@@ -78,7 +78,7 @@ export function TableSelector({
                   <Badge key={col.name} variant="outline" className="font-mono text-xs">
                     {col.name}
                     {col.key === 'PRI' && <span className="ml-1 text-primary">PK</span>}
-                    {col.key === 'UNI' && <span className="ml-1 text-amber-600">UNI</span>}
+                    {col.key === 'UNI' && <span className="ml-1 text-amber-600 dark:text-amber-400">UNI</span>}
                   </Badge>
                 ))}
               </div>

@@ -29,21 +29,21 @@ export function ImportProgressComponent({ progress }: ImportProgressProps) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-4">
-          <div className="rounded-lg bg-green-50 p-4 text-center">
-            <p className="text-2xl font-bold text-green-700">{formatNumber(progress.inserted)}</p>
-            <p className="text-sm text-green-600">Inseridos</p>
+          <div className="rounded-lg bg-green-50 p-4 text-center dark:bg-green-950/40">
+            <p className="text-2xl font-bold text-green-700 dark:text-green-300">{formatNumber(progress.inserted)}</p>
+            <p className="text-sm text-green-600 dark:text-green-400">Inseridos</p>
           </div>
-          <div className="rounded-lg bg-blue-50 p-4 text-center">
-            <p className="text-2xl font-bold text-blue-700">{formatNumber(progress.updated)}</p>
-            <p className="text-sm text-blue-600">Atualizados</p>
+          <div className="rounded-lg bg-blue-50 p-4 text-center dark:bg-blue-950/40">
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{formatNumber(progress.updated)}</p>
+            <p className="text-sm text-blue-600 dark:text-blue-400">Atualizados</p>
           </div>
-          <div className="rounded-lg bg-slate-100 p-4 text-center">
-            <p className="text-2xl font-bold text-slate-700">{formatNumber(progress.skipped)}</p>
-            <p className="text-sm text-slate-600">Ignorados</p>
+          <div className="rounded-lg bg-slate-100 p-4 text-center dark:bg-slate-800">
+            <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">{formatNumber(progress.skipped)}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Ignorados</p>
           </div>
-          <div className="rounded-lg bg-red-50 p-4 text-center">
-            <p className="text-2xl font-bold text-red-700">{formatNumber(progress.errors)}</p>
-            <p className="text-sm text-red-600">Erros</p>
+          <div className="rounded-lg bg-red-50 p-4 text-center dark:bg-red-950/40">
+            <p className="text-2xl font-bold text-red-700 dark:text-red-300">{formatNumber(progress.errors)}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">Erros</p>
           </div>
         </div>
 

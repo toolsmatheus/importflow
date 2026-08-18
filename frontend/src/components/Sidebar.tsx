@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -47,6 +48,10 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-border p-3">
+        <div className="mb-1 flex items-center justify-between px-1">
+          <span className="text-xs font-medium text-muted-foreground">Aparência</span>
+          <ThemeToggle compact />
+        </div>
         <NavLink
           to="/settings"
           className={({ isActive }) =>

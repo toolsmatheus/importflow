@@ -402,8 +402,8 @@ export function ImportPage() {
       {wizard.currentStep === 'mapping' && (
         <div className="space-y-6">
           {tablesQuery.isError && (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-4 text-sm text-red-700">
+            <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40">
+              <CardContent className="p-4 text-sm text-red-700 dark:text-red-300">
                 {(tablesQuery.error as ApiError).message ?? 'Erro ao carregar tabelas do banco.'}
               </CardContent>
             </Card>
@@ -419,8 +419,8 @@ export function ImportPage() {
           />
 
           {wizard.selectedTable && columnsQuery.isError && (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-4 text-sm text-red-700">
+            <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40">
+              <CardContent className="p-4 text-sm text-red-700 dark:text-red-300">
                 {(columnsQuery.error as ApiError).message ?? 'Erro ao carregar colunas da tabela.'}
               </CardContent>
             </Card>
@@ -634,7 +634,7 @@ export function ImportPage() {
               {formatNumber(wizard.validationResult?.validCount ?? 0)}
             </p>
             {(wizard.validationResult?.warningCount ?? 0) > 0 && (
-              <p className="text-amber-700">
+              <p className="text-amber-700 dark:text-amber-300">
                 <strong>Com alertas:</strong>{' '}
                 {formatNumber(wizard.validationResult!.warningCount)} (serão importados com os
                 valores ajustados)

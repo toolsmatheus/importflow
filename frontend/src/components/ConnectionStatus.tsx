@@ -23,17 +23,17 @@ export function ConnectionStatus({ result, isLoading }: ConnectionStatusProps) {
 
   if (result.success) {
     return (
-      <Card className="border-green-200 bg-green-50">
+      <Card className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600 dark:text-green-400" />
             <div>
-              <p className="font-medium text-green-800">Conexão realizada com sucesso</p>
-              <div className="mt-2 space-y-1 text-sm text-green-700">
+              <p className="font-medium text-green-800 dark:text-green-200">Conexão realizada com sucesso</p>
+              <div className="mt-2 space-y-1 text-sm text-green-700 dark:text-green-300">
                 {result.connectionName && <p className="font-medium">{result.connectionName}</p>}
                 <p>{result.host}:{result.port}</p>
                 <p>{result.database}</p>
-                <p className="text-green-600">{result.responseTimeMs}ms</p>
+                <p className="text-green-600 dark:text-green-400">{result.responseTimeMs}ms</p>
               </div>
             </div>
           </div>
@@ -43,12 +43,12 @@ export function ConnectionStatus({ result, isLoading }: ConnectionStatusProps) {
   }
 
   return (
-    <Card className="border-red-200 bg-red-50">
+    <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40">
       <CardContent className="flex items-start gap-3 p-4">
-        <XCircle className="mt-0.5 h-5 w-5 text-red-600" />
+        <XCircle className="mt-0.5 h-5 w-5 text-red-600 dark:text-red-400" />
         <div>
-          <p className="font-medium text-red-800">Não foi possível conectar ao banco.</p>
-          <p className="mt-1 text-sm text-red-700">
+          <p className="font-medium text-red-800 dark:text-red-200">Não foi possível conectar ao banco.</p>
+          <p className="mt-1 text-sm text-red-700 dark:text-red-300">
             {result.message ?? 'Verifique os dados informados e tente novamente.'}
           </p>
         </div>
