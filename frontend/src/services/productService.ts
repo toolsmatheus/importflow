@@ -1,6 +1,7 @@
 import type {
   AuxiliaryEntity,
   AuxiliaryUploadResult,
+  FolderCollectResult,
   ProductFieldCatalog,
   ProductValidationResult,
   SendJobSnapshot,
@@ -130,6 +131,24 @@ export const productService = {
     const data = await response.json()
     if (!response.ok) throw new Error(data?.message ?? 'Erro ao reenviar falhas')
     return data as SendJobSnapshot
+  },
+
+  async collectFolder(folderPath: string): Promise<FolderCollectResult> {
+    const response = await fetch('/api/products/collect-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderPath }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao coletar arquivos da pasta')
+    return data as FolderCollectResult
+  },
+
+  async getFolderExpect(): Promise<{ expected: { role: string; names: string[] }[]; tip: string }> {
+    const response = await fetch('/api/products/folder-expect')
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao carregar nomes esperados')
+    return data as { expected: { role: string; names: string[] }[]; tip: string }
   },
 
   downloadTemplate() {

@@ -50,8 +50,8 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Tema e URL do TMS ficam no navegador. Enquanto a API de insert não estiver disponível,
-            use a simulação na etapa de envio.
+            Tema, URL do TMS e o último caminho de pasta automática ficam neste navegador.
+            Enquanto a API de insert não estiver disponível, use a simulação na etapa de envio.
           </p>
         </CardContent>
       </Card>

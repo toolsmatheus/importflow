@@ -49,20 +49,29 @@ const frontendDist = frontendDistCandidates.find((candidate) =>
 if (frontendDist) {
   await app.register(fastifyStatic, {
     root: frontendDist,
-    wildcard: false,
+    // wildcard true: resolve arquivos no disco a cada request (sobrevive a rebuild do front)
+    wildcard: true,
+    decorateReply: true,
   })
 
   app.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith('/api')) {
       return reply.status(404).send({ success: false, message: 'Rota não encontrada.' })
     }
+
+    const pathname = request.url.split('?')[0] ?? ''
+    // Não devolver index.html para .js/.css (senão a tela fica preta)
+    if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
+      return reply.status(404).send({ success: false, message: 'Arquivo não encontrado.' })
+    }
+
     return reply.sendFile('index.html')
   })
 
   app.log.info({ frontendDist }, 'Serving frontend static files')
 } else {
   app.log.warn(
-    'Frontend build not found (frontend/dist). Run npm run build before start.bat for single-process mode.'
+    'Frontend build not found (frontend/dist). O start.bat gera o build automaticamente na primeira execução.'
   )
 }
 

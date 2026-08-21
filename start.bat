@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo ========================================
@@ -14,32 +14,40 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "backend\node_modules\" (
-  echo Instalando dependencias do backend...
-  call npm install --prefix backend --omit=dev
+set "FORCE_BUILD=0"
+if /I "%~1"=="/rebuild" set "FORCE_BUILD=1"
+if /I "%~1"=="--rebuild" set "FORCE_BUILD=1"
+
+set "NEED_INSTALL=0"
+if not exist "backend\node_modules\" set "NEED_INSTALL=1"
+if not exist "frontend\node_modules\" set "NEED_INSTALL=1"
+
+if "%NEED_INSTALL%"=="1" (
+  echo Instalando dependencias...
+  call npm run install:all
   if errorlevel 1 (
     echo Falha ao instalar dependencias.
     pause
     exit /b 1
   )
+  echo.
 )
 
-if not exist "backend\dist\server.js" (
-  echo Build do backend nao encontrado.
-  if exist "backend\node_modules\typescript\" (
-    echo Compilando backend...
-    call npm run build --prefix backend
-  ) else (
-    echo Execute "npm run build" nesta pasta antes de levar ao cliente.
+set "NEED_BUILD=%FORCE_BUILD%"
+if not exist "backend\dist\server.js" set "NEED_BUILD=1"
+if not exist "frontend\dist\index.html" set "NEED_BUILD=1"
+
+if "%NEED_BUILD%"=="1" (
+  echo Gerando build de producao...
+  call npm run build
+  if errorlevel 1 (
+    echo Falha no build.
     pause
     exit /b 1
   )
-)
-
-if not exist "frontend\dist\index.html" (
-  echo AVISO: frontend\dist nao encontrado.
-  echo A API sobe, mas a interface web pode nao abrir neste processo.
-  echo Rode "npm run build" antes de distribuir ao cliente.
+  echo.
+) else (
+  echo Build ja existe. Para forcar: start.bat /rebuild
   echo.
 )
 
@@ -48,7 +56,15 @@ echo Iniciando ImportFlow em http://localhost:%PORT%
 echo Feche esta janela para encerrar.
 echo.
 
-start "" "http://localhost:%PORT%"
-call npm run start --prefix backend
+REM Abre o navegador um pouco depois, dando tempo do servidor subir
+start "" cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:%PORT%"
 
+call npm run start --prefix backend
+set "EXITCODE=%ERRORLEVEL%"
+
+echo.
+if not "%EXITCODE%"=="0" (
+  echo O servidor encerrou com erro %EXITCODE%.
+)
 pause
+exit /b %EXITCODE%

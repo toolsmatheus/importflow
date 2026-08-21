@@ -1,15 +1,10 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Upload, Settings, Package, Menu, X } from 'lucide-react'
+import { Upload, Settings, Package, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
-
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/import', label: 'Nova importação', icon: Upload },
-]
 
 export function Sidebar() {
   const [open, setOpen] = useState(false)
@@ -37,25 +32,22 @@ export function Sidebar() {
       <Separator />
 
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            onClick={() => setOpen(false)}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )
-            }
-          >
-            <Icon className="h-5 w-5" />
-            {label}
-          </NavLink>
-        ))}
+        <NavLink
+          to="/"
+          end
+          onClick={() => setOpen(false)}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )
+          }
+        >
+          <Upload className="h-5 w-5" />
+          Importação
+        </NavLink>
       </nav>
 
       <div className="border-t border-border p-3">

@@ -53,6 +53,7 @@ interface ImportWizardContextValue {
   setCsvAnalysis: (analysis: CsvAnalysis | null) => void
   auxiliaries: AuxiliaryMap
   setAuxiliary: (entity: AuxiliaryEntity, result: AuxiliaryUploadResult | null) => void
+  replaceAuxiliaries: (next: AuxiliaryMap) => void
   validationResult: ProductValidationResult | null
   setValidationResult: (result: ProductValidationResult | null) => void
   previewRows: Record<string, string>[]
@@ -100,6 +101,10 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const replaceAuxiliaries = useCallback((next: AuxiliaryMap) => {
+    setAuxiliaries(next)
+  }, [])
+
   const auxiliaryFileIds = useMemo(
     () =>
       Object.fromEntries(
@@ -144,6 +149,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
       setCsvAnalysis,
       auxiliaries,
       setAuxiliary,
+      replaceAuxiliaries,
       validationResult,
       setValidationResult,
       previewRows,
@@ -165,6 +171,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
       csvAnalysis,
       auxiliaries,
       setAuxiliary,
+      replaceAuxiliaries,
       validationResult,
       previewRows,
       previewColumns,

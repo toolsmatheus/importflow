@@ -32,6 +32,11 @@ import {
   resumeSendJob,
   retryFailedSendJob,
 } from '../services/sendJobService.js'
+import {
+  collectFolderBodySchema,
+  collectFromFolder,
+  expectedFolderFiles,
+} from '../services/folderCollectService.js'
 
 export async function downloadProductTemplateHandler(
   _request: FastifyRequest,
@@ -199,6 +204,47 @@ const startSendBodySchema = z.object({
   batchSize: z.number().int().min(10).max(500).optional(),
   concurrency: z.number().int().min(1).max(8).optional(),
 })
+
+export async function getFolderExpectHandler(_request: FastifyRequest, reply: FastifyReply) {
+  return reply.send({
+    expected: expectedFolderFiles(),
+    tip: 'Coloque na pasta arquivos como produtos.csv, grupo.csv, categoria.csv, etc.',
+  })
+}
+
+export async function collectFolderHandler(request: FastifyRequest, reply: FastifyReply) {
+  const parsed = collectFolderBodySchema.safeParse(request.body)
+
+  if (!parsed.success) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Informe o caminho da pasta.',
+      errors: parsed.error.flatten().fieldErrors,
+    })
+  }
+
+  try {
+    const result = await collectFromFolder(parsed.data.folderPath)
+
+    request.log.info(
+      {
+        folderPath: result.folderPath,
+        found: result.found.length,
+        missing: result.missing,
+        hasProducts: Boolean(result.products),
+      },
+      'Folder collected'
+    )
+
+    return reply.send(result)
+  } catch (error) {
+    request.log.error({ err: error, folderPath: parsed.data.folderPath }, 'Folder collect failed')
+    return reply.status(400).send({
+      success: false,
+      message: error instanceof Error ? error.message : 'Erro ao ler a pasta',
+    })
+  }
+}
 
 export async function identifyServerHandler(request: FastifyRequest, reply: FastifyReply) {
   const query = request.query as { tmsBaseUrl?: string }

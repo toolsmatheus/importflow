@@ -5,29 +5,32 @@ Importação de produtos via CSV para a API TMS (ToolsPharma), com validação e
 ## Fluxo
 
 1. Modelo: download do `modelo-produtos.csv` e auxiliares
-2. Arquivo: upload do CSV de produtos
+2. Arquivo: upload manual **ou** coleta automática de uma pasta (`produtos.csv`, `grupo.csv`, ...)
 3. Auxiliares: `grupo.csv` (obrigatório) e demais usados (`id;nome`)
 4. Erros: validação com filtros e export CSV
 5. Prévia: grid editável e revalidação
 6. Envio: lotes com progresso, pausa, retomar e reenvio de falhas (ou simulação sem TMS)
 
-## Uso no cliente (recomendado)
+## Uso no cliente
 
-No seu PC de desenvolvimento:
-
-```bat
-build.bat
-```
-
-Leve a pasta do projeto (já com `frontend/dist`, `backend/dist` e `backend/node_modules`) para o cliente.
-
-No cliente (Node.js 20+ instalado), dê duplo clique em:
+Com Node.js 20+ instalado, dê **duplo clique** em:
 
 ```bat
 start.bat
 ```
 
-Isso sobe **um único processo** em `http://localhost:3001` (API + interface) e abre o navegador.
+Na primeira execução ele:
+1. Instala dependências (se faltar `node_modules`)
+2. Gera o build (se faltar `frontend/dist` ou `backend/dist`)
+3. Sobe API + interface em `http://localhost:3001` e abre o navegador
+
+Nas próximas vezes, se o build já existir, só sobe o servidor (mais rápido).
+
+Para forçar rebuild:
+
+```bat
+start.bat /rebuild
+```
 
 ## Desenvolvimento local
 
@@ -68,6 +71,8 @@ Enquanto a API TMS não existir, use **Simular lotes** para testar 5k–20k prod
 | `GET` | `/api/products/template` | Modelo de produtos |
 | `GET` | `/api/products/template/auxiliar/:entity` | Modelo auxiliar |
 | `GET` | `/api/products/catalog` | Catálogo de campos |
+| `POST` | `/api/products/collect-folder` | Lê pasta local e carrega CSVs pelo nome |
+| `GET` | `/api/products/folder-expect` | Lista nomes de arquivo reconhecidos |
 | `POST` | `/api/products/auxiliary/:entity` | Upload auxiliar |
 | `POST` | `/api/products/validate` | Validação CSV + auxiliares |
 | `POST` | `/api/products/validate-rows` | Revalidação da prévia |

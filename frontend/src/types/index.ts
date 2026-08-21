@@ -120,6 +120,17 @@ export interface SendJobSnapshot {
   remaining: number
 }
 
+export interface FolderCollectResult {
+  folderPath: string
+  products: CsvAnalysis | null
+  auxiliaries: Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
+  found: { role: string; fileName: string }[]
+  missing: string[]
+  ignored: string[]
+}
+
+export type FileInputMode = 'manual' | 'folder'
+
 /** @deprecated Prefer SendJobSnapshot */
 export type TmsSendResult = Pick<
   SendJobSnapshot,

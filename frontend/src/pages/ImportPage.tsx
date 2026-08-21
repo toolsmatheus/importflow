@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2 } from 'lucide-react'
-import { Header } from '@/components/Header'
+import { Loader2, RotateCcw } from 'lucide-react'
 import { Stepper } from '@/components/Stepper'
 import { TemplateStep } from '@/components/TemplateStep'
 import { FileDropzone } from '@/components/FileDropzone'
 import { FileInfo } from '@/components/FileInfo'
+import { FolderCollectPanel } from '@/components/FolderCollectPanel'
 import { AuxiliaryStep } from '@/components/AuxiliaryStep'
 import { ErrorsStep } from '@/components/ErrorsStep'
 import { PreviewStep } from '@/components/PreviewStep'
@@ -16,12 +16,14 @@ import { Button } from '@/components/ui/button'
 import { useImportWizard } from '@/hooks/useImportWizard'
 import { csvService } from '@/services/csvService'
 import { productService } from '@/services/productService'
-import { formatNumber } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
+import type { FileInputMode, FolderCollectResult } from '@/types'
 
 export function ImportPage() {
   const navigate = useNavigate()
   const wizard = useImportWizard()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [inputMode, setInputMode] = useState<FileInputMode>('manual')
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -81,19 +83,44 @@ export function ImportPage() {
     uploadMutation.mutate(file)
   }
 
+  const handleFolderCollected = (result: FolderCollectResult) => {
+    if (result.products) {
+      wizard.setCsvAnalysis(result.products)
+      setSelectedFile(null)
+    } else {
+      wizard.setCsvAnalysis(null)
+    }
+
+    wizard.replaceAuxiliaries(result.auxiliaries)
+    wizard.setValidationResult(null)
+    wizard.setPreviewRows([])
+    wizard.setSendJob(null)
+  }
+
   return (
     <div>
-      <div className="mb-6 flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-          <ArrowLeft className="h-4 w-4" />
-          Voltar
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Importação de produtos
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Valide o CSV e envie em lotes para o servidor TMS.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            wizard.resetWizard()
+            setSelectedFile(null)
+            toast.message('Importação reiniciada')
+          }}
+        >
+          <RotateCcw className="h-4 w-4" />
+          Reiniciar
         </Button>
       </div>
-
-      <Header
-        title="Nova importação"
-        description="Importe produtos via CSV com validação antes do envio."
-      />
 
       <Stepper currentStep={wizard.currentStep} />
 
@@ -103,13 +130,41 @@ export function ImportPage() {
 
       {wizard.currentStep === 'file' && (
         <div className="space-y-6">
-          <FileDropzone
-            onFileSelect={handleFileSelect}
-            isLoading={uploadMutation.isPending}
-            selectedFile={selectedFile}
-          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={inputMode === 'manual' ? 'default' : 'outline'}
+              onClick={() => setInputMode('manual')}
+            >
+              Manual
+            </Button>
+            <Button
+              size="sm"
+              variant={inputMode === 'folder' ? 'default' : 'outline'}
+              onClick={() => setInputMode('folder')}
+            >
+              Pasta automática
+            </Button>
+          </div>
+
+          {inputMode === 'manual' ? (
+            <FileDropzone
+              onFileSelect={handleFileSelect}
+              isLoading={uploadMutation.isPending}
+              selectedFile={selectedFile}
+            />
+          ) : (
+            <FolderCollectPanel onCollected={handleFolderCollected} />
+          )}
 
           {wizard.csvAnalysis && <FileInfo analysis={wizard.csvAnalysis} />}
+
+          {inputMode === 'folder' && Object.keys(wizard.auxiliaries).length > 0 && (
+            <p className={cn('text-sm text-muted-foreground')}>
+              Auxiliares já carregados da pasta:{' '}
+              {Object.keys(wizard.auxiliaries).join(', ')}. Você pode revisar na próxima etapa.
+            </p>
+          )}
 
           <div className="flex justify-between">
             <Button variant="outline" onClick={wizard.goToPreviousStep}>

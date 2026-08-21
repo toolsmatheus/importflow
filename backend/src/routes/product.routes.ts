@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import {
   cancelSendJobHandler,
+  collectFolderHandler,
   downloadAuxiliaryTemplateHandler,
   downloadProductTemplateHandler,
+  getFolderExpectHandler,
   getProductFieldCatalogHandler,
   getSendJobHandler,
   identifyServerHandler,
@@ -19,6 +21,8 @@ export async function productRoutes(app: FastifyInstance) {
   app.get('/products/template', downloadProductTemplateHandler)
   app.get('/products/template/auxiliar/:entity', downloadAuxiliaryTemplateHandler)
   app.get('/products/catalog', getProductFieldCatalogHandler)
+  app.get('/products/folder-expect', getFolderExpectHandler)
+  app.post('/products/collect-folder', collectFolderHandler)
   app.post('/products/auxiliary/:entity', uploadAuxiliaryHandler)
   app.post('/products/validate', validateProductHandler)
   app.post('/products/validate-rows', validateProductRowsHandler)
