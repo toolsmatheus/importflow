@@ -1,10 +1,15 @@
 import type { FastifyInstance } from 'fastify'
 import {
+  cancelSendJobHandler,
   downloadAuxiliaryTemplateHandler,
   downloadProductTemplateHandler,
   getProductFieldCatalogHandler,
+  getSendJobHandler,
   identifyServerHandler,
-  sendProductsHandler,
+  pauseSendJobHandler,
+  resumeSendJobHandler,
+  retryFailedSendJobHandler,
+  startSendJobHandler,
   uploadAuxiliaryHandler,
   validateProductHandler,
   validateProductRowsHandler,
@@ -18,5 +23,10 @@ export async function productRoutes(app: FastifyInstance) {
   app.post('/products/validate', validateProductHandler)
   app.post('/products/validate-rows', validateProductRowsHandler)
   app.get('/products/identify-server', identifyServerHandler)
-  app.post('/products/send', sendProductsHandler)
+  app.post('/products/send/start', startSendJobHandler)
+  app.get('/products/send/:jobId', getSendJobHandler)
+  app.post('/products/send/:jobId/pause', pauseSendJobHandler)
+  app.post('/products/send/:jobId/resume', resumeSendJobHandler)
+  app.post('/products/send/:jobId/cancel', cancelSendJobHandler)
+  app.post('/products/send/:jobId/retry-failures', retryFailedSendJobHandler)
 }

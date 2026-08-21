@@ -34,7 +34,7 @@ export function ImportPage() {
       wizard.setCsvAnalysis(analysis)
       wizard.setValidationResult(null)
       wizard.setPreviewRows([])
-      wizard.setSendResult(null)
+      wizard.setSendJob(null)
       toast.success(
         `Arquivo analisado: ${formatNumber(analysis.recordCount)} registro(s), ${analysis.columnCount} coluna(s)`
       )
@@ -169,8 +169,8 @@ export function ImportPage() {
           rows={wizard.previewRows}
           tmsBaseUrl={wizard.tmsBaseUrl}
           onTmsBaseUrlChange={wizard.setTmsBaseUrl}
-          result={wizard.sendResult}
-          onResult={wizard.setSendResult}
+          job={wizard.sendJob}
+          onJobChange={wizard.setSendJob}
           onBack={() => wizard.setCurrentStep('preview')}
           onFinish={() => {
             wizard.resetWizard()

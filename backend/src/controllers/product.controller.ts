@@ -23,8 +23,15 @@ import {
 import {
   fetchServerIdentification,
   getDefaultTmsBaseUrl,
-  insertProducts,
 } from '../services/tmsService.js'
+import {
+  cancelSendJob,
+  createSendJob,
+  getSendJob,
+  pauseSendJob,
+  resumeSendJob,
+  retryFailedSendJob,
+} from '../services/sendJobService.js'
 
 export async function downloadProductTemplateHandler(
   _request: FastifyRequest,
@@ -185,9 +192,12 @@ export async function validateProductRowsHandler(request: FastifyRequest, reply:
   }
 }
 
-const sendBodySchema = z.object({
-  rows: z.array(z.record(z.string())).min(1),
+const startSendBodySchema = z.object({
+  rows: z.array(z.record(z.string())).min(1).max(50000),
   tmsBaseUrl: z.string().url().optional(),
+  mode: z.enum(['live', 'simulate']).optional(),
+  batchSize: z.number().int().min(10).max(500).optional(),
+  concurrency: z.number().int().min(1).max(8).optional(),
 })
 
 export async function identifyServerHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -210,8 +220,8 @@ export async function identifyServerHandler(request: FastifyRequest, reply: Fast
   }
 }
 
-export async function sendProductsHandler(request: FastifyRequest, reply: FastifyReply) {
-  const parsed = sendBodySchema.safeParse(request.body)
+export async function startSendJobHandler(request: FastifyRequest, reply: FastifyReply) {
+  const parsed = startSendBodySchema.safeParse(request.body)
 
   if (!parsed.success) {
     return reply.status(400).send({
@@ -222,27 +232,76 @@ export async function sendProductsHandler(request: FastifyRequest, reply: Fastif
   }
 
   try {
-    const result = await insertProducts(
-      parsed.data.rows,
-      parsed.data.tmsBaseUrl ?? getDefaultTmsBaseUrl()
-    )
+    const snapshot = await createSendJob({
+      rows: parsed.data.rows,
+      mode: parsed.data.mode ?? 'simulate',
+      tmsBaseUrl: parsed.data.tmsBaseUrl,
+      batchSize: parsed.data.batchSize,
+      concurrency: parsed.data.concurrency,
+    })
 
     request.log.info(
       {
-        idFilial: result.idFilial,
-        total: result.total,
-        successCount: result.successCount,
-        errorCount: result.errorCount,
+        jobId: snapshot.id,
+        mode: snapshot.mode,
+        total: snapshot.total,
+        batchSize: snapshot.batchSize,
+        concurrency: snapshot.concurrency,
       },
-      'TMS insert finished'
+      'Send job started'
     )
 
-    return reply.send(result)
+    return reply.status(202).send(snapshot)
   } catch (error) {
-    request.log.error({ err: error }, 'TMS insert failed')
+    request.log.error({ err: error }, 'Send job start failed')
     return reply.status(502).send({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao enviar produtos ao TMS',
+      message: error instanceof Error ? error.message : 'Falha ao iniciar o envio',
     })
   }
+}
+
+export async function getSendJobHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { jobId } = request.params as { jobId: string }
+  const snapshot = getSendJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function pauseSendJobHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { jobId } = request.params as { jobId: string }
+  const snapshot = pauseSendJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function resumeSendJobHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { jobId } = request.params as { jobId: string }
+  const snapshot = resumeSendJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function cancelSendJobHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { jobId } = request.params as { jobId: string }
+  const snapshot = cancelSendJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function retryFailedSendJobHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { jobId } = request.params as { jobId: string }
+  const snapshot = retryFailedSendJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
+  }
+  return reply.send(snapshot)
 }

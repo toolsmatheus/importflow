@@ -79,10 +79,51 @@ export interface CsvAnalysis {
   columns: string[]
 }
 
-export interface TmsSendResult {
+export type SendJobStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type SendMode = 'live' | 'simulate'
+
+export interface SendJobError {
+  index: number
+  codigo: string
+  message: string
+  batch: number
+}
+
+export interface SendJobSnapshot {
+  id: string
+  status: SendJobStatus
+  mode: SendMode
+  tmsBaseUrl: string
   idFilial: number
+  batchSize: number
+  concurrency: number
   total: number
+  processed: number
   successCount: number
   errorCount: number
+  currentBatch: number
+  totalBatches: number
+  errors: SendJobError[]
+  errorsTruncated: boolean
+  startedAt: string | null
+  finishedAt: string | null
+  elapsedMs: number
+  productsPerSecond: number
+  percent: number
+  remaining: number
+}
+
+/** @deprecated Prefer SendJobSnapshot */
+export type TmsSendResult = Pick<
+  SendJobSnapshot,
+  'idFilial' | 'total' | 'successCount' | 'errorCount'
+> & {
   errors: { index: number; codigo: string; message: string }[]
 }

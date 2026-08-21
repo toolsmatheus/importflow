@@ -3,7 +3,8 @@ import type {
   AuxiliaryUploadResult,
   ProductFieldCatalog,
   ProductValidationResult,
-  TmsSendResult,
+  SendJobSnapshot,
+  SendMode,
 } from '@/types'
 
 export const productService = {
@@ -77,18 +78,58 @@ export const productService = {
     return data as { idFilial: number; tmsBaseUrl: string }
   },
 
-  async send(
-    rows: Record<string, string>[],
+  async startSend(options: {
+    rows: Record<string, string>[]
+    mode?: SendMode
     tmsBaseUrl?: string
-  ): Promise<TmsSendResult> {
-    const response = await fetch('/api/products/send', {
+    batchSize?: number
+    concurrency?: number
+  }): Promise<SendJobSnapshot> {
+    const response = await fetch('/api/products/send/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows, tmsBaseUrl }),
+      body: JSON.stringify(options),
     })
     const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao enviar produtos ao TMS')
-    return data as TmsSendResult
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao iniciar o envio')
+    return data as SendJobSnapshot
+  },
+
+  async getSendJob(jobId: string): Promise<SendJobSnapshot> {
+    const response = await fetch(`/api/products/send/${jobId}`)
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Job de envio não encontrado')
+    return data as SendJobSnapshot
+  },
+
+  async pauseSend(jobId: string): Promise<SendJobSnapshot> {
+    const response = await fetch(`/api/products/send/${jobId}/pause`, { method: 'POST' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao pausar')
+    return data as SendJobSnapshot
+  },
+
+  async resumeSend(jobId: string): Promise<SendJobSnapshot> {
+    const response = await fetch(`/api/products/send/${jobId}/resume`, { method: 'POST' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao retomar')
+    return data as SendJobSnapshot
+  },
+
+  async cancelSend(jobId: string): Promise<SendJobSnapshot> {
+    const response = await fetch(`/api/products/send/${jobId}/cancel`, { method: 'POST' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao cancelar')
+    return data as SendJobSnapshot
+  },
+
+  async retryFailedSend(jobId: string): Promise<SendJobSnapshot> {
+    const response = await fetch(`/api/products/send/${jobId}/retry-failures`, {
+      method: 'POST',
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao reenviar falhas')
+    return data as SendJobSnapshot
   },
 
   downloadTemplate() {

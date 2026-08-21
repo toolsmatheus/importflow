@@ -7,12 +7,10 @@ export interface ServerIdentification {
   raw: unknown
 }
 
-export interface TmsInsertResult {
-  idFilial: number
-  total: number
-  successCount: number
-  errorCount: number
-  errors: { index: number; codigo: string; message: string }[]
+export interface BatchInsertResult {
+  ok: boolean
+  message?: string
+  statusCode?: number
 }
 
 function snToBool(value: string | undefined): boolean | undefined {
@@ -40,9 +38,8 @@ function str(value: string | undefined): string | undefined {
 }
 
 /**
- * Mapeia uma linha do CSV (cabeçalhos do modelo) para o payload esperado
- * pelo ProdutoService/insert. O contrato da API ainda pode evoluir —
- * os nomes seguem a especificação ToolsPharma / XData.
+ * Mapeia uma linha do CSV para o payload do ProdutoService/insert.
+ * Contrato provisório até a API TMS fechar.
  */
 export function mapCsvRowToProductPayload(
   row: Record<string, string>,
@@ -102,8 +99,7 @@ function extractIdFilial(payload: unknown): number | null {
   if (!payload || typeof payload !== 'object') return null
   const obj = payload as Record<string, unknown>
 
-  const direct =
-    obj.IdFilial ?? obj.idFilial ?? obj.id_filial ?? obj.IDFILIAL
+  const direct = obj.IdFilial ?? obj.idFilial ?? obj.id_filial ?? obj.IDFILIAL
   if (typeof direct === 'number') return direct
   if (typeof direct === 'string' && /^\d+$/.test(direct)) return Number(direct)
 
@@ -155,60 +151,49 @@ export async function fetchServerIdentification(
   return { idFilial, raw: data }
 }
 
-export async function insertProducts(
-  rows: Record<string, string>[],
+/**
+ * Envia um lote de produtos. Preferência: body com array.
+ * Quando a API real fechar o contrato, ajustar só este método.
+ */
+export async function insertProductBatch(
+  payloads: Record<string, unknown>[],
   baseUrl = DEFAULT_TMS_BASE
-): Promise<TmsInsertResult> {
-  const { idFilial } = await fetchServerIdentification(baseUrl)
+): Promise<BatchInsertResult> {
   const url = `${baseUrl.replace(/\/$/, '')}/tms/xdata/ProdutoService/insert`
 
-  const errors: TmsInsertResult['errors'] = []
-  let successCount = 0
+  const body =
+    payloads.length === 1
+      ? payloads[0]
+      : { products: payloads, items: payloads, value: payloads }
 
-  // A API ainda não está fechada: enviamos um produto por request para isolar falhas.
-  for (let index = 0; index < rows.length; index++) {
-    const row = rows[index]
-    const payload = mapCsvRowToProductPayload(row, idFilial)
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '')
-        errors.push({
-          index,
-          codigo: String(row.codigo ?? ''),
-          message: body || `HTTP ${response.status}`,
-        })
-        continue
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      return {
+        ok: false,
+        statusCode: response.status,
+        message: text || `HTTP ${response.status}`,
       }
-
-      successCount++
-    } catch (error) {
-      errors.push({
-        index,
-        codigo: String(row.codigo ?? ''),
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Falha de rede ao chamar ProdutoService/insert',
-      })
     }
-  }
 
-  return {
-    idFilial,
-    total: rows.length,
-    successCount,
-    errorCount: errors.length,
-    errors,
+    return { ok: true, statusCode: response.status }
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha de rede ao chamar ProdutoService/insert',
+    }
   }
 }
 

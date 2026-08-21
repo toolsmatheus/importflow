@@ -11,7 +11,7 @@ import type {
   AuxiliaryUploadResult,
   CsvAnalysis,
   ProductValidationResult,
-  TmsSendResult,
+  SendJobSnapshot,
   WizardStep,
 } from '@/types'
 
@@ -59,8 +59,8 @@ interface ImportWizardContextValue {
   setPreviewRows: (rows: Record<string, string>[]) => void
   previewColumns: string[]
   setPreviewColumns: (columns: string[]) => void
-  sendResult: TmsSendResult | null
-  setSendResult: (result: TmsSendResult | null) => void
+  sendJob: SendJobSnapshot | null
+  setSendJob: (job: SendJobSnapshot | null) => void
   tmsBaseUrl: string
   setTmsBaseUrl: (url: string) => void
   resetWizard: () => void
@@ -79,7 +79,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
   const [validationResult, setValidationResult] = useState<ProductValidationResult | null>(null)
   const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([])
   const [previewColumns, setPreviewColumns] = useState<string[]>([])
-  const [sendResult, setSendResult] = useState<TmsSendResult | null>(null)
+  const [sendJob, setSendJob] = useState<SendJobSnapshot | null>(null)
   const [tmsBaseUrl, setTmsBaseUrlState] = useState(readStoredTmsUrl)
 
   const setTmsBaseUrl = useCallback((url: string) => {
@@ -117,7 +117,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
     setValidationResult(null)
     setPreviewRows([])
     setPreviewColumns([])
-    setSendResult(null)
+    setSendJob(null)
   }, [])
 
   const goToNextStep = useCallback(() => {
@@ -150,8 +150,8 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
       setPreviewRows,
       previewColumns,
       setPreviewColumns,
-      sendResult,
-      setSendResult,
+      sendJob,
+      setSendJob,
       tmsBaseUrl,
       setTmsBaseUrl,
       resetWizard,
@@ -168,7 +168,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
       validationResult,
       previewRows,
       previewColumns,
-      sendResult,
+      sendJob,
       tmsBaseUrl,
       setTmsBaseUrl,
       resetWizard,
