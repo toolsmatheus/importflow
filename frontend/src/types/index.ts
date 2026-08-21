@@ -1,21 +1,70 @@
-export interface ConnectionConfig {
-  name: string
-  host: string
-  port: number
-  database: string
-  user: string
-  password: string
+export type WizardStep =
+  | 'template'
+  | 'file'
+  | 'auxiliary'
+  | 'errors'
+  | 'preview'
+  | 'send'
+
+export type IssueSeverity = 'error' | 'warning'
+
+export type AuxiliaryEntity =
+  | 'grupo'
+  | 'subgrupo'
+  | 'categoria'
+  | 'laboratorio'
+  | 'grupodepreco'
+  | 'similar'
+  | 'dcb'
+
+export interface ValidationIssue {
+  row: number
+  field: string
+  value: string
+  message: string
+  severity: IssueSeverity
 }
 
-export interface ConnectionTestResult {
-  success: boolean
-  host?: string
-  port?: number
-  database?: string
-  responseTimeMs?: number
-  sessionId?: string
-  connectionName?: string
-  message?: string
+export interface ProductValidationResult {
+  fileId: string
+  fileName: string
+  totalRecords: number
+  errorCount: number
+  warningCount: number
+  missingRequiredHeaders: string[]
+  unknownHeaders: string[]
+  presentOptionalHeaders: string[]
+  canProceed: boolean
+  issues: ValidationIssue[]
+  truncated: boolean
+  columns: string[]
+  rows: Record<string, string>[]
+}
+
+export interface AuxiliaryUploadResult {
+  entity: AuxiliaryEntity
+  fileId: string
+  fileName: string
+  fileSize: number
+  recordCount: number
+  parseWarnings: string[]
+}
+
+export interface ProductFieldCatalog {
+  required: string[]
+  optional: string[]
+  farmaciaPopular: string[]
+  controlados: string[]
+  listapiscofins: string[]
+  auxiliaryEntities: AuxiliaryEntity[]
+  delimiter: string
+  markupFormula: string
+  tmsBaseUrl: string
+  rules: {
+    controladoSemDcb: string
+    csosnECsticmsJuntos: string
+    markupInconsistente: string
+  }
 }
 
 export interface CsvAnalysis {
@@ -30,96 +79,10 @@ export interface CsvAnalysis {
   columns: string[]
 }
 
-export interface TableColumn {
-  name: string
-  type: string
-  columnType: string
-  nullable: boolean
-  key: string
-  maxLength: number | null
-  numericPrecision: number | null
-  numericScale: number | null
-  defaultValue: string | null
-  autoIncrement: boolean
-}
-
-export interface ColumnMapping {
-  csvColumn: string
-  mysqlColumn: string | null
-  suggested?: boolean
-}
-
-export type ImportMode = 'insert' | 'update' | 'upsert'
-
-export interface PreviewRow {
-  [key: string]: string
-}
-
-export interface ValidationError {
-  row: number
-  field: string
-  value: string
-  message: string
-  severity: 'error' | 'warning'
-}
-
-export interface ValidationResult {
-  totalRecords: number
-  validCount: number
-  warningCount: number
-  invalidCount: number
-  missingRequiredColumns: string[]
-  duplicateKeyColumns: string[]
-  errors: ValidationError[]
-  truncatedErrors: boolean
-  previewRows: PreviewRow[]
-  previewColumns: string[]
-}
-
-export interface ImportProgress {
-  id: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  progress: number
-  processed: number
+export interface TmsSendResult {
+  idFilial: number
   total: number
-  inserted: number
-  updated: number
-  skipped: number
-  errors: number
-  elapsedSeconds: number
-  message?: string
+  successCount: number
+  errorCount: number
+  errors: { index: number; codigo: string; message: string }[]
 }
-
-export interface ImportResult {
-  id: string
-  status: 'completed' | 'failed'
-  totalProcessed: number
-  inserted: number
-  updated: number
-  skipped: number
-  errors: number
-  durationSeconds: number
-  message?: string
-}
-
-export interface ImportError {
-  row: number
-  field: string
-  value: string
-  message: string
-}
-
-export interface ImportWizardState {
-  connection: ConnectionConfig | null
-  connectionTested: boolean
-  connectionResult: ConnectionTestResult | null
-  csvAnalysis: CsvAnalysis | null
-  selectedTable: string | null
-  columnMappings: ColumnMapping[]
-  importMode: ImportMode
-  validationResult: ValidationResult | null
-  importProgress: ImportProgress | null
-  importResult: ImportResult | null
-}
-
-export type WizardStep = 'connection' | 'file' | 'mapping' | 'review' | 'import'

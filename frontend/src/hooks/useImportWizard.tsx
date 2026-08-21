@@ -1,134 +1,193 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from 'react'
 import type {
-  ConnectionConfig,
-  ConnectionTestResult,
+  AuxiliaryEntity,
+  AuxiliaryUploadResult,
   CsvAnalysis,
-  ColumnMapping,
-  ValidationResult,
-  ImportProgress,
-  ImportResult,
-  ImportMode,
+  ProductValidationResult,
+  TmsSendResult,
   WizardStep,
 } from '@/types'
+
+const TMS_URL_KEY = 'importflow.tmsBaseUrl'
+const DEFAULT_TMS_URL = 'http://localhost:2001'
+
+type AuxiliaryMap = Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
+
+export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
+  template: 'Modelo',
+  file: 'Arquivo',
+  auxiliary: 'Auxiliares',
+  errors: 'Erros',
+  preview: 'Prévia',
+  send: 'Envio',
+}
+
+export const WIZARD_STEPS: WizardStep[] = [
+  'template',
+  'file',
+  'auxiliary',
+  'errors',
+  'preview',
+  'send',
+]
+
+function readStoredTmsUrl(): string {
+  try {
+    return localStorage.getItem(TMS_URL_KEY) || DEFAULT_TMS_URL
+  } catch {
+    return DEFAULT_TMS_URL
+  }
+}
 
 interface ImportWizardContextValue {
   currentStep: WizardStep
   setCurrentStep: (step: WizardStep) => void
-  connection: ConnectionConfig | null
-  setConnection: (config: ConnectionConfig) => void
-  sessionId: string | null
-  setSessionId: (id: string | null) => void
-  connectionTested: boolean
-  connectionResult: ConnectionTestResult | null
-  setConnectionResult: (result: ConnectionTestResult | null) => void
   csvAnalysis: CsvAnalysis | null
   setCsvAnalysis: (analysis: CsvAnalysis | null) => void
-  selectedTable: string | null
-  setSelectedTable: (table: string | null) => void
-  columnMappings: ColumnMapping[]
-  setColumnMappings: (mappings: ColumnMapping[]) => void
-  importMode: ImportMode
-  setImportMode: (mode: ImportMode) => void
-  validationResult: ValidationResult | null
-  setValidationResult: (result: ValidationResult | null) => void
-  importProgress: ImportProgress | null
-  setImportProgress: (progress: ImportProgress | null) => void
-  importResult: ImportResult | null
-  setImportResult: (result: ImportResult | null) => void
+  auxiliaries: AuxiliaryMap
+  setAuxiliary: (entity: AuxiliaryEntity, result: AuxiliaryUploadResult | null) => void
+  validationResult: ProductValidationResult | null
+  setValidationResult: (result: ProductValidationResult | null) => void
+  previewRows: Record<string, string>[]
+  setPreviewRows: (rows: Record<string, string>[]) => void
+  previewColumns: string[]
+  setPreviewColumns: (columns: string[]) => void
+  sendResult: TmsSendResult | null
+  setSendResult: (result: TmsSendResult | null) => void
+  tmsBaseUrl: string
+  setTmsBaseUrl: (url: string) => void
   resetWizard: () => void
   goToNextStep: () => void
   goToPreviousStep: () => void
+  auxiliaryFileIds: Partial<Record<AuxiliaryEntity, string>>
+  hasInProgressImport: boolean
 }
-
-const STEPS: WizardStep[] = ['connection', 'file', 'mapping', 'review', 'import']
 
 const ImportWizardContext = createContext<ImportWizardContextValue | null>(null)
 
 export function ImportWizardProvider({ children }: { children: ReactNode }) {
-  const [currentStep, setCurrentStep] = useState<WizardStep>('connection')
-  const [connection, setConnection] = useState<ConnectionConfig | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [connectionResult, setConnectionResult] = useState<ConnectionTestResult | null>(null)
+  const [currentStep, setCurrentStep] = useState<WizardStep>('template')
   const [csvAnalysis, setCsvAnalysis] = useState<CsvAnalysis | null>(null)
-  const [selectedTable, setSelectedTable] = useState<string | null>(null)
-  const [columnMappings, setColumnMappings] = useState<ColumnMapping[]>([])
-  const [importMode, setImportMode] = useState<ImportMode>('upsert')
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
-  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
-  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [auxiliaries, setAuxiliaries] = useState<AuxiliaryMap>({})
+  const [validationResult, setValidationResult] = useState<ProductValidationResult | null>(null)
+  const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([])
+  const [previewColumns, setPreviewColumns] = useState<string[]>([])
+  const [sendResult, setSendResult] = useState<TmsSendResult | null>(null)
+  const [tmsBaseUrl, setTmsBaseUrlState] = useState(readStoredTmsUrl)
 
-  const connectionTested = connectionResult?.success === true
+  const setTmsBaseUrl = useCallback((url: string) => {
+    setTmsBaseUrlState(url)
+    try {
+      localStorage.setItem(TMS_URL_KEY, url)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const setAuxiliary = useCallback((entity: AuxiliaryEntity, result: AuxiliaryUploadResult | null) => {
+    setAuxiliaries((prev) => {
+      const next = { ...prev }
+      if (result) next[entity] = result
+      else delete next[entity]
+      return next
+    })
+  }, [])
+
+  const auxiliaryFileIds = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(auxiliaries)
+          .filter(([, value]) => value)
+          .map(([entity, value]) => [entity, value!.fileId])
+      ) as Partial<Record<AuxiliaryEntity, string>>,
+    [auxiliaries]
+  )
 
   const resetWizard = useCallback(() => {
-    setCurrentStep('connection')
-    setConnection(null)
-    setSessionId(null)
-    setConnectionResult(null)
+    setCurrentStep('template')
     setCsvAnalysis(null)
-    setSelectedTable(null)
-    setColumnMappings([])
-    setImportMode('upsert')
+    setAuxiliaries({})
     setValidationResult(null)
-    setImportProgress(null)
-    setImportResult(null)
+    setPreviewRows([])
+    setPreviewColumns([])
+    setSendResult(null)
   }, [])
 
   const goToNextStep = useCallback(() => {
     setCurrentStep((prev) => {
-      const idx = STEPS.indexOf(prev)
-      return idx < STEPS.length - 1 ? STEPS[idx + 1] : prev
+      const idx = WIZARD_STEPS.indexOf(prev)
+      return idx < WIZARD_STEPS.length - 1 ? WIZARD_STEPS[idx + 1] : prev
     })
   }, [])
 
   const goToPreviousStep = useCallback(() => {
     setCurrentStep((prev) => {
-      const idx = STEPS.indexOf(prev)
-      return idx > 0 ? STEPS[idx - 1] : prev
+      const idx = WIZARD_STEPS.indexOf(prev)
+      return idx > 0 ? WIZARD_STEPS[idx - 1] : prev
     })
   }, [])
 
+  const hasInProgressImport = Boolean(csvAnalysis) || currentStep !== 'template'
+
+  const value = useMemo<ImportWizardContextValue>(
+    () => ({
+      currentStep,
+      setCurrentStep,
+      csvAnalysis,
+      setCsvAnalysis,
+      auxiliaries,
+      setAuxiliary,
+      validationResult,
+      setValidationResult,
+      previewRows,
+      setPreviewRows,
+      previewColumns,
+      setPreviewColumns,
+      sendResult,
+      setSendResult,
+      tmsBaseUrl,
+      setTmsBaseUrl,
+      resetWizard,
+      goToNextStep,
+      goToPreviousStep,
+      auxiliaryFileIds,
+      hasInProgressImport,
+    }),
+    [
+      currentStep,
+      csvAnalysis,
+      auxiliaries,
+      setAuxiliary,
+      validationResult,
+      previewRows,
+      previewColumns,
+      sendResult,
+      tmsBaseUrl,
+      setTmsBaseUrl,
+      resetWizard,
+      goToNextStep,
+      goToPreviousStep,
+      auxiliaryFileIds,
+      hasInProgressImport,
+    ]
+  )
+
   return (
-    <ImportWizardContext.Provider
-      value={{
-        currentStep,
-        setCurrentStep,
-        connection,
-        setConnection,
-        sessionId,
-        setSessionId,
-        connectionTested,
-        connectionResult,
-        setConnectionResult,
-        csvAnalysis,
-        setCsvAnalysis,
-        selectedTable,
-        setSelectedTable,
-        columnMappings,
-        setColumnMappings,
-        importMode,
-        setImportMode,
-        validationResult,
-        setValidationResult,
-        importProgress,
-        setImportProgress,
-        importResult,
-        setImportResult,
-        resetWizard,
-        goToNextStep,
-        goToPreviousStep,
-      }}
-    >
-      {children}
-    </ImportWizardContext.Provider>
+    <ImportWizardContext.Provider value={value}>{children}</ImportWizardContext.Provider>
   )
 }
 
 export function useImportWizard() {
   const context = useContext(ImportWizardContext)
   if (!context) {
-    throw new Error('useImportWizard must be used within ImportWizardProvider')
+    throw new Error('useImportWizard deve ser usado dentro de ImportWizardProvider')
   }
   return context
 }
-
-export { STEPS }

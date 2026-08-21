@@ -1,8 +1,12 @@
 import { Header } from '@/components/Header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { Input } from '@/components/ui/input'
+import { useImportWizard } from '@/hooks/useImportWizard'
 
 export function SettingsPage() {
+  const { tmsBaseUrl, setTmsBaseUrl } = useImportWizard()
+
   return (
     <div>
       <Header title="Configurações" description="Preferências da aplicação." />
@@ -19,17 +23,35 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Dados da sessão</CardTitle>
+          <CardTitle>Servidor TMS</CardTitle>
           <CardDescription>
-            As credenciais MySQL não são gravadas no navegador.
+            URL base usada na etapa de envio. Guardada neste navegador.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <label htmlFor="tms-url" className="mb-1.5 block text-sm text-muted-foreground">
+            URL base
+          </label>
+          <Input
+            id="tms-url"
+            value={tmsBaseUrl}
+            onChange={(e) => setTmsBaseUrl(e.target.value)}
+            placeholder="http://localhost:2001"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Sobre esta versão</CardTitle>
+          <CardDescription>Importação de produtos via CSV para a API TMS.</CardDescription>
+        </CardHeader>
+        <CardContent>
           <p className="text-sm text-muted-foreground">
-            Nesta versão MVP, a preferência de tema é a única configuração guardada no
-            navegador. As credenciais MySQL ficam apenas na sessão temporária do servidor.
+            Tema e URL do TMS ficam no navegador. Enquanto a API de insert não estiver disponível,
+            use a simulação na etapa de envio.
           </p>
         </CardContent>
       </Card>

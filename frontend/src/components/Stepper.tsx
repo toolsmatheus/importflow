@@ -1,34 +1,33 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { WIZARD_STEP_LABELS, WIZARD_STEPS } from '@/hooks/useImportWizard'
 import type { WizardStep } from '@/types'
-
-const STEPS = [
-  { id: 'connection' as WizardStep, number: '01', label: 'Conexão' },
-  { id: 'file' as WizardStep, number: '02', label: 'Arquivo' },
-  { id: 'mapping' as WizardStep, number: '03', label: 'Mapeamento' },
-  { id: 'review' as WizardStep, number: '04', label: 'Revisão' },
-  { id: 'import' as WizardStep, number: '05', label: 'Importação' },
-]
 
 interface StepperProps {
   currentStep: WizardStep
 }
 
 export function Stepper({ currentStep }: StepperProps) {
-  const currentIndex = STEPS.findIndex((s) => s.id === currentStep)
+  const currentIndex = WIZARD_STEPS.indexOf(currentStep)
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between">
-        {STEPS.map((step, index) => {
+      <p className="mb-3 text-sm text-muted-foreground lg:hidden">
+        Etapa {currentIndex + 1} de {WIZARD_STEPS.length}:{' '}
+        <span className="font-medium text-foreground">{WIZARD_STEP_LABELS[currentStep]}</span>
+      </p>
+
+      <div className="hidden items-center justify-between lg:flex">
+        {WIZARD_STEPS.map((stepId, index) => {
           const isCompleted = index < currentIndex
           const isCurrent = index === currentIndex
           const isUpcoming = index > currentIndex
 
           return (
-            <div key={step.id} className="flex flex-1 items-center">
+            <div key={stepId} className="flex flex-1 items-center">
               <div className="flex flex-col items-center">
                 <div
+                  aria-current={isCurrent ? 'step' : undefined}
                   className={cn(
                     'flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors',
                     isCompleted && 'border-primary bg-primary text-primary-foreground',
@@ -36,18 +35,18 @@ export function Stepper({ currentStep }: StepperProps) {
                     isUpcoming && 'border-border bg-card text-muted-foreground'
                   )}
                 >
-                  {isCompleted ? <Check className="h-5 w-5" /> : step.number}
+                  {isCompleted ? <Check className="h-5 w-5" /> : String(index + 1).padStart(2, '0')}
                 </div>
                 <span
                   className={cn(
-                    'mt-2 text-xs font-medium',
+                    'mt-2 text-center text-xs font-medium',
                     isCurrent ? 'text-primary' : 'text-muted-foreground'
                   )}
                 >
-                  {step.label}
+                  {WIZARD_STEP_LABELS[stepId]}
                 </span>
               </div>
-              {index < STEPS.length - 1 && (
+              {index < WIZARD_STEPS.length - 1 && (
                 <div
                   className={cn(
                     'mx-2 mb-6 h-0.5 flex-1',
@@ -58,6 +57,19 @@ export function Stepper({ currentStep }: StepperProps) {
             </div>
           )
         })}
+      </div>
+
+      <div className="flex gap-1.5 lg:hidden">
+        {WIZARD_STEPS.map((stepId, index) => (
+          <div
+            key={stepId}
+            className={cn(
+              'h-1.5 flex-1 rounded-full',
+              index <= currentIndex ? 'bg-primary' : 'bg-border'
+            )}
+            title={WIZARD_STEP_LABELS[stepId]}
+          />
+        ))}
       </div>
     </div>
   )
