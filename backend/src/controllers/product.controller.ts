@@ -204,6 +204,17 @@ const startSendBodySchema = z.object({
   mode: z.enum(['live', 'simulate']).optional(),
   batchSize: z.number().int().min(10).max(500).optional(),
   concurrency: z.number().int().min(1).max(8).optional(),
+  auxiliary: z
+    .object({
+      grupo: z.string().uuid().optional(),
+      subgrupo: z.string().uuid().optional(),
+      categoria: z.string().uuid().optional(),
+      laboratorio: z.string().uuid().optional(),
+      grupodepreco: z.string().uuid().optional(),
+      similar: z.string().uuid().optional(),
+      dcb: z.string().uuid().optional(),
+    })
+    .optional(),
 })
 
 const suggestControladosBodySchema = z.object({
@@ -298,6 +309,7 @@ export async function identifyServerHandler(request: FastifyRequest, reply: Fast
     )
     return reply.send({
       idFilial: identification.idFilial,
+      versao: identification.versao,
       tmsBaseUrl: query.tmsBaseUrl ?? getDefaultTmsBaseUrl(),
     })
   } catch (error) {
@@ -321,12 +333,32 @@ export async function startSendJobHandler(request: FastifyRequest, reply: Fastif
   }
 
   try {
+    const auxiliaries: { entity: AuxiliaryEntity; codigo: string; descricao: string }[] = []
+    const auxIds = parsed.data.auxiliary ?? {}
+
+    for (const entity of AUXILIARY_ENTITIES) {
+      const fileId = auxIds[entity]
+      if (!fileId) continue
+      const file = getStoredFile(fileId)
+      if (!file) {
+        return reply.status(400).send({
+          success: false,
+          message: `Arquivo auxiliar ${entity}.csv expirado. Envie novamente na etapa de auxiliares.`,
+        })
+      }
+      const loaded = await loadAuxiliaryCatalog(file)
+      for (const [codigo, descricao] of loaded.catalog.entries()) {
+        auxiliaries.push({ entity, codigo, descricao })
+      }
+    }
+
     const snapshot = await createSendJob({
       rows: parsed.data.rows,
       mode: parsed.data.mode ?? 'simulate',
       tmsBaseUrl: parsed.data.tmsBaseUrl,
       batchSize: parsed.data.batchSize,
       concurrency: parsed.data.concurrency,
+      auxiliaries,
     })
 
     request.log.info(
@@ -334,6 +366,14 @@ export async function startSendJobHandler(request: FastifyRequest, reply: Fastif
         jobId: snapshot.id,
         mode: snapshot.mode,
         total: snapshot.total,
+        grupos: snapshot.gruposTotal,
+        auxiliares: snapshot.auxTotal,
+        entidades: Object.fromEntries(
+          AUXILIARY_ENTITIES.map((entity) => [
+            entity,
+            auxiliaries.filter((item) => item.entity === entity).length,
+          ])
+        ),
         batchSize: snapshot.batchSize,
         concurrency: snapshot.concurrency,
       },

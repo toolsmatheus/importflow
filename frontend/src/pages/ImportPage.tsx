@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { useImportWizard } from '@/hooks/useImportWizard'
 import { csvService } from '@/services/csvService'
 import { productService } from '@/services/productService'
-import { cn, formatNumber } from '@/lib/utils'
+import { formatNumber } from '@/lib/utils'
 import type { FileInputMode, FolderCollectResult } from '@/types'
 
 export function ImportPage() {
@@ -91,7 +91,10 @@ export function ImportPage() {
       wizard.setCsvAnalysis(null)
     }
 
-    wizard.replaceAuxiliaries(result.auxiliaries)
+    wizard.replaceAuxiliaries({
+      ...wizard.auxiliaries,
+      ...result.auxiliaries,
+    })
     wizard.setValidationResult(null)
     wizard.setPreviewRows([])
     wizard.setSendJob(null)
@@ -105,7 +108,7 @@ export function ImportPage() {
             Importação de produtos
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Valide o CSV e envie em lotes para o servidor TMS.
+            Primeiro os auxiliares, depois o CSV de produtos e o envio ao TMS.
           </p>
         </div>
         <Button
@@ -128,6 +131,15 @@ export function ImportPage() {
         <TemplateStep onContinue={wizard.goToNextStep} />
       )}
 
+      {wizard.currentStep === 'auxiliary' && (
+        <AuxiliaryStep
+          auxiliaries={wizard.auxiliaries}
+          onUploaded={wizard.setAuxiliary}
+          onBack={() => wizard.setCurrentStep('template')}
+          onContinue={() => wizard.setCurrentStep('file')}
+        />
+      )}
+
       {wizard.currentStep === 'file' && (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2">
@@ -147,6 +159,12 @@ export function ImportPage() {
             </Button>
           </div>
 
+          {Object.keys(wizard.auxiliaries).length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Auxiliares prontos: {Object.keys(wizard.auxiliaries).join(', ')}.
+            </p>
+          )}
+
           {inputMode === 'manual' ? (
             <FileDropzone
               onFileSelect={handleFileSelect}
@@ -159,41 +177,36 @@ export function ImportPage() {
 
           {wizard.csvAnalysis && <FileInfo analysis={wizard.csvAnalysis} />}
 
-          {inputMode === 'folder' && Object.keys(wizard.auxiliaries).length > 0 && (
-            <p className={cn('text-sm text-muted-foreground')}>
-              Auxiliares já carregados da pasta:{' '}
-              {Object.keys(wizard.auxiliaries).join(', ')}. Você pode revisar na próxima etapa.
-            </p>
-          )}
-
           <div className="flex justify-between">
-            <Button variant="outline" onClick={wizard.goToPreviousStep}>
+            <Button
+              variant="outline"
+              onClick={() => wizard.setCurrentStep('auxiliary')}
+              disabled={validateMutation.isPending}
+            >
               Voltar
             </Button>
             <Button
-              onClick={() => wizard.setCurrentStep('auxiliary')}
-              disabled={!wizard.csvAnalysis}
+              onClick={() => validateMutation.mutate()}
+              disabled={!wizard.csvAnalysis || !wizard.auxiliaries.grupo || validateMutation.isPending}
             >
-              Continuar
+              {validateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Validar produtos
             </Button>
           </div>
-        </div>
-      )}
 
-      {wizard.currentStep === 'auxiliary' && (
-        <AuxiliaryStep
-          auxiliaries={wizard.auxiliaries}
-          onUploaded={wizard.setAuxiliary}
-          onBack={() => wizard.setCurrentStep('file')}
-          onContinue={() => validateMutation.mutate()}
-          isValidating={validateMutation.isPending}
-        />
+          {validateMutation.isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Validando produtos e vínculos auxiliares...
+            </div>
+          )}
+        </div>
       )}
 
       {wizard.currentStep === 'errors' && (
         <ErrorsStep
           result={wizard.validationResult}
-          onBack={() => wizard.setCurrentStep('auxiliary')}
+          onBack={() => wizard.setCurrentStep('file')}
           onFixFile={() => wizard.setCurrentStep('file')}
           onFixAuxiliary={() => wizard.setCurrentStep('auxiliary')}
           onRevalidate={() => validateMutation.mutate()}
@@ -227,6 +240,7 @@ export function ImportPage() {
           onTmsBaseUrlChange={wizard.setTmsBaseUrl}
           job={wizard.sendJob}
           onJobChange={wizard.setSendJob}
+          auxiliary={wizard.auxiliaryFileIds}
           onBack={() => wizard.setCurrentStep('preview')}
           onFinish={() => {
             wizard.resetWizard()
@@ -235,13 +249,6 @@ export function ImportPage() {
             toast.success('Importação concluída')
           }}
         />
-      )}
-
-      {validateMutation.isPending && wizard.currentStep === 'auxiliary' && (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Validando produtos e vínculos auxiliares...
-        </div>
       )}
     </div>
   )

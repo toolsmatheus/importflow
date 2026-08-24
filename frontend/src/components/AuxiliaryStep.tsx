@@ -159,7 +159,7 @@ export function AuxiliaryStep({
         </Button>
         <Button onClick={onContinue} disabled={!hasGrupo || isValidating}>
           {isValidating && <Loader2 className="h-4 w-4 animate-spin" />}
-          Validar com auxiliares
+          Continuar para produtos
         </Button>
       </div>
     </div>

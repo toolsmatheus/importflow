@@ -22,8 +22,8 @@ type AuxiliaryMap = Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
 
 export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
   template: 'Modelo',
-  file: 'Arquivo',
   auxiliary: 'Auxiliares',
+  file: 'Produtos',
   errors: 'Erros',
   preview: 'Prévia',
   send: 'Envio',
@@ -31,8 +31,8 @@ export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
 
 export const WIZARD_STEPS: WizardStep[] = [
   'template',
-  'file',
   'auxiliary',
+  'file',
   'errors',
   'preview',
   'send',

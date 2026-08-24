@@ -20,7 +20,7 @@ import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { productService } from '@/services/productService'
 import { formatNumber } from '@/lib/utils'
-import type { SendJobSnapshot, SendMode } from '@/types'
+import type { AuxiliaryEntity, SendJobSnapshot, SendMode } from '@/types'
 
 interface SendStepProps {
   rows: Record<string, string>[]
@@ -30,6 +30,7 @@ interface SendStepProps {
   onJobChange: (job: SendJobSnapshot | null) => void
   onBack: () => void
   onFinish: () => void
+  auxiliary?: Partial<Record<AuxiliaryEntity, string>>
 }
 
 function formatDuration(ms: number) {
@@ -47,8 +48,10 @@ export function SendStep({
   onJobChange,
   onBack,
   onFinish,
+  auxiliary,
 }: SendStepProps) {
   const [idFilialPreview, setIdFilialPreview] = useState<number | null>(null)
+  const [versaoPreview, setVersaoPreview] = useState<string | null>(null)
   const [batchSize, setBatchSize] = useState(100)
   const [concurrency, setConcurrency] = useState(2)
 
@@ -74,7 +77,12 @@ export function SendStep({
     mutationFn: () => productService.identifyServer(tmsBaseUrl),
     onSuccess: (data) => {
       setIdFilialPreview(data.idFilial)
-      toast.success(`Servidor ok. Filial ${data.idFilial}`)
+      setVersaoPreview(data.versao ?? null)
+      toast.success(
+        data.versao
+          ? `Servidor ok. Filial ${data.idFilial}, versão ${data.versao}`
+          : `Servidor ok. Filial ${data.idFilial}`
+      )
     },
     onError: (error: Error) => toast.error(error.message || 'Servidor indisponível'),
   })
@@ -87,6 +95,7 @@ export function SendStep({
         tmsBaseUrl,
         batchSize,
         concurrency,
+        auxiliary,
       }),
     onSuccess: (snapshot) => {
       onJobChange(snapshot)
@@ -121,8 +130,9 @@ export function SendStep({
         <CardHeader>
           <CardTitle>Envio em lotes</CardTitle>
           <CardDescription>
-            Preparado para 5 mil a 20 mil produtos. Enquanto a API TMS não existir, use a
-            simulação para validar progresso e retomada.
+            Preparado para 5 mil a 20 mil produtos. No envio ao vivo, os auxiliares (grupo,
+            subgrupo, categoria, laboratório, grupo de preço, similar e DCB) são inseridos
+            primeiro; a descrição vai em maiúsculas.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -170,6 +180,15 @@ export function SendStep({
             </div>
           </div>
 
+          {auxiliary && Object.keys(auxiliary).length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Auxiliares no envio:{' '}
+              <span className="font-mono text-foreground">
+                {Object.keys(auxiliary).join(', ')}
+              </span>
+            </p>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
@@ -204,6 +223,12 @@ export function SendStep({
             <p className="text-sm text-muted-foreground">
               Filial detectada:{' '}
               <span className="font-mono text-foreground">{idFilialPreview}</span>
+              {versaoPreview ? (
+                <>
+                  {' '}
+                  · versão <span className="font-mono text-foreground">{versaoPreview}</span>
+                </>
+              ) : null}
             </p>
           )}
         </CardContent>
@@ -218,6 +243,13 @@ export function SendStep({
             <CardDescription>
               Lote {job.currentBatch}/{job.totalBatches}, filial {job.idFilial}, status{' '}
               {job.status}
+              {typeof job.auxTotal === 'number' && job.auxTotal > 0
+                ? ` · auxiliares ${job.auxInserted ?? 0}/${job.auxTotal}${
+                    job.auxSkipped ? ` (${job.auxSkipped} DCB já no TMS)` : ''
+                  }`
+                : typeof job.gruposTotal === 'number' && job.gruposTotal > 0
+                  ? ` · grupos ${job.gruposInserted ?? 0}/${job.gruposTotal}`
+                  : ''}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

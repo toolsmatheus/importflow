@@ -89,12 +89,14 @@ export const productService = {
     return data as ControladoSuggestResult
   },
 
-  async identifyServer(tmsBaseUrl?: string): Promise<{ idFilial: number; tmsBaseUrl: string }> {
+  async identifyServer(
+    tmsBaseUrl?: string
+  ): Promise<{ idFilial: number; versao?: string; tmsBaseUrl: string }> {
     const query = tmsBaseUrl ? `?tmsBaseUrl=${encodeURIComponent(tmsBaseUrl)}` : ''
     const response = await fetch(`/api/products/identify-server${query}`)
     const data = await response.json()
     if (!response.ok) throw new Error(data?.message ?? 'Erro ao identificar o servidor TMS')
-    return data as { idFilial: number; tmsBaseUrl: string }
+    return data as { idFilial: number; versao?: string; tmsBaseUrl: string }
   },
 
   async startSend(options: {
@@ -103,11 +105,19 @@ export const productService = {
     tmsBaseUrl?: string
     batchSize?: number
     concurrency?: number
+    auxiliary?: Partial<Record<AuxiliaryEntity, string>>
   }): Promise<SendJobSnapshot> {
     const response = await fetch('/api/products/send/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(options),
+      body: JSON.stringify({
+        rows: options.rows,
+        mode: options.mode,
+        tmsBaseUrl: options.tmsBaseUrl,
+        batchSize: options.batchSize,
+        concurrency: options.concurrency,
+        auxiliary: options.auxiliary,
+      }),
     })
     const data = await response.json()
     if (!response.ok) throw new Error(data?.message ?? 'Erro ao iniciar o envio')

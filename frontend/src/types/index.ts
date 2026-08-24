@@ -118,6 +118,13 @@ export interface SendJobSnapshot {
   productsPerSecond: number
   percent: number
   remaining: number
+  gruposTotal?: number
+  gruposInserted?: number
+  gruposFailed?: number
+  auxTotal?: number
+  auxInserted?: number
+  auxFailed?: number
+  auxSkipped?: number
 }
 
 export interface FolderCollectResult {

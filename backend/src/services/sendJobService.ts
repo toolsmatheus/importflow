@@ -1,10 +1,14 @@
 import { randomUUID } from 'crypto'
 import {
   fetchServerIdentification,
+  fetchTmsDcbCatalog,
   getDefaultTmsBaseUrl,
+  insertAuxiliaryEntity,
   insertProductBatch,
   mapCsvRowToProductPayload,
+  type TmsAuxiliaryEntity,
 } from './tmsService.js'
+import { lookupAnvisaDcb, padDcbCode } from './dcbIndexService.js'
 
 export type SendJobStatus =
   | 'queued'
@@ -45,6 +49,29 @@ export interface SendJobSnapshot {
   productsPerSecond: number
   percent: number
   remaining: number
+  gruposTotal: number
+  gruposInserted: number
+  gruposFailed: number
+  auxTotal: number
+  auxInserted: number
+  auxFailed: number
+  auxSkipped: number
+}
+
+export interface AuxiliarySendRow {
+  entity: TmsAuxiliaryEntity
+  codigo: string
+  descricao: string
+}
+
+const AUX_LABEL: Record<TmsAuxiliaryEntity, string> = {
+  grupo: 'Grupo',
+  subgrupo: 'Subgrupo',
+  categoria: 'Categoria',
+  laboratorio: 'Laboratório',
+  grupodepreco: 'Grupo de preço',
+  similar: 'Similar',
+  dcb: 'DCB',
 }
 
 interface SendJobInternal {
@@ -69,6 +96,11 @@ interface SendJobInternal {
   pauseRequested: boolean
   cancelRequested: boolean
   runner: Promise<void> | null
+  auxiliaries: AuxiliarySendRow[]
+  auxInserted: number
+  auxFailed: number
+  auxSkipped: number
+  auxDone: boolean
 }
 
 const MAX_STORED_ERRORS = 500
@@ -120,7 +152,85 @@ export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
     productsPerSecond,
     percent: job.rows.length === 0 ? 100 : Math.round((job.processed / job.rows.length) * 100),
     remaining: Math.max(0, job.rows.length - job.processed),
+    gruposTotal: job.auxiliaries.filter((a) => a.entity === 'grupo').length,
+    gruposInserted: job.auxInserted,
+    gruposFailed: job.auxFailed,
+    auxTotal: job.auxiliaries.length,
+    auxInserted: job.auxInserted,
+    auxFailed: job.auxFailed,
+    auxSkipped: job.auxSkipped,
   }
+}
+
+async function insertAuxiliaries(job: SendJobInternal): Promise<void> {
+  if (job.mode !== 'live' || job.auxiliaries.length === 0 || job.auxDone) return
+
+  const remaining = job.auxiliaries.slice(job.auxInserted + job.auxFailed + job.auxSkipped)
+  const needsDcbCatalog = remaining.some((item) => item.entity === 'dcb')
+  const dcbCatalog = needsDcbCatalog ? await fetchTmsDcbCatalog(job.tmsBaseUrl) : null
+
+  for (const item of remaining) {
+    if (job.cancelRequested) return
+    while (job.pauseRequested && !job.cancelRequested) {
+      job.status = 'paused'
+      await sleep(200)
+    }
+    if (job.cancelRequested) return
+
+    if (item.entity === 'dcb' && dcbCatalog) {
+      const padded = padDcbCode(item.codigo)
+      const existing = dcbCatalog.get(padded) ?? dcbCatalog.get(item.codigo.trim())
+      if (existing) {
+        job.auxSkipped++
+        continue
+      }
+
+      const anvisa = lookupAnvisaDcb(padded)
+      const toInsert = {
+        codigo: padded,
+        descricao: anvisa?.descricao || item.descricao,
+      }
+      const result = await insertAuxiliaryEntity('dcb', toInsert, job.tmsBaseUrl)
+      if (result.ok) {
+        job.auxInserted++
+        dcbCatalog.set(padded, {
+          id: '',
+          dcb: padded,
+          descricao: toInsert.descricao,
+        })
+        continue
+      }
+      job.auxFailed++
+      if (job.errors.length < MAX_STORED_ERRORS) {
+        job.errors.push({
+          index: -1,
+          codigo: padded,
+          message: `DCB ${padded} (${toInsert.descricao}): ${result.message || 'falha no insert'}`,
+          batch: 0,
+        })
+      }
+      continue
+    }
+
+    const result = await insertAuxiliaryEntity(item.entity, item, job.tmsBaseUrl)
+    if (result.ok) {
+      job.auxInserted++
+      continue
+    }
+
+    job.auxFailed++
+    if (job.errors.length < MAX_STORED_ERRORS) {
+      const label = AUX_LABEL[item.entity]
+      job.errors.push({
+        index: -1,
+        codigo: item.codigo,
+        message: `${label} ${item.codigo} (${item.descricao}): ${result.message || 'falha no insert'}`,
+        batch: 0,
+      })
+    }
+  }
+
+  if (!job.cancelRequested) job.auxDone = true
 }
 
 async function processOneBatch(
@@ -226,6 +336,13 @@ async function runJob(job: SendJobInternal): Promise<void> {
   job.finishedAt = null
 
   try {
+    await insertAuxiliaries(job)
+    if (job.cancelRequested) {
+      job.status = 'cancelled'
+      job.finishedAt = Date.now()
+      return
+    }
+
     while (job.pendingIndexes.length > 0) {
       if (job.cancelRequested) {
         job.status = 'cancelled'
@@ -279,6 +396,7 @@ export async function createSendJob(input: {
   tmsBaseUrl?: string
   batchSize?: number
   concurrency?: number
+  auxiliaries?: AuxiliarySendRow[]
 }): Promise<SendJobSnapshot> {
   cleanupJobs()
 
@@ -286,6 +404,13 @@ export async function createSendJob(input: {
   const tmsBaseUrl = input.tmsBaseUrl ?? getDefaultTmsBaseUrl()
   const batchSize = Math.min(500, Math.max(10, input.batchSize ?? DEFAULT_BATCH_SIZE))
   const concurrency = Math.min(8, Math.max(1, input.concurrency ?? DEFAULT_CONCURRENCY))
+  const auxiliaries = (input.auxiliaries ?? [])
+    .map((item) => ({
+      entity: item.entity,
+      codigo: String(item.codigo ?? '').trim(),
+      descricao: String(item.descricao ?? '').trim().toLocaleUpperCase('pt-BR'),
+    }))
+    .filter((item) => item.codigo && item.descricao)
 
   let idFilial = 1
   if (mode === 'live') {
@@ -318,6 +443,11 @@ export async function createSendJob(input: {
     pauseRequested: false,
     cancelRequested: false,
     runner: null,
+    auxiliaries,
+    auxInserted: 0,
+    auxFailed: 0,
+    auxSkipped: 0,
+    auxDone: false,
   }
 
   jobs.set(job.id, job)
