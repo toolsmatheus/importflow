@@ -138,10 +138,11 @@ function resolveAliquotaId(
   }
 
   const found = catalogs.aliquotaByPercent.get(aliquota)
-  if (found !== undefined) return { id: found }
+  if (found !== undefined && found > 0) return { id: found }
 
-  // Percentual inexistente no cadastro → ICMS ST
-  return { id: catalogs.aliquotaStId }
+  return {
+    error: `AliquotaICMS com aliquota=${aliquota} não encontrada no TMS (deveria ter sido criada antes do produto)`,
+  }
 }
 
 function resolveSimilarId(
@@ -179,6 +180,46 @@ function resolveDcbId(
     return { error: `DCB ${code} não encontrado no TMS` }
   }
   return { id }
+}
+
+/**
+ * Regras fiscais:
+ * - aliquota ≠ 0 → CFOP 5102, csticmsnormal cic00, csticms cic102
+ * - ST (st=S) → CFOP 5405, csticmsnormal cic60, csticms cic500
+ * - Isento (isento=S) → csticmsnormal cic40
+ */
+function resolveFiscalOverrides(row: Record<string, string>): {
+  cfopCode?: string
+  csticms?: string
+  csticmsnormal?: string
+} {
+  const aliquota = num(row.aliquota)
+  const isSt = str(row.st)?.toUpperCase() === 'S'
+  const isIsento = str(row.isento)?.toUpperCase() === 'S'
+
+  if (aliquota !== undefined && aliquota !== 0) {
+    return {
+      cfopCode: '5102',
+      csticmsnormal: 'cic00',
+      csticms: 'cic102',
+    }
+  }
+
+  if (isSt) {
+    return {
+      cfopCode: '5405',
+      csticmsnormal: 'cic60',
+      csticms: 'cic500',
+    }
+  }
+
+  if (isIsento) {
+    return {
+      csticmsnormal: 'cic40',
+    }
+  }
+
+  return {}
 }
 
 /**
@@ -232,7 +273,8 @@ export function mapCsvRowToProductPayload(
   const dcb = resolveDcbId(row, catalogs)
   if (dcb.error) return { ok: false, message: dcb.error }
 
-  const cfopCode = str(row.cfop)
+  const fiscal = resolveFiscalOverrides(row)
+  const cfopCode = fiscal.cfopCode ?? str(row.cfop)
   let cfopId: number | undefined
   if (cfopCode) {
     cfopId = catalogs.cfopByCode.get(cfopCode)
@@ -317,10 +359,10 @@ export function mapCsvRowToProductPayload(
   const observacao = str(row.observacao)
   if (observacao) payload.observacaovenda = observacao
 
-  const csticms = mapCstIcms(row.csosn, 'cic')
+  const csticms = fiscal.csticms ?? mapCstIcms(row.csosn, 'cic')
   if (csticms) payload.csticms = csticms
 
-  const csticmsnormal = mapCstIcms(row.csticms, 'cic')
+  const csticmsnormal = fiscal.csticmsnormal ?? mapCstIcms(row.csticms, 'cic')
   if (csticmsnormal) payload.csticmsnormal = csticmsnormal
 
   if (cstpis) payload.cstpis = cstpis

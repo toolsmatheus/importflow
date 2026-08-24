@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import {
   auxiliaryMigracaoExists,
+  ensureAliquotaPercent,
   fetchAuxiliaryExistenceCatalogs,
   fetchProductExistenceCatalogs,
   fetchProductLookupCatalogs,
@@ -18,6 +19,7 @@ import {
 } from './tmsService.js'
 import { lookupAnvisaDcb, padDcbCode } from './dcbIndexService.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
+import { parseBrazilianNumber } from '../utils/productFormats.js'
 
 export type SendJobStatus =
   | 'queued'
@@ -504,6 +506,27 @@ async function processOneBatch(
       })
       job.processed++
       continue
+    }
+
+    const aliquotaNum = parseBrazilianNumber(String(row.aliquota ?? ''))
+    if (aliquotaNum !== null && aliquotaNum !== 0) {
+      const ensured = await ensureAliquotaPercent(catalogs, aliquotaNum, job.tmsBaseUrl)
+      if (!ensured.ok) {
+        if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
+        if (barcode) releaseExistenceKey(existence.byBarcode, barcode)
+        job.errorCount++
+        job.failedIndexes.push(index)
+        if (job.errors.length < MAX_STORED_ERRORS) {
+          job.errors.push({
+            index,
+            codigo,
+            message: ensured.message || `Falha ao garantir AliquotaICMS ${aliquotaNum}%`,
+            batch: batchNumber,
+          })
+        }
+        job.processed++
+        continue
+      }
     }
 
     const mapped = mapCsvRowToProductPayload(row, job.idFilial, catalogs)

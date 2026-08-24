@@ -62,8 +62,10 @@ export interface ProductFieldCatalog {
   tmsBaseUrl: string
   rules: {
     controladoSemDcb: string
-    csosnECsticmsJuntos: string
     markupInconsistente: string
+    aliquotaZeroStIsento?: string
+    aliquotaPercent?: string
+    unidadeEstoque?: string
   }
 }
 

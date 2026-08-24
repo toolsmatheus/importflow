@@ -494,19 +494,6 @@ function validateRow(
     }
   }
 
-  const hasCsosn = hasColumn(columns, 'csosn') && !isBlank(cell(record, 'csosn'))
-  const hasCsticms = hasColumn(columns, 'csticms') && !isBlank(cell(record, 'csticms'))
-  if (hasCsosn && hasCsticms) {
-    pushIssue(issues, counters, {
-      row: rowNumber,
-      field: 'csosn',
-      value: `${cell(record, 'csosn')} / ${cell(record, 'csticms')}`,
-      message:
-        'CSOSN e CST ICMS preenchidos juntos — normalmente só um vale (Simples Nacional x Regime Normal).',
-      severity: 'warning',
-    })
-  }
-
   if (hasColumn(columns, 'medfciapop') && cell(record, 'medfciapop').trim().toUpperCase() === 'S') {
     for (const field of ['qtdfciapop', 'valorfciapop'] as const) {
       if (isBlank(cell(record, field))) {
