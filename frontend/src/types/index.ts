@@ -96,6 +96,18 @@ export interface SendJobError {
   batch: number
 }
 
+export type ProductSkipReason = 'codigo_barras' | 'codigo_migracao'
+
+export interface SendJobSkippedProduct {
+  index: number
+  codigo: string
+  nome: string
+  codigobarras: string
+  reason: ProductSkipReason
+  message: string
+  tmsProdutoId: number | null
+}
+
 export interface SendJobSnapshot {
   id: string
   status: SendJobStatus
@@ -108,10 +120,13 @@ export interface SendJobSnapshot {
   processed: number
   successCount: number
   errorCount: number
+  productSkipped?: number
   currentBatch: number
   totalBatches: number
   errors: SendJobError[]
   errorsTruncated: boolean
+  skipped?: SendJobSkippedProduct[]
+  skippedTruncated?: boolean
   startedAt: string | null
   finishedAt: string | null
   elapsedMs: number

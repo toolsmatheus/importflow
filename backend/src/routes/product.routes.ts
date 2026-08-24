@@ -4,6 +4,7 @@ import {
   collectFolderHandler,
   downloadAuxiliaryTemplateHandler,
   downloadProductTemplateHandler,
+  downloadSkippedProductsHandler,
   getFolderExpectHandler,
   getProductFieldCatalogHandler,
   getSendJobHandler,
@@ -31,6 +32,7 @@ export async function productRoutes(app: FastifyInstance) {
   app.get('/products/identify-server', identifyServerHandler)
   app.post('/products/send/start', startSendJobHandler)
   app.get('/products/send/:jobId', getSendJobHandler)
+  app.get('/products/send/:jobId/skipped.csv', downloadSkippedProductsHandler)
   app.post('/products/send/:jobId/pause', pauseSendJobHandler)
   app.post('/products/send/:jobId/resume', resumeSendJobHandler)
   app.post('/products/send/:jobId/cancel', cancelSendJobHandler)

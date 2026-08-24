@@ -1,6 +1,9 @@
 import { createHash } from 'crypto'
-import { parseBrazilianNumber, isBlank } from '../utils/productFormats.js'
 import { lookupAnvisaDcb, padDcbCode } from './dcbIndexService.js'
+import type { ProductLookupCatalogs } from './productTmsMapper.js'
+
+export type { ProductLookupCatalogs } from './productTmsMapper.js'
+export { mapCsvRowToProductPayload } from './productTmsMapper.js'
 
 const DEFAULT_TMS_BASE = process.env.TMS_BASE_URL ?? 'http://localhost:2001'
 /** Sufixo combinado com a versão para gerar a senha Basic Auth do TMS. */
@@ -22,88 +25,6 @@ export interface BatchInsertResult {
   ok: boolean
   message?: string
   statusCode?: number
-}
-
-function snToBool(value: string | undefined): boolean | undefined {
-  if (isBlank(value)) return undefined
-  const v = value!.trim().toUpperCase()
-  if (v === 'S') return true
-  if (v === 'N') return false
-  return undefined
-}
-
-function num(value: string | undefined): number | undefined {
-  if (isBlank(value)) return undefined
-  return parseBrazilianNumber(value!) ?? undefined
-}
-
-function int(value: string | undefined): number | undefined {
-  if (isBlank(value)) return undefined
-  const n = Number(value!.trim())
-  return Number.isInteger(n) ? n : undefined
-}
-
-function str(value: string | undefined): string | undefined {
-  if (isBlank(value)) return undefined
-  return value!.trim()
-}
-
-/**
- * Mapeia uma linha do CSV para o payload do ProdutoService/insert.
- * Contrato provisório até a API TMS fechar.
- */
-export function mapCsvRowToProductPayload(
-  row: Record<string, string>,
-  idFilial: number
-): Record<string, unknown> {
-  const cstPisCofins = str(row.cstpiscofins)
-
-  return {
-    idFilial,
-    codigo_migracao: str(row.codigo),
-    nome: str(row.nome),
-    idGrupo: int(row.codigogrupo),
-    custo: num(row.custo),
-    markup: num(row.markup),
-    venda: num(row.venda),
-    unidade: str(row.unidade),
-    fator: num(row.fator),
-    listapiscofins: str(row.listapiscofins)?.toUpperCase(),
-    aliquotaicms: num(row.aliquota),
-    cfop: str(row.cfop),
-    ncm: str(row.ncm),
-    cstpis: cstPisCofins,
-    cstcofins: cstPisCofins,
-    valorpmc: num(row.valorpmc),
-    codigobarras: str(row.codigobarras),
-    idSubgrupo: int(row.subgrupo),
-    idCategoria: int(row.categoria),
-    idLaboratorio: int(row.laboratorio),
-    idGrupodepreco: int(row.grupodepreco),
-    idSimilar: int(row.similar),
-    estoque: num(row.estoque),
-    descontofixo: num(row.descontofixo),
-    comissao: num(row.comissao),
-    atualizaestoque: snToBool(row.atualizaestoque),
-    demanda: num(row.demanda),
-    ativo: str(row.ativo)?.toUpperCase() === 'I' ? false : true,
-    st: snToBool(row.st),
-    isento: snToBool(row.isento),
-    semincidencia: snToBool(row.semincidencia),
-    permitedesconto: snToBool(row.permitedesconto),
-    localizacao: str(row.localizacao),
-    usocontinuo: snToBool(row.usocontinuo),
-    observacao: str(row.observacao),
-    descontomax: num(row.descontomax),
-    cest: str(row.cest),
-    csticms: str(row.csosn),
-    csticmsnormal: str(row.csticms),
-    medfciapop: snToBool(row.medfciapop),
-    qtdfciapop: num(row.qtdfciapop),
-    valorfciapop: num(row.valorfciapop),
-    listacontrole: str(row.listacontrole),
-    idDcb: int(row.dcb),
-  }
 }
 
 function sha256Hex(value: string): string {
@@ -342,22 +263,137 @@ function buildAuxiliaryPayload(
   return { codigo_migracao: migrationCodigo(codigo), descricao }
 }
 
+/** Entidades auxiliares que usam codigo_migracao para deduplicar. */
+export const AUXILIARY_MIGRACAO_ENTITIES = [
+  'grupo',
+  'subgrupo',
+  'categoria',
+  'laboratorio',
+  'grupodepreco',
+] as const satisfies readonly TmsAuxiliaryEntity[]
+
+export type AuxiliaryMigracaoEntity = (typeof AUXILIARY_MIGRACAO_ENTITIES)[number]
+
+export interface AuxiliaryExistenceCatalogs {
+  /** codigo_migracao (string) → já existe no TMS */
+  byMigracao: Record<AuxiliaryMigracaoEntity, Set<string>>
+  /** Similar não tem codigo_migracao — deduplica por descrição UPPER */
+  similarByDescricao: Set<string>
+}
+
+function addMigracaoKeys(set: Set<string>, value: unknown) {
+  if (value === undefined || value === null || value === '') return
+  const raw = String(value).trim()
+  if (!raw) return
+  set.add(raw)
+  const n = Number(raw)
+  if (Number.isInteger(n)) set.add(String(n))
+}
+
 /**
- * Envia um lote de produtos. Preferência: body com array.
- * Quando a API real fechar o contrato, ajustar só este método.
+ * Catálogos para pular auxiliares já cadastrados (codigo_migracao / descrição similar).
  */
+export async function fetchAuxiliaryExistenceCatalogs(
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<AuxiliaryExistenceCatalogs> {
+  const byMigracao: Record<AuxiliaryMigracaoEntity, Set<string>> = {
+    grupo: new Set(),
+    subgrupo: new Set(),
+    categoria: new Set(),
+    laboratorio: new Set(),
+    grupodepreco: new Set(),
+  }
+
+  const loads = AUXILIARY_MIGRACAO_ENTITIES.map(async (entity) => {
+    const rows = await fetchTmsEntityRows(AUXILIARY_TMS_PATH[entity], baseUrl)
+    const set = byMigracao[entity]
+    for (const row of rows) {
+      addMigracaoKeys(set, row.codigo_migracao)
+    }
+  })
+
+  const similarPromise = fetchTmsEntityRows(AUXILIARY_TMS_PATH.similar, baseUrl)
+  const [, similarRows] = await Promise.all([Promise.all(loads), similarPromise])
+
+  const similarByDescricao = new Set<string>()
+  for (const row of similarRows) {
+    const descricao = String(row.descricao ?? '')
+      .trim()
+      .toLocaleUpperCase('pt-BR')
+    if (descricao) similarByDescricao.add(descricao)
+  }
+
+  return { byMigracao, similarByDescricao }
+}
+
+export function auxiliaryMigracaoExists(
+  catalogs: AuxiliaryExistenceCatalogs,
+  entity: AuxiliaryMigracaoEntity,
+  codigo: string
+): boolean {
+  const set = catalogs.byMigracao[entity]
+  const raw = codigo.trim()
+  if (set.has(raw)) return true
+  const n = Number(raw)
+  if (Number.isInteger(n) && set.has(String(n))) return true
+  return false
+}
+
+export function markAuxiliaryMigracaoExists(
+  catalogs: AuxiliaryExistenceCatalogs,
+  entity: AuxiliaryMigracaoEntity,
+  codigo: string
+) {
+  addMigracaoKeys(catalogs.byMigracao[entity], codigo)
+}
+
+/**
+ * Insere um produto: tenta ProdutoService/insert; se falhar, tenta /save.
+ */
+export async function insertProduct(
+  payload: Record<string, unknown>,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<BatchInsertResult> {
+  const root = baseUrl.replace(/\/$/, '')
+  const body = JSON.stringify(payload)
+
+  const insertResult = await tmsJsonRequest(
+    `${root}/tms/xdata/ProdutoService/insert`,
+    { method: 'POST', body },
+    baseUrl
+  )
+  if (insertResult.ok) return insertResult
+
+  const saveResult = await tmsJsonRequest(
+    `${root}/tms/xdata/ProdutoService/save`,
+    { method: 'POST', body },
+    baseUrl
+  )
+  if (saveResult.ok) return saveResult
+
+  return {
+    ok: false,
+    statusCode: saveResult.statusCode ?? insertResult.statusCode,
+    message:
+      saveResult.message ||
+      insertResult.message ||
+      'Falha no insert/save do produto',
+  }
+}
+
+/** @deprecated use insertProduct — mantido para compatibilidade de imports. */
 export async function insertProductBatch(
   payloads: Record<string, unknown>[],
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<BatchInsertResult> {
-  const url = `${baseUrl.replace(/\/$/, '')}/tms/xdata/ProdutoService/insert`
+  if (payloads.length === 0) return { ok: true }
+  if (payloads.length === 1) return insertProduct(payloads[0], baseUrl)
 
-  const body =
-    payloads.length === 1
-      ? payloads[0]
-      : { products: payloads, items: payloads, value: payloads }
-
-  return tmsJsonRequest(url, { method: 'POST', body: JSON.stringify(body) }, baseUrl)
+  for (const payload of payloads) {
+    const result = await insertProduct(payload, baseUrl)
+    if (!result.ok) return result
+  }
+  return { ok: true }
 }
 
 export interface TmsDcbRecord {
@@ -366,19 +402,38 @@ export interface TmsDcbRecord {
   descricao: string
 }
 
-export async function fetchTmsDcbCatalog(
-  baseUrl = DEFAULT_TMS_BASE
-): Promise<Map<string, TmsDcbRecord>> {
-  const catalog = new Map<string, TmsDcbRecord>()
-  const pageSize = 2000
+function extractODataRows(payload: unknown): Record<string, unknown>[] {
+  if (!payload || typeof payload !== 'object') return []
+  const obj = payload as Record<string, unknown>
+  if (Array.isArray(obj.value)) {
+    return obj.value.filter((item) => item && typeof item === 'object') as Record<
+      string,
+      unknown
+    >[]
+  }
+  if (Array.isArray(payload)) {
+    return payload.filter((item) => item && typeof item === 'object') as Record<
+      string,
+      unknown
+    >[]
+  }
+  return []
+}
+
+async function fetchTmsEntityRows(
+  entityPath: string,
+  baseUrl: string,
+  pageSize = 2000
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = []
   let skip = 0
+  const root = baseUrl.replace(/\/$/, '')
 
   while (true) {
-    const url = `${baseUrl.replace(/\/$/, '')}/tms/xdata/DCB?$top=${pageSize}&$skip=${skip}`
-
+    const url = `${root}/tms/xdata/${entityPath}?$top=${pageSize}&$skip=${skip}`
     const result = await tmsJsonRequest(url, { method: 'GET' }, baseUrl)
     if (!result.ok) {
-      throw new Error(result.message || 'Falha ao listar DCBs no TMS')
+      throw new Error(result.message || `Falha ao listar ${entityPath} no TMS`)
     }
 
     let parsed: unknown = null
@@ -388,43 +443,225 @@ export async function fetchTmsDcbCatalog(
       parsed = null
     }
 
-    const rows = extractDcbRows(parsed)
-    for (const row of rows) {
-      const padded = padDcbCode(row.dcb)
-      if (padded) catalog.set(padded, row)
-      const raw = String(row.dcb ?? '').trim()
-      if (raw) catalog.set(raw, row)
+    const page = extractODataRows(parsed)
+    rows.push(...page)
+    if (page.length < pageSize) break
+    skip += pageSize
+  }
+
+  return rows
+}
+
+function migracaoKey(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null
+  return String(value).trim()
+}
+
+function buildMigracaoMap(rows: Record<string, unknown>[]): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const row of rows) {
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) continue
+    const key = migracaoKey(row.codigo_migracao)
+    if (key === null) continue
+    map.set(key, id)
+  }
+  return map
+}
+
+/**
+ * Carrega catálogos necessários para resolver refs do produto.
+ * `similarAux` = linhas do CSV auxiliar (codigo → descrição).
+ */
+export async function fetchProductLookupCatalogs(
+  baseUrl = DEFAULT_TMS_BASE,
+  similarAux: Array<{ codigo: string; descricao: string }> = []
+): Promise<ProductLookupCatalogs> {
+  const [
+    grupos,
+    subgrupos,
+    categorias,
+    laboratorios,
+    gruposPreco,
+    similares,
+    aliquotas,
+    unidades,
+    cfops,
+    dcbs,
+  ] = await Promise.all([
+    fetchTmsEntityRows('GrupoProdutoDrogaria', baseUrl),
+    fetchTmsEntityRows('SubGrupoProdutoDrogaria', baseUrl),
+    fetchTmsEntityRows('Categoria', baseUrl),
+    fetchTmsEntityRows('Laboratorio', baseUrl),
+    fetchTmsEntityRows('GrupoPreco', baseUrl),
+    fetchTmsEntityRows('Similar', baseUrl),
+    fetchTmsEntityRows('AliquotaICMS', baseUrl),
+    fetchTmsEntityRows('Unidade', baseUrl),
+    fetchTmsEntityRows('CFOP', baseUrl, 500),
+    fetchTmsEntityRows('DCB', baseUrl),
+  ])
+
+  const similarByDescricao = new Map<string, number>()
+  for (const row of similares) {
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) continue
+    const descricao = String(row.descricao ?? '')
+      .trim()
+      .toLocaleUpperCase('pt-BR')
+    if (descricao) similarByDescricao.set(descricao, id)
+  }
+
+  const similarCodigoToDescricao = new Map<string, string>()
+  for (const item of similarAux) {
+    const codigo = item.codigo.trim()
+    const descricao = item.descricao.trim().toLocaleUpperCase('pt-BR')
+    if (codigo && descricao) similarCodigoToDescricao.set(codigo, descricao)
+  }
+
+  const dcbByCode = new Map<string, number>()
+  for (const row of dcbs) {
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) continue
+    const dcb = String(row.dcb ?? '').trim()
+    if (!dcb) continue
+    dcbByCode.set(dcb, id)
+    const padded = padDcbCode(dcb)
+    if (padded) dcbByCode.set(padded, id)
+  }
+
+  let unidadeUnId = 600
+  for (const row of unidades) {
+    if (String(row.unidade ?? '').trim().toUpperCase() === 'UN') {
+      const id = Number(row.id)
+      if (Number.isFinite(id)) {
+        unidadeUnId = id
+        break
+      }
+    }
+  }
+
+  const aliquotaByPercent = new Map<number, number>()
+  let aliquotaStId = 100
+  let aliquotaIsentoId = 400
+
+  for (const row of aliquotas) {
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) continue
+    const tipoImposto = String(row.tipoImposto ?? '')
+    const aliquota = Number(row.aliquota)
+    const descricao = String(row.descricao ?? '').toUpperCase()
+    const aliquotaisento = Number(row.aliquotaisento)
+
+    if (tipoImposto === 'tipICMS' && Number.isFinite(aliquota) && aliquota !== 0) {
+      if (!aliquotaByPercent.has(aliquota)) {
+        aliquotaByPercent.set(aliquota, id)
+      }
     }
 
-    if (rows.length < pageSize) break
-    skip += pageSize
+    if (
+      tipoImposto === 'tipICMS' &&
+      aliquota === 0 &&
+      (descricao.includes('SUBSTITU') || aliquotaisento === 0)
+    ) {
+      aliquotaStId = id
+    }
+    if (
+      tipoImposto === 'tipICMS' &&
+      aliquota === 0 &&
+      (descricao.includes('ISENTO') || aliquotaisento === 1)
+    ) {
+      aliquotaIsentoId = id
+    }
+  }
+
+  const cfopByCode = new Map<string, number>()
+  const cfopCandidates = new Map<string, Array<{ id: number; score: number }>>()
+  for (const row of cfops) {
+    const id = Number(row.id)
+    const cfop = String(row.cfop ?? '').trim()
+    if (!Number.isFinite(id) || !cfop) continue
+    const descricao = String(row.descricao ?? '').trim()
+    const score = (descricao ? 1000 : 0) - id
+    const list = cfopCandidates.get(cfop) ?? []
+    list.push({ id, score })
+    cfopCandidates.set(cfop, list)
+  }
+  for (const [cfop, list] of cfopCandidates) {
+    list.sort((a, b) => b.score - a.score)
+    cfopByCode.set(cfop, list[0].id)
+  }
+
+  return {
+    grupoByMigracao: buildMigracaoMap(grupos),
+    subgrupoByMigracao: buildMigracaoMap(subgrupos),
+    categoriaByMigracao: buildMigracaoMap(categorias),
+    laboratorioByMigracao: buildMigracaoMap(laboratorios),
+    grupodeprecoByMigracao: buildMigracaoMap(gruposPreco),
+    similarByDescricao,
+    similarCodigoToDescricao,
+    dcbByCode,
+    unidadeUnId,
+    aliquotaByPercent,
+    aliquotaStId,
+    aliquotaIsentoId,
+    cfopByCode,
+  }
+}
+
+export async function fetchTmsDcbCatalog(
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<Map<string, TmsDcbRecord>> {
+  const catalog = new Map<string, TmsDcbRecord>()
+  const rows = await fetchTmsEntityRows('DCB', baseUrl)
+
+  for (const row of rows) {
+    const dcb = row.dcb ?? row.DCB ?? row.codigo
+    if (dcb === undefined || dcb === null) continue
+    const record: TmsDcbRecord = {
+      id: (row.id as number | string) ?? '',
+      dcb: String(dcb).trim(),
+      descricao: String(row.descricao ?? row.nome ?? '').trim(),
+    }
+    const padded = padDcbCode(record.dcb)
+    if (padded) catalog.set(padded, record)
+    if (record.dcb) catalog.set(record.dcb, record)
   }
 
   return catalog
 }
 
-function extractDcbRows(payload: unknown): TmsDcbRecord[] {
-  if (!payload || typeof payload !== 'object') return []
-  const obj = payload as Record<string, unknown>
-  const list = Array.isArray(obj.value)
-    ? obj.value
-    : Array.isArray(payload)
-      ? payload
-      : []
+/** Códigos de barras e codigo_migracao já presentes em Produto no TMS. */
+export interface ProductExistenceCatalogs {
+  /** codigoBarras → id do produto TMS */
+  byBarcode: Map<string, number>
+  /** codigo_migracao → id do produto TMS */
+  byMigracao: Map<string, number>
+}
 
-  const out: TmsDcbRecord[] = []
-  for (const item of list) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    const dcb = row.dcb ?? row.DCB ?? row.codigo
-    if (dcb === undefined || dcb === null) continue
-    out.push({
-      id: (row.id as number | string) ?? '',
-      dcb: String(dcb).trim(),
-      descricao: String(row.descricao ?? row.nome ?? '').trim(),
-    })
+function addExistenceKey(map: Map<string, number>, key: unknown, id: number) {
+  if (key === undefined || key === null) return
+  const raw = String(key).trim()
+  if (!raw) return
+  if (!map.has(raw)) map.set(raw, id)
+  const n = Number(raw)
+  if (Number.isInteger(n) && !map.has(String(n))) map.set(String(n), id)
+}
+
+export async function fetchProductExistenceCatalogs(
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<ProductExistenceCatalogs> {
+  const byBarcode = new Map<string, number>()
+  const byMigracao = new Map<string, number>()
+  const rows = await fetchTmsEntityRows('Produto', baseUrl)
+
+  for (const row of rows) {
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) continue
+    addExistenceKey(byBarcode, row.codigoBarras ?? row.CodigoBarras, id)
+    addExistenceKey(byMigracao, row.codigo_migracao, id)
   }
-  return out
+
+  return { byBarcode, byMigracao }
 }
 
 export function getDefaultTmsBaseUrl() {

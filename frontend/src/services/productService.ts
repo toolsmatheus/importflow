@@ -161,6 +161,13 @@ export const productService = {
     return data as SendJobSnapshot
   },
 
+  downloadSkippedProducts(jobId: string) {
+    const link = document.createElement('a')
+    link.href = `/api/products/send/${jobId}/skipped.csv`
+    link.download = `produtos-ignorados-${jobId.slice(0, 8)}.csv`
+    link.click()
+  },
+
   async collectFolder(folderPath: string): Promise<FolderCollectResult> {
     const response = await fetch('/api/products/collect-folder', {
       method: 'POST',

@@ -1,13 +1,13 @@
-codigo;nome;codigogrupo;custo;markup;venda;unidade;fator;listapiscofins;aliquota;cfop;ncm;cstpiscofins;valorpmc;codigobarras;subgrupo;categoria;laboratorio;grupodepreco;similar;estoque;descontofixo;comissao;atualizaestoque;demanda;ativo;st;isento;semincidencia;permitedesconto;localizacao;usocontinuo;observacao;descontomax;cest;csosn;csticms;medfciapop;qtdfciapop;valorfciapop;listacontrole;dcb
-90001;Reconter (escitalopram) teste;1;28,50;60,00;45,60;UN;1;NEUTRA;18;5405;30049099;01;;7896094207592;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
-90002;Clonazepam teste;1;12,00;70,00;20,40;UN;1;NEUTRA;18;5405;30049099;01;;7891317008932;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
-90003;Zolpidem teste;1;35,00;55,00;54,25;UN;1;NEUTRA;18;5405;30049099;01;;7891317004606;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
-90004;Verotina (fluoxetina) teste;1;18,90;65,00;31,18;UN;1;NEUTRA;18;5405;30049099;01;;7896094200494;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
-90005;Sertralina teste;1;22,00;60,00;35,20;UN;1;NEUTRA;18;5405;30049099;01;;7891317446031;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
-90006;Alprazolam teste;1;15,40;70,00;26,18;UN;1;NEUTRA;18;5405;30049099;01;;7891317462031;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
-90007;Jolik (pregabalina) teste;1;42,00;50,00;63,00;UN;1;NEUTRA;18;5405;30049099;01;;7896094211728;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
-90008;Dimorf (morfina) teste;1;55,00;45,00;79,75;UN;1;NEUTRA;18;5405;30049099;01;;7896676402087;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado A1;10;;102;;N;;;;
-90009;Metilfenidato teste;1;48,00;50,00;72,00;UN;1;NEUTRA;18;5405;30049099;01;;7891317010263;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado A3;10;;102;;N;;;;
-90010;Diazepam teste;1;9,80;80,00;17,64;UN;1;NEUTRA;18;5405;30049099;01;;7897406120448;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
-90011;Amoxicilina 500mg teste;1;9,00;55,00;13,95;UN;1;NEUTRA;18;5405;30049099;01;;7891317001568;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;nao controlado;10;;102;;N;;;;
-90012;DIPIRONA + CAFEÍNA (dipirona) teste;1;4,50;100,00;9,00;UN;1;NEUTRA;18;5405;30049099;01;;7896714261515;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;nao controlado;10;;102;;N;;;;
+﻿codigo;nome;codigogrupo;custo;markup;venda;fator;listapiscofins;aliquota;cfop;ncm;cstpiscofins;valorpmc;codigobarras;subgrupo;categoria;laboratorio;grupodepreco;similar;estoque;descontofixo;comissao;atualizaestoque;demanda;ativo;st;isento;semincidencia;permitedesconto;localizacao;usocontinuo;observacao;descontomax;cest;csosn;csticms;medfciapop;qtdfciapop;valorfciapop;listacontrole;dcb
+90001;Reconter (escitalopram) teste;1;28,50;60,00;45,60;1;NEUTRA;18;5405;30049099;01;;7896094207592;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
+90002;Clonazepam teste;1;12,00;70,00;20,40;1;NEUTRA;18;5405;30049099;01;;7891317008932;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
+90003;Zolpidem teste;1;35,00;55,00;54,25;1;NEUTRA;18;5405;30049099;01;;7891317004606;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
+90004;Verotina (fluoxetina) teste;1;18,90;65,00;31,18;1;NEUTRA;18;5405;30049099;01;;7896094200494;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
+90005;Sertralina teste;1;22,00;60,00;35,20;1;NEUTRA;18;5405;30049099;01;;7891317446031;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
+90006;Alprazolam teste;1;15,40;70,00;26,18;1;NEUTRA;18;5405;30049099;01;;7891317462031;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
+90007;Jolik (pregabalina) teste;1;42,00;50,00;63,00;1;NEUTRA;18;5405;30049099;01;;7896094211728;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado C1;10;;102;;N;;;;
+90008;Dimorf (morfina) teste;1;55,00;45,00;79,75;1;NEUTRA;18;5405;30049099;01;;7896676402087;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado A1;10;;102;;N;;;;
+90009;Metilfenidato teste;1;48,00;50,00;72,00;1;NEUTRA;18;5405;30049099;01;;7891317010263;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado A3;10;;102;;N;;;;
+90010;Diazepam teste;1;9,80;80,00;17,64;1;NEUTRA;18;5405;30049099;01;;7897406120448;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;esperado B1;10;;102;;N;;;;
+90011;Amoxicilina 500mg teste;1;9,00;55,00;13,95;1;NEUTRA;18;5405;30049099;01;;7891317001568;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;nao controlado;10;;102;;N;;;;
+90012;DIPIRONA + CAFEÍNA (dipirona) teste;1;4,50;100,00;9,00;1;NEUTRA;18;5405;30049099;01;;7896714261515;1;1;1;1;;20;0;2;S;5;A;N;N;N;S;;N;nao controlado;10;;102;;N;;;;

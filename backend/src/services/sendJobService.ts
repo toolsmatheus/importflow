@@ -1,14 +1,23 @@
 import { randomUUID } from 'crypto'
 import {
+  auxiliaryMigracaoExists,
+  fetchAuxiliaryExistenceCatalogs,
+  fetchProductExistenceCatalogs,
+  fetchProductLookupCatalogs,
   fetchServerIdentification,
   fetchTmsDcbCatalog,
   getDefaultTmsBaseUrl,
   insertAuxiliaryEntity,
-  insertProductBatch,
+  insertProduct,
   mapCsvRowToProductPayload,
+  markAuxiliaryMigracaoExists,
+  type AuxiliaryMigracaoEntity,
+  type ProductExistenceCatalogs,
+  type ProductLookupCatalogs,
   type TmsAuxiliaryEntity,
 } from './tmsService.js'
 import { lookupAnvisaDcb, padDcbCode } from './dcbIndexService.js'
+import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
 
 export type SendJobStatus =
   | 'queued'
@@ -20,11 +29,23 @@ export type SendJobStatus =
 
 export type SendMode = 'live' | 'simulate'
 
+export type ProductSkipReason = 'codigo_barras' | 'codigo_migracao'
+
 export interface SendJobError {
   index: number
   codigo: string
   message: string
   batch: number
+}
+
+export interface SendJobSkippedProduct {
+  index: number
+  codigo: string
+  nome: string
+  codigobarras: string
+  reason: ProductSkipReason
+  message: string
+  tmsProdutoId: number | null
 }
 
 export interface SendJobSnapshot {
@@ -39,10 +60,13 @@ export interface SendJobSnapshot {
   processed: number
   successCount: number
   errorCount: number
+  productSkipped: number
   currentBatch: number
   totalBatches: number
   errors: SendJobError[]
   errorsTruncated: boolean
+  skipped: SendJobSkippedProduct[]
+  skippedTruncated: boolean
   startedAt: string | null
   finishedAt: string | null
   elapsedMs: number
@@ -101,9 +125,13 @@ interface SendJobInternal {
   auxFailed: number
   auxSkipped: number
   auxDone: boolean
+  productCatalogs: ProductLookupCatalogs | null
+  productExistence: ProductExistenceCatalogs | null
+  skipped: SendJobSkippedProduct[]
 }
 
 const MAX_STORED_ERRORS = 500
+const MAX_SNAPSHOT_SKIPPED = 200
 const JOB_TTL_MS = 6 * 60 * 60 * 1000
 const jobs = new Map<string, SendJobInternal>()
 
@@ -120,6 +148,41 @@ function cleanupJobs() {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function lookupExistenceId(map: Map<string, number>, value: string): number | undefined {
+  const raw = value.trim()
+  if (!raw) return undefined
+  if (map.has(raw)) return map.get(raw)
+  const n = Number(raw)
+  if (Number.isInteger(n) && map.has(String(n))) return map.get(String(n))
+  return undefined
+}
+
+function claimExistenceKey(map: Map<string, number>, value: string, placeholderId = -1): boolean {
+  const raw = value.trim()
+  if (!raw) return true
+  if (lookupExistenceId(map, raw) !== undefined) return false
+  map.set(raw, placeholderId)
+  const n = Number(raw)
+  if (Number.isInteger(n)) map.set(String(n), placeholderId)
+  return true
+}
+
+function releaseExistenceKey(map: Map<string, number>, value: string) {
+  const raw = value.trim()
+  if (!raw) return
+  if (map.get(raw) === -1) map.delete(raw)
+  const n = Number(raw)
+  if (Number.isInteger(n) && map.get(String(n)) === -1) map.delete(String(n))
+}
+
+function confirmExistenceKey(map: Map<string, number>, value: string, id: number) {
+  const raw = value.trim()
+  if (!raw) return
+  map.set(raw, id)
+  const n = Number(raw)
+  if (Number.isInteger(n)) map.set(String(n), id)
 }
 
 export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
@@ -142,10 +205,13 @@ export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
     processed: job.processed,
     successCount: job.successCount,
     errorCount: job.errorCount,
+    productSkipped: job.skipped.length,
     currentBatch: job.currentBatch,
     totalBatches: job.totalBatches,
     errors: job.errors.slice(0, MAX_STORED_ERRORS),
     errorsTruncated: job.errors.length > MAX_STORED_ERRORS,
+    skipped: job.skipped.slice(0, MAX_SNAPSHOT_SKIPPED),
+    skippedTruncated: job.skipped.length > MAX_SNAPSHOT_SKIPPED,
     startedAt: job.startedAt ? new Date(job.startedAt).toISOString() : null,
     finishedAt: job.finishedAt ? new Date(job.finishedAt).toISOString() : null,
     elapsedMs,
@@ -162,12 +228,44 @@ export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
   }
 }
 
+function csvEscape(value: string): string {
+  if (/[;"\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+  return value
+}
+
+/** CSV dos produtos ignorados (já existiam no TMS). */
+export function buildSkippedProductsCsv(jobId: string): string | null {
+  const job = jobs.get(jobId)
+  if (!job) return null
+  if (job.skipped.length === 0) {
+    return `motivo;id_tms;codigo;nome;codigobarras\n`
+  }
+
+  const baseColumns = Object.keys(job.rows[job.skipped[0].index] ?? {})
+  const headers = ['motivo', 'id_tms', 'mensagem', ...baseColumns]
+  const lines = [headers.join(TEMPLATE_DELIMITER)]
+
+  for (const skip of job.skipped) {
+    const row = job.rows[skip.index] ?? {}
+    const values = [
+      skip.reason,
+      skip.tmsProdutoId === null ? '' : String(skip.tmsProdutoId),
+      skip.message,
+      ...baseColumns.map((col) => csvEscape(String(row[col] ?? ''))),
+    ]
+    lines.push(values.join(TEMPLATE_DELIMITER))
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
 async function insertAuxiliaries(job: SendJobInternal): Promise<void> {
   if (job.mode !== 'live' || job.auxiliaries.length === 0 || job.auxDone) return
 
   const remaining = job.auxiliaries.slice(job.auxInserted + job.auxFailed + job.auxSkipped)
   const needsDcbCatalog = remaining.some((item) => item.entity === 'dcb')
   const dcbCatalog = needsDcbCatalog ? await fetchTmsDcbCatalog(job.tmsBaseUrl) : null
+  const existence = await fetchAuxiliaryExistenceCatalogs(job.tmsBaseUrl)
 
   for (const item of remaining) {
     if (job.cancelRequested) return
@@ -212,9 +310,40 @@ async function insertAuxiliaries(job: SendJobInternal): Promise<void> {
       continue
     }
 
+    if (item.entity === 'similar') {
+      const key = item.descricao.trim().toLocaleUpperCase('pt-BR')
+      if (existence.similarByDescricao.has(key)) {
+        job.auxSkipped++
+        continue
+      }
+      const result = await insertAuxiliaryEntity('similar', item, job.tmsBaseUrl)
+      if (result.ok) {
+        job.auxInserted++
+        existence.similarByDescricao.add(key)
+        continue
+      }
+      job.auxFailed++
+      if (job.errors.length < MAX_STORED_ERRORS) {
+        job.errors.push({
+          index: -1,
+          codigo: item.codigo,
+          message: `Similar ${item.codigo} (${item.descricao}): ${result.message || 'falha no insert'}`,
+          batch: 0,
+        })
+      }
+      continue
+    }
+
+    const migracaoEntity = item.entity as AuxiliaryMigracaoEntity
+    if (auxiliaryMigracaoExists(existence, migracaoEntity, item.codigo)) {
+      job.auxSkipped++
+      continue
+    }
+
     const result = await insertAuxiliaryEntity(item.entity, item, job.tmsBaseUrl)
     if (result.ok) {
       job.auxInserted++
+      markAuxiliaryMigracaoExists(existence, migracaoEntity, item.codigo)
       continue
     }
 
@@ -239,8 +368,6 @@ async function processOneBatch(
   batchNumber: number
 ): Promise<void> {
   if (indexes.length === 0) return
-
-  const batchRows = indexes.map((i) => job.rows[i])
 
   if (job.mode === 'simulate') {
     // Simula latência proporcional ao lote (escala para 5k–20k sem demorar horas).
@@ -269,51 +396,9 @@ async function processOneBatch(
     return
   }
 
-  const payloads = batchRows.map((row) => mapCsvRowToProductPayload(row, job.idFilial))
-
-  try {
-    const result = await insertProductBatch(payloads, job.tmsBaseUrl)
-
-    if (result.ok) {
-      job.successCount += indexes.length
-      job.processed += indexes.length
-      return
-    }
-
-    // API rejeitou o lote inteiro: tenta item a item para isolar falhas.
-    for (let i = 0; i < indexes.length; i++) {
-      if (job.cancelRequested) break
-      while (job.pauseRequested && !job.cancelRequested) {
-        job.status = 'paused'
-        await sleep(200)
-      }
-      if (job.cancelRequested) break
-
-      const index = indexes[i]
-      const row = job.rows[index]
-      const itemResult = await insertProductBatch(
-        [mapCsvRowToProductPayload(row, job.idFilial)],
-        job.tmsBaseUrl
-      )
-
-      if (itemResult.ok) {
-        job.successCount++
-      } else {
-        job.errorCount++
-        job.failedIndexes.push(index)
-        if (job.errors.length < MAX_STORED_ERRORS) {
-          job.errors.push({
-            index,
-            codigo: String(row.codigo ?? ''),
-            message: itemResult.message || 'Falha no insert',
-            batch: batchNumber,
-          })
-        }
-      }
-      job.processed++
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Falha de rede no lote'
+  const catalogs = job.productCatalogs
+  const existence = job.productExistence
+  if (!catalogs || !existence) {
     for (const index of indexes) {
       job.errorCount++
       job.failedIndexes.push(index)
@@ -321,12 +406,147 @@ async function processOneBatch(
         job.errors.push({
           index,
           codigo: String(job.rows[index]?.codigo ?? ''),
-          message,
+          message: 'Catálogos TMS não carregados para mapear o produto',
           batch: batchNumber,
         })
       }
       job.processed++
     }
+    return
+  }
+
+  for (let i = 0; i < indexes.length; i++) {
+    if (job.cancelRequested) break
+    while (job.pauseRequested && !job.cancelRequested) {
+      job.status = 'paused'
+      await sleep(200)
+    }
+    if (job.cancelRequested) break
+
+    const index = indexes[i]
+    const row = job.rows[index]
+    const codigo = String(row.codigo ?? '').trim()
+    const barcode = String(row.codigobarras ?? '').trim()
+    const nome = String(row.nome ?? '').trim()
+
+    const existingMigracaoId = codigo
+      ? lookupExistenceId(existence.byMigracao, codigo)
+      : undefined
+    if (existingMigracaoId !== undefined) {
+      job.skipped.push({
+        index,
+        codigo,
+        nome,
+        codigobarras: barcode,
+        reason: 'codigo_migracao',
+        message:
+          existingMigracaoId > 0
+            ? `codigo_migracao já existe no produto TMS id ${existingMigracaoId}`
+            : 'codigo_migracao duplicado neste envio',
+        tmsProdutoId: existingMigracaoId > 0 ? existingMigracaoId : null,
+      })
+      job.processed++
+      continue
+    }
+
+    if (barcode) {
+      const existingBarcodeId = lookupExistenceId(existence.byBarcode, barcode)
+      if (existingBarcodeId !== undefined) {
+        job.skipped.push({
+          index,
+          codigo,
+          nome,
+          codigobarras: barcode,
+          reason: 'codigo_barras',
+          message:
+            existingBarcodeId > 0
+              ? `código de barras já existe no produto TMS id ${existingBarcodeId}`
+              : 'código de barras duplicado neste envio',
+          tmsProdutoId: existingBarcodeId > 0 ? existingBarcodeId : null,
+        })
+        job.processed++
+        continue
+      }
+    }
+
+    // Reserva chaves antes do insert (evita corrida entre lotes paralelos).
+    if (codigo && !claimExistenceKey(existence.byMigracao, codigo)) {
+      const id = lookupExistenceId(existence.byMigracao, codigo)
+      job.skipped.push({
+        index,
+        codigo,
+        nome,
+        codigobarras: barcode,
+        reason: 'codigo_migracao',
+        message:
+          id && id > 0
+            ? `codigo_migracao já existe no produto TMS id ${id}`
+            : 'codigo_migracao duplicado neste envio',
+        tmsProdutoId: id && id > 0 ? id : null,
+      })
+      job.processed++
+      continue
+    }
+    if (barcode && !claimExistenceKey(existence.byBarcode, barcode)) {
+      const id = lookupExistenceId(existence.byBarcode, barcode)
+      if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
+      job.skipped.push({
+        index,
+        codigo,
+        nome,
+        codigobarras: barcode,
+        reason: 'codigo_barras',
+        message:
+          id && id > 0
+            ? `código de barras já existe no produto TMS id ${id}`
+            : 'código de barras duplicado neste envio',
+        tmsProdutoId: id && id > 0 ? id : null,
+      })
+      job.processed++
+      continue
+    }
+
+    const mapped = mapCsvRowToProductPayload(row, job.idFilial, catalogs)
+
+    if (!mapped.ok) {
+      if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
+      if (barcode) releaseExistenceKey(existence.byBarcode, barcode)
+      job.errorCount++
+      job.failedIndexes.push(index)
+      if (job.errors.length < MAX_STORED_ERRORS) {
+        job.errors.push({
+          index,
+          codigo,
+          message: mapped.message,
+          batch: batchNumber,
+        })
+      }
+      job.processed++
+      continue
+    }
+
+    const itemResult = await insertProduct(mapped.payload, job.tmsBaseUrl)
+
+    if (itemResult.ok) {
+      job.successCount++
+      // Mantém a reserva (-1) como ocupado neste envio; id real virá no próximo catálogo.
+      if (codigo) confirmExistenceKey(existence.byMigracao, codigo, -1)
+      if (barcode) confirmExistenceKey(existence.byBarcode, barcode, -1)
+    } else {
+      if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
+      if (barcode) releaseExistenceKey(existence.byBarcode, barcode)
+      job.errorCount++
+      job.failedIndexes.push(index)
+      if (job.errors.length < MAX_STORED_ERRORS) {
+        job.errors.push({
+          index,
+          codigo,
+          message: itemResult.message || 'Falha no insert/save',
+          batch: batchNumber,
+        })
+      }
+    }
+    job.processed++
   }
 }
 
@@ -341,6 +561,18 @@ async function runJob(job: SendJobInternal): Promise<void> {
       job.status = 'cancelled'
       job.finishedAt = Date.now()
       return
+    }
+
+    if (job.mode === 'live') {
+      const similarAux = job.auxiliaries
+        .filter((a) => a.entity === 'similar')
+        .map((a) => ({ codigo: a.codigo, descricao: a.descricao }))
+      const [lookup, existence] = await Promise.all([
+        fetchProductLookupCatalogs(job.tmsBaseUrl, similarAux),
+        fetchProductExistenceCatalogs(job.tmsBaseUrl),
+      ])
+      job.productCatalogs = lookup
+      job.productExistence = existence
     }
 
     while (job.pendingIndexes.length > 0) {
@@ -448,6 +680,9 @@ export async function createSendJob(input: {
     auxFailed: 0,
     auxSkipped: 0,
     auxDone: false,
+    productCatalogs: null,
+    productExistence: null,
+    skipped: [],
   }
 
   jobs.set(job.id, job)

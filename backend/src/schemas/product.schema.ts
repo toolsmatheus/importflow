@@ -25,7 +25,6 @@ export const REQUIRED_HEADERS = [
   'custo',
   'markup',
   'venda',
-  'unidade',
   'fator',
   'listapiscofins',
   'aliquota',
@@ -91,7 +90,6 @@ export const productCsvRowSchema = z.object({
   custo: z.string(),
   markup: z.string(),
   venda: z.string(),
-  unidade: z.string(),
   fator: z.string(),
   listapiscofins: z.string(),
   aliquota: z.string(),
@@ -161,7 +159,6 @@ function buildExampleProductRow(values: {
   custo: string
   markup: string
   venda: string
-  unidade?: string
   fator?: string
   listapiscofins?: string
   aliquota?: string
@@ -200,10 +197,9 @@ function buildExampleProductRow(values: {
     custo: values.custo,
     markup: values.markup,
     venda: values.venda,
-    unidade: values.unidade ?? 'UN',
     fator: values.fator ?? '1',
     listapiscofins: values.listapiscofins ?? 'NEUTRA',
-    aliquota: values.aliquota ?? '18',
+    aliquota: values.aliquota ?? '17',
     cfop: values.cfop ?? '5405',
     ncm: values.ncm ?? '30049099',
     cstpiscofins: values.cstpiscofins ?? '01',
@@ -437,7 +433,6 @@ export function buildTemplateCsvContent(): string {
       comissao: '3',
       demanda: '9',
       localizacao: 'C1-P01',
-      unidade: 'CX',
       fator: '1',
       cest: '2003900',
     }),

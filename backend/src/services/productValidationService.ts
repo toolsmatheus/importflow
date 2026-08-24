@@ -94,6 +94,9 @@ const KNOWN_HEADERS = new Set<string>([
   ...CONTROLADOS_HEADERS,
 ])
 
+/** Colunas antigas do modelo — aceitas no CSV mas ignoradas no envio. */
+const LEGACY_IGNORED_HEADERS = new Set(['unidade'])
+
 export const validateBodySchema = z.object({
   fileId: z.string().uuid(),
   delimiter: z.string().min(1).max(1).optional(),
@@ -326,6 +329,28 @@ function validateRow(
     })
   }
 
+  const aliquotaNum = !isBlank(aliquotaRaw) ? parseBrazilianNumber(aliquotaRaw) : null
+  if (aliquotaNum === 0) {
+    const st = hasColumn(columns, 'st')
+      ? cell(record, 'st').trim().toUpperCase()
+      : ''
+    const isento = hasColumn(columns, 'isento')
+      ? cell(record, 'isento').trim().toUpperCase()
+      : ''
+    const stOn = st === 'S'
+    const isentoOn = isento === 'S'
+    if (stOn === isentoOn) {
+      pushIssue(issues, counters, {
+        row: rowNumber,
+        field: 'aliquota',
+        value: aliquotaRaw,
+        message:
+          'Quando aliquota=0, exatamente uma coluna deve ser S: st (substituição) ou isento.',
+        severity: 'error',
+      })
+    }
+  }
+
   if (custo !== null && markup !== null && venda !== null && !markupMatchesSale(custo, markup, venda)) {
     const expected = custo * (1 + markup / 100)
     pushIssue(issues, counters, {
@@ -442,14 +467,17 @@ function validateRow(
   }
 
   if (hasColumn(columns, 'st') && cell(record, 'st').trim().toUpperCase() === 'S') {
-    pushIssue(issues, counters, {
-      row: rowNumber,
-      field: 'st',
-      value: 'S',
-      message:
-        'ST marcada como S — considere o preenchimento futuro de aliquotaicmsstsaida (alerta, não bloqueia).',
-      severity: 'warning',
-    })
+    const isentoOn =
+      hasColumn(columns, 'isento') && cell(record, 'isento').trim().toUpperCase() === 'S'
+    if (isentoOn) {
+      pushIssue(issues, counters, {
+        row: rowNumber,
+        field: 'st',
+        value: 'S',
+        message: 'st e isento não podem ser S ao mesmo tempo.',
+        severity: 'error',
+      })
+    }
   }
 
   if (hasColumn(columns, 'descontofixo') && hasColumn(columns, 'descontomax')) {
@@ -589,7 +617,9 @@ export async function validateProductCsv(
       columns = Object.keys(record)
       const columnSet = new Set(columns)
       missingRequiredHeaders = REQUIRED_HEADERS.filter((h) => !columnSet.has(h))
-      unknownHeaders = columns.filter((h) => !KNOWN_HEADERS.has(h))
+      unknownHeaders = columns.filter(
+        (h) => !KNOWN_HEADERS.has(h) && !LEGACY_IGNORED_HEADERS.has(h)
+      )
       presentOptionalHeaders = [
         ...OPTIONAL_HEADERS,
         ...FARMACIA_POPULAR_HEADERS,

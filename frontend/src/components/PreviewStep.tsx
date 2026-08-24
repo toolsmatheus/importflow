@@ -19,7 +19,6 @@ const PRIORITY_COLUMNS = [
   'custo',
   'markup',
   'venda',
-  'unidade',
   'codigobarras',
 ]
 

@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   CheckCircle2,
+  Download,
   Loader2,
   Pause,
   Play,
@@ -10,6 +11,7 @@ import {
   Server,
   Sparkles,
   Square,
+  SkipForward,
   XCircle,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -245,7 +247,7 @@ export function SendStep({
               {job.status}
               {typeof job.auxTotal === 'number' && job.auxTotal > 0
                 ? ` · auxiliares ${job.auxInserted ?? 0}/${job.auxTotal}${
-                    job.auxSkipped ? ` (${job.auxSkipped} DCB já no TMS)` : ''
+                    job.auxSkipped ? ` (${job.auxSkipped} já no TMS)` : ''
                   }`
                 : typeof job.gruposTotal === 'number' && job.gruposTotal > 0
                   ? ` · grupos ${job.gruposInserted ?? 0}/${job.gruposTotal}`
@@ -255,7 +257,7 @@ export function SendStep({
           <CardContent className="space-y-4">
             <Progress value={job.percent} />
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
               <div className="rounded-lg bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">Processados</p>
                 <p className="font-semibold">
@@ -266,6 +268,12 @@ export function SendStep({
                 <p className="text-xs text-muted-foreground">Sucesso</p>
                 <p className="font-semibold text-emerald-600 dark:text-emerald-400">
                   {formatNumber(job.successCount)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Ignorados</p>
+                <p className="font-semibold text-amber-700 dark:text-amber-300">
+                  {formatNumber(job.productSkipped ?? 0)}
                 </p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
@@ -324,6 +332,16 @@ export function SendStep({
                   Reenviar falhas
                 </Button>
               ) : null}
+              {(job.productSkipped ?? 0) > 0 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => productService.downloadSkippedProducts(job.id)}
+                >
+                  <Download className="h-4 w-4" />
+                  Baixar ignorados CSV
+                </Button>
+              ) : null}
               {finished ? (
                 <Button size="sm" variant="ghost" onClick={() => onJobChange(null)}>
                   Novo envio
@@ -336,6 +354,13 @@ export function SendStep({
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 {formatNumber(job.successCount)} ok
               </Badge>
+              <Badge
+                variant={(job.productSkipped ?? 0) > 0 ? 'outline' : 'secondary'}
+                className="gap-1"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+                {formatNumber(job.productSkipped ?? 0)} ignorado(s)
+              </Badge>
               <Badge variant={job.errorCount > 0 ? 'destructive' : 'secondary'} className="gap-1">
                 <XCircle className="h-3.5 w-3.5" />
                 {formatNumber(job.errorCount)} falha(s)
@@ -347,6 +372,41 @@ export function SendStep({
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                 Simulação concluída. Nenhum dado foi enviado ao TMS.
               </p>
+            )}
+
+            {(job.skipped?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Produtos ignorados (código de barras ou codigo_migracao já no TMS)
+                  {job.skippedTruncated ? ' — lista parcial; use o CSV completo.' : ''}:
+                </p>
+                <div className="max-h-48 overflow-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Linha</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Motivo</TableHead>
+                        <TableHead>Id TMS</TableHead>
+                        <TableHead>Mensagem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {job.skipped!.map((skip) => (
+                        <TableRow key={`skip-${skip.index}-${skip.reason}`}>
+                          <TableCell>{skip.index + 2}</TableCell>
+                          <TableCell className="font-mono">{skip.codigo || '-'}</TableCell>
+                          <TableCell className="font-mono text-xs">{skip.reason}</TableCell>
+                          <TableCell className="font-mono">
+                            {skip.tmsProdutoId ?? '-'}
+                          </TableCell>
+                          <TableCell>{skip.message}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             )}
 
             {job.errors.length > 0 && (

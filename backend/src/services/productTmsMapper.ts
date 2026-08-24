@@ -1,0 +1,362 @@
+import { parseBrazilianNumber, isBlank } from '../utils/productFormats.js'
+import { padDcbCode } from './dcbIndexService.js'
+
+/** Catálogos TMS usados para montar refs `@xdata.ref` no insert de produto. */
+export interface ProductLookupCatalogs {
+  grupoByMigracao: Map<string, number>
+  subgrupoByMigracao: Map<string, number>
+  categoriaByMigracao: Map<string, number>
+  laboratorioByMigracao: Map<string, number>
+  grupodeprecoByMigracao: Map<string, number>
+  /** descrição UPPER → id TMS */
+  similarByDescricao: Map<string, number>
+  /** código do CSV auxiliar similar → descrição */
+  similarCodigoToDescricao: Map<string, string>
+  /** código DCB (padded e raw) → id TMS */
+  dcbByCode: Map<string, number>
+  unidadeUnId: number
+  /** percentual ICMS (≠ 0) → id AliquotaICMS tipICMS */
+  aliquotaByPercent: Map<number, number>
+  aliquotaStId: number
+  aliquotaIsentoId: number
+  /** CFOP string → id preferido (com descrição quando houver) */
+  cfopByCode: Map<string, number>
+}
+
+export interface MapProductResult {
+  ok: true
+  payload: Record<string, unknown>
+}
+
+export interface MapProductError {
+  ok: false
+  message: string
+}
+
+const LISTA_PIS_COFINS_TMS: Record<string, { tipo: string; monofasico: boolean }> = {
+  NEUTRA: { tipo: 'tlListaNeutra', monofasico: false },
+  MONOFASICA: { tipo: 'tlListaNeutra', monofasico: true },
+  ALIQUOTA_ZERO: { tipo: 'tlNehnum', monofasico: false },
+  SUBSTITUICAO: { tipo: 'tlListaNegativa', monofasico: false },
+  ISENTA: { tipo: 'tlNehnum', monofasico: false },
+}
+
+function snToBool(value: string | undefined): boolean | undefined {
+  if (isBlank(value)) return undefined
+  const v = value!.trim().toUpperCase()
+  if (v === 'S') return true
+  if (v === 'N') return false
+  return undefined
+}
+
+function num(value: string | undefined): number | undefined {
+  if (isBlank(value)) return undefined
+  return parseBrazilianNumber(value!) ?? undefined
+}
+
+function str(value: string | undefined): string | undefined {
+  if (isBlank(value)) return undefined
+  return value!.trim()
+}
+
+function xdataRef(entity: string, id: number): string {
+  return `${entity}(${id})`
+}
+
+function padCstDigits(raw: string, width = 2): string {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return raw
+  return digits.padStart(width, '0')
+}
+
+function mapCstIcms(raw: string | undefined, prefix: 'cic'): string | undefined {
+  const v = str(raw)
+  if (!v) return undefined
+  if (v.toLowerCase().startsWith(prefix)) return v
+  return `${prefix}${padCstDigits(v)}`
+}
+
+function mapCstPisCofins(
+  raw: string | undefined
+): { cstpis?: string; cstcofins?: string } {
+  const v = str(raw)
+  if (!v) return {}
+  const lower = v.toLowerCase()
+  if (lower.startsWith('cp') || lower.startsWith('cc')) {
+    return {
+      cstpis: lower.startsWith('cp') ? v : undefined,
+      cstcofins: lower.startsWith('cc') ? v : undefined,
+    }
+  }
+  const digits = padCstDigits(v)
+  return { cstpis: `cp${digits}`, cstcofins: `cc${digits}` }
+}
+
+function mapListaControlado(raw: string | undefined): string {
+  const v = str(raw)
+  if (!v) return 'tlNenhuma'
+  const u = v.toUpperCase()
+  if (u === 'NENHUMA' || u === 'NENHUM' || u === 'TLNENHUMA') return 'tlNenhuma'
+  if (u.startsWith('TL')) return `tl${u.slice(2)}`
+  return `tl${u}`
+}
+
+function resolveMigracaoId(
+  code: string | undefined,
+  map: Map<string, number>,
+  label: string
+): { id?: number; error?: string } {
+  const v = str(code)
+  if (!v) return {}
+  const id = map.get(v) ?? map.get(String(Number(v)))
+  if (id === undefined) {
+    return { error: `${label} codigo_migracao=${v} não encontrado no TMS` }
+  }
+  return { id }
+}
+
+function resolveAliquotaId(
+  row: Record<string, string>,
+  catalogs: ProductLookupCatalogs
+): { id?: number; error?: string } {
+  const aliquota = num(row.aliquota)
+  if (aliquota === undefined) {
+    return { error: 'aliquota obrigatória' }
+  }
+
+  const st = str(row.st)?.toUpperCase() === 'S'
+  const isento = str(row.isento)?.toUpperCase() === 'S'
+
+  if (aliquota === 0) {
+    if (st === isento) {
+      return {
+        error:
+          'Quando aliquota=0, exatamente uma coluna (st ou isento) deve ser S',
+      }
+    }
+    return { id: st ? catalogs.aliquotaStId : catalogs.aliquotaIsentoId }
+  }
+
+  const found = catalogs.aliquotaByPercent.get(aliquota)
+  if (found !== undefined) return { id: found }
+
+  // Percentual inexistente no cadastro → ICMS ST
+  return { id: catalogs.aliquotaStId }
+}
+
+function resolveSimilarId(
+  row: Record<string, string>,
+  catalogs: ProductLookupCatalogs
+): { id?: number; error?: string } {
+  const code = str(row.similar)
+  if (!code) return {}
+
+  const descricao =
+    catalogs.similarCodigoToDescricao.get(code) ??
+    catalogs.similarCodigoToDescricao.get(String(Number(code))) ??
+    code
+
+  const key = descricao.trim().toLocaleUpperCase('pt-BR')
+  const id = catalogs.similarByDescricao.get(key)
+  if (id === undefined) {
+    return { error: `Similar "${descricao}" não encontrado no TMS por descrição` }
+  }
+  return { id }
+}
+
+function resolveDcbId(
+  row: Record<string, string>,
+  catalogs: ProductLookupCatalogs
+): { id?: number; error?: string } {
+  const code = str(row.dcb)
+  if (!code) return {}
+  const padded = padDcbCode(code)
+  const id =
+    catalogs.dcbByCode.get(padded) ??
+    catalogs.dcbByCode.get(code) ??
+    catalogs.dcbByCode.get(String(Number(code)))
+  if (id === undefined) {
+    return { error: `DCB ${code} não encontrado no TMS` }
+  }
+  return { id }
+}
+
+/**
+ * Monta o payload XData de Produto a partir de uma linha do CSV.
+ * Unidade de estoque é sempre UN. Estoque do CSV é ignorado.
+ */
+export function mapCsvRowToProductPayload(
+  row: Record<string, string>,
+  idFilial: number,
+  catalogs: ProductLookupCatalogs
+): MapProductResult | MapProductError {
+  const nomeRaw = str(row.nome)
+  if (!nomeRaw) return { ok: false, message: 'nome obrigatório' }
+  const nome = nomeRaw.toLocaleUpperCase('pt-BR')
+
+  const valorCusto = num(row.custo)
+  if (valorCusto === undefined) return { ok: false, message: 'custo obrigatório' }
+
+  const grupo = resolveMigracaoId(row.codigogrupo, catalogs.grupoByMigracao, 'Grupo')
+  if (grupo.error) return { ok: false, message: grupo.error }
+  if (grupo.id === undefined) return { ok: false, message: 'codigogrupo obrigatório' }
+
+  const aliquota = resolveAliquotaId(row, catalogs)
+  if (aliquota.error || aliquota.id === undefined) {
+    return { ok: false, message: aliquota.error || 'aliquota inválida' }
+  }
+
+  const subgrupo = resolveMigracaoId(row.subgrupo, catalogs.subgrupoByMigracao, 'Subgrupo')
+  if (subgrupo.error) return { ok: false, message: subgrupo.error }
+
+  const categoria = resolveMigracaoId(row.categoria, catalogs.categoriaByMigracao, 'Categoria')
+  if (categoria.error) return { ok: false, message: categoria.error }
+
+  const laboratorio = resolveMigracaoId(
+    row.laboratorio,
+    catalogs.laboratorioByMigracao,
+    'Laboratório'
+  )
+  if (laboratorio.error) return { ok: false, message: laboratorio.error }
+
+  const grupodepreco = resolveMigracaoId(
+    row.grupodepreco,
+    catalogs.grupodeprecoByMigracao,
+    'Grupo de preço'
+  )
+  if (grupodepreco.error) return { ok: false, message: grupodepreco.error }
+
+  const similar = resolveSimilarId(row, catalogs)
+  if (similar.error) return { ok: false, message: similar.error }
+
+  const dcb = resolveDcbId(row, catalogs)
+  if (dcb.error) return { ok: false, message: dcb.error }
+
+  const cfopCode = str(row.cfop)
+  let cfopId: number | undefined
+  if (cfopCode) {
+    cfopId = catalogs.cfopByCode.get(cfopCode)
+    if (cfopId === undefined) {
+      return { ok: false, message: `CFOP ${cfopCode} não encontrado no TMS` }
+    }
+  }
+
+  const listaKey = str(row.listapiscofins)?.toUpperCase() ?? 'NEUTRA'
+  const listaMap = LISTA_PIS_COFINS_TMS[listaKey] ?? {
+    tipo: 'tlListaNeutra',
+    monofasico: false,
+  }
+
+  const { cstpis, cstcofins } = mapCstPisCofins(row.cstpiscofins)
+  const codigoMigracao = str(row.codigo)
+  const margemLucro = num(row.markup)
+  const valorvenda = num(row.venda)
+  const fator = num(row.fator) ?? 1
+
+  const payload: Record<string, unknown> = {
+    '@xdata.type': 'XData.Default.Produto',
+    idFilial,
+    nome,
+    valorCusto,
+    ultimoValorCusto: valorCusto,
+    ativo: str(row.ativo)?.toUpperCase() === 'I' ? false : true,
+    fatordecompra: fator,
+    tipoListaPisCofins: listaMap.tipo,
+    monofasico: listaMap.monofasico,
+    atualizarestoque: snToBool(row.atualizaestoque) ?? true,
+    atualizarpreco: true,
+    permitirdescontovenda: snToBool(row.permitedesconto) ?? true,
+    origemmercadoria: 'omNacional',
+    apresentacao: 'taCapCompDrag',
+    tipopreco: 'tpLiberado',
+    tipoitemsped: 'tisMercadoriaRevenda',
+    listaControlado: mapListaControlado(row.listacontrole),
+    listaControladoAdendo: 'tlNenhuma',
+    'unidadeEstoque@xdata.ref': xdataRef('Unidade', catalogs.unidadeUnId),
+    'grupo@xdata.ref': xdataRef('GrupoProdutoDrogaria', grupo.id),
+    'aliquotaicms@xdata.ref': xdataRef('AliquotaICMS', aliquota.id),
+  }
+
+  if (codigoMigracao !== undefined) {
+    const n = Number(codigoMigracao)
+    payload.codigo_migracao = Number.isInteger(n) ? n : codigoMigracao
+  }
+  if (margemLucro !== undefined) payload.margemLucro = margemLucro
+  if (valorvenda !== undefined) {
+    payload.valorvenda = valorvenda
+    payload.ultimoValorVenda = valorvenda
+  }
+
+  const codigoBarras = str(row.codigobarras)
+  if (codigoBarras) payload.codigoBarras = codigoBarras
+
+  const ncm = str(row.ncm)
+  if (ncm) payload.ncm = ncm
+
+  const cest = str(row.cest)
+  if (cest) payload.CEST = cest
+
+  const valorpmc = num(row.valorpmc)
+  if (valorpmc !== undefined) payload.valorpmc = valorpmc
+
+  const demanda = num(row.demanda)
+  if (demanda !== undefined) payload.demanda = demanda
+
+  const desconto = num(row.descontofixo)
+  if (desconto !== undefined) payload.desconto = desconto
+
+  const descontoMaximo = num(row.descontomax)
+  if (descontoMaximo !== undefined) payload.descontoMaximo = descontoMaximo
+
+  const comissao = num(row.comissao)
+  if (comissao !== undefined) payload.percentualcomissao = comissao
+
+  const usocontinuo = snToBool(row.usocontinuo)
+  if (usocontinuo !== undefined) payload.usocontinuo = usocontinuo
+
+  const observacao = str(row.observacao)
+  if (observacao) payload.observacaovenda = observacao
+
+  const csticms = mapCstIcms(row.csosn, 'cic')
+  if (csticms) payload.csticms = csticms
+
+  const csticmsnormal = mapCstIcms(row.csticms, 'cic')
+  if (csticmsnormal) payload.csticmsnormal = csticmsnormal
+
+  if (cstpis) payload.cstpis = cstpis
+  if (cstcofins) payload.cstcofins = cstcofins
+
+  const medPop = snToBool(row.medfciapop)
+  if (medPop !== undefined) payload.medicamentofarmaciapopular = medPop
+  const qtdPop = num(row.qtdfciapop)
+  if (qtdPop !== undefined) payload.quantidadefarmaciapopular = qtdPop
+  const valorPop = num(row.valorfciapop)
+  if (valorPop !== undefined) {
+    payload.valorfarmaciapopular = valorPop
+    payload.valorfinalfarmaciapopular = valorPop
+  }
+
+  if (subgrupo.id !== undefined) {
+    payload['subgrupo@xdata.ref'] = xdataRef('SubGrupoProdutoDrogaria', subgrupo.id)
+  }
+  if (categoria.id !== undefined) {
+    payload['categoria@xdata.ref'] = xdataRef('Categoria', categoria.id)
+  }
+  if (laboratorio.id !== undefined) {
+    payload['laboratorio@xdata.ref'] = xdataRef('Laboratorio', laboratorio.id)
+  }
+  if (grupodepreco.id !== undefined) {
+    payload['grupodeprecos@xdata.ref'] = xdataRef('GrupoPreco', grupodepreco.id)
+  }
+  if (similar.id !== undefined) {
+    payload['similar@xdata.ref'] = xdataRef('Similar', similar.id)
+  }
+  if (dcb.id !== undefined) {
+    payload['dcb@xdata.ref'] = xdataRef('DCB', dcb.id)
+  }
+  if (cfopId !== undefined) {
+    payload['cfopvenda@xdata.ref'] = xdataRef('CFOP', cfopId)
+  }
+
+  return { ok: true, payload }
+}

@@ -28,6 +28,7 @@ import {
   cancelSendJob,
   createSendJob,
   getSendJob,
+  buildSkippedProductsCsv,
   pauseSendJob,
   resumeSendJob,
   retryFailedSendJob,
@@ -90,6 +91,8 @@ export async function getProductFieldCatalogHandler(
       controladoSemDcb: 'bloqueia',
       csosnECsticmsJuntos: 'alerta',
       markupInconsistente: 'alerta',
+      aliquotaZeroStIsento: 'bloqueia (exatamente uma de st/isento = S)',
+      unidadeEstoque: 'sempre UN no TMS (coluna unidade do CSV ignorada)',
     },
   })
 }
@@ -433,4 +436,22 @@ export async function retryFailedSendJobHandler(request: FastifyRequest, reply: 
     return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
   }
   return reply.send(snapshot)
+}
+
+export async function downloadSkippedProductsHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const { jobId } = request.params as { jobId: string }
+  const csv = buildSkippedProductsCsv(jobId)
+  if (csv === null) {
+    return reply.status(404).send({ success: false, message: 'Job de envio não encontrado.' })
+  }
+  return reply
+    .header('Content-Type', 'text/csv; charset=utf-8')
+    .header(
+      'Content-Disposition',
+      `attachment; filename="produtos-ignorados-${jobId.slice(0, 8)}.csv"`
+    )
+    .send(csv)
 }
