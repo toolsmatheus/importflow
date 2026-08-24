@@ -101,6 +101,9 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
       if (suggestion.suggestedDcb) {
         updated.dcb = suggestion.suggestedDcb
       }
+      if (suggestion.registro) {
+        updated.registroms = suggestion.registro
+      }
       return updated
     })
 
@@ -201,6 +204,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
                     <TableCell className="font-mono text-xs">
                       {s.currentLista || '-'}
                       {s.currentDcb ? ` / DCB ${s.currentDcb}` : ''}
+                      {s.currentRegistro ? ` / MS ${s.currentRegistro}` : ''}
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {s.suggestedLista}
@@ -209,6 +213,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
                         : s.suggestedDcbNome
                           ? ` / ${s.suggestedDcbNome}`
                           : ' / DCB ?'}
+                      {s.registro ? ` / MS ${s.registro}` : ''}
                     </TableCell>
                     <TableCell
                       className="max-w-[280px] truncate text-xs text-muted-foreground"

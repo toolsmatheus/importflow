@@ -100,10 +100,6 @@ export function TemplateStep({ onContinue }: TemplateStepProps) {
           <CollapsibleFields title="Opcionais" fields={catalogQuery.data.optional} />
           <CollapsibleFields title="Farmácia popular" fields={catalogQuery.data.farmaciaPopular} />
           <CollapsibleFields title="Controlados" fields={catalogQuery.data.controlados} />
-          <CollapsibleFields
-            title="Valores de listapiscofins"
-            fields={catalogQuery.data.listapiscofins}
-          />
         </div>
       )}
 

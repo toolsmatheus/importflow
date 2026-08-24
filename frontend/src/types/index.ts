@@ -55,7 +55,6 @@ export interface ProductFieldCatalog {
   optional: string[]
   farmaciaPopular: string[]
   controlados: string[]
-  listapiscofins: string[]
   auxiliaryEntities: AuxiliaryEntity[]
   delimiter: string
   markupFormula: string
@@ -169,11 +168,13 @@ export interface ControladoSuggestion {
   suggestedLista: string
   suggestedDcb: string
   suggestedDcbNome: string
+  /** Registro MS from CMED — applied to registroms */
+  registro: string
   currentLista: string
   currentDcb: string
+  currentRegistro: string
   kind: ControladoSuggestKind
   tarja: string
-  registro: string
   produtoCmed: string
   reason: string
 }

@@ -39,10 +39,8 @@ export interface MapProductError {
 
 const LISTA_PIS_COFINS_TMS: Record<string, { tipo: string; monofasico: boolean }> = {
   NEUTRA: { tipo: 'tlListaNeutra', monofasico: false },
-  MONOFASICA: { tipo: 'tlListaNeutra', monofasico: true },
-  ALIQUOTA_ZERO: { tipo: 'tlNehnum', monofasico: false },
-  SUBSTITUICAO: { tipo: 'tlListaNegativa', monofasico: false },
-  ISENTA: { tipo: 'tlNehnum', monofasico: false },
+  POSITIVA: { tipo: 'tlListaPositiva', monofasico: false },
+  NEGATIVA: { tipo: 'tlListaNegativa', monofasico: false },
 }
 
 function snToBool(value: string | undefined): boolean | undefined {
@@ -101,8 +99,36 @@ function mapListaControlado(raw: string | undefined): string {
   if (!v) return 'tlNenhuma'
   const u = v.toUpperCase()
   if (u === 'NENHUMA' || u === 'NENHUM' || u === 'TLNENHUMA') return 'tlNenhuma'
+  // Antibióticos / antimicrobianos (RDC) usam lista "T" no cadastro.
+  if (
+    u === 'T' ||
+    u === 'TLT' ||
+    u === 'ANTIMICROBIANO' ||
+    u === 'ANTIMICROBIANOS' ||
+    u === 'ANTIBIOTICO' ||
+    u === 'ANTIBIOTICOS' ||
+    u === 'ANTIBIÓTICO' ||
+    u === 'ANTIBIÓTICOS'
+  ) {
+    return 'tlT'
+  }
   if (u.startsWith('TL')) return `tl${u.slice(2)}`
   return `tl${u}`
+}
+
+function isAntimicrobianoLista(raw: string | undefined): boolean {
+  const u = str(raw)?.toUpperCase()
+  if (!u) return false
+  return (
+    u === 'T' ||
+    u === 'TLT' ||
+    u === 'ANTIMICROBIANO' ||
+    u === 'ANTIMICROBIANOS' ||
+    u === 'ANTIBIOTICO' ||
+    u === 'ANTIBIOTICOS' ||
+    u === 'ANTIBIÓTICO' ||
+    u === 'ANTIBIÓTICOS'
+  )
 }
 
 /** Extrai unid. por embalagem do nome (ex.: "30CP", "20 COMP"). */
@@ -440,8 +466,10 @@ export function mapCsvRowToProductPayload(
   if (isControlado) {
     payload.controlaLote = true
     payload.dataInicioControlado = new Date().toISOString().slice(0, 19)
-    // Classe SNGPC = Controle especial (Portaria 344)
-    payload.tipoclassesngpc = 'tcControleEspecial'
+    // Antibiótico (lista T) → ANTIMICROBIANO; demais listas → CONTROLE ESPECIAL
+    payload.tipoclassesngpc = isAntimicrobianoLista(listaControleRaw)
+      ? 'tcAntimicrobiano'
+      : 'tcControleEspecial'
     // Unidade SNGPC: CSV opcional ou CAIXA por padrão
     payload.unidadesngpc = mapUnidadeSngpc(row.unidadesngpc)
     // Unid. por embalagem: coluna opcional, senão tenta extrair do nome (ex.: 30CP)

@@ -17,11 +17,13 @@ export interface ControladoSuggestion {
   suggestedLista: string
   suggestedDcb: string
   suggestedDcbNome: string
+  /** Registro MS (CMED) — gravar em registroms ao aplicar */
+  registro: string
   currentLista: string
   currentDcb: string
+  currentRegistro: string
   kind: ControladoSuggestKind
   tarja: string
-  registro: string
   produtoCmed: string
   reason: string
 }
@@ -69,22 +71,27 @@ function findDcbId(
 function classifyKind(
   currentLista: string,
   currentDcb: string,
+  currentRegistro: string,
   suggestedLista: string,
-  suggestedDcb: string
+  suggestedDcb: string,
+  suggestedRegistro: string
 ): ControladoSuggestKind {
-  const listaEmpty = !currentLista
-  const dcbEmpty = !currentDcb
-  if (listaEmpty && dcbEmpty) return 'empty'
-
   const listaDiff = currentLista && currentLista !== suggestedLista
   const dcbDiff = suggestedDcb && currentDcb && currentDcb !== suggestedDcb
-  if (listaDiff || dcbDiff) return 'conflict'
+  const registroDiff =
+    suggestedRegistro && currentRegistro && currentRegistro !== suggestedRegistro
+  if (listaDiff || dcbDiff || registroDiff) return 'conflict'
+
+  const needsLista = !currentLista
+  const needsDcb = Boolean(suggestedDcb) && !currentDcb
+  const needsRegistro = Boolean(suggestedRegistro) && !currentRegistro
+  if (needsLista || needsDcb || needsRegistro) return 'empty'
 
   return 'confirm'
 }
 
 /**
- * Gera sugestões de listacontrole/DCB a partir de EAN → CMED → Portaria 344.
+ * Gera sugestões de listacontrole/DCB/registroms a partir de EAN → CMED → Portaria 344.
  * Nunca altera linhas; apenas sugere.
  */
 export function suggestControlados(
@@ -124,14 +131,19 @@ export function suggestControlados(
     const dcb = findDcbId(cmed.s, listaMatch.matchedName, dcbCatalog)
     const currentLista = (row.listacontrole ?? '').trim()
     const currentDcb = (row.dcb ?? '').trim()
-    const kind = classifyKind(currentLista, currentDcb, listaMatch.listacontrole, dcb.id)
+    const currentRegistro = (row.registroms ?? '').trim()
+    const registro = (cmed.r ?? '').trim()
+    const kind = classifyKind(
+      currentLista,
+      currentDcb,
+      currentRegistro,
+      listaMatch.listacontrole,
+      dcb.id,
+      registro
+    )
 
-    // Já igual ao sugerido: não listar
-    if (
-      kind === 'confirm' &&
-      currentLista === listaMatch.listacontrole &&
-      (!dcb.id || currentDcb === dcb.id)
-    ) {
+    // Já igual ao sugerido (lista/DCB/registro MS): não listar
+    if (kind === 'confirm') {
       return
     }
 
@@ -139,6 +151,7 @@ export function suggestControlados(
       `CMED: ${cmed.s}`,
       `Portaria 344: ${listaMatch.matchedName} → ${listaMatch.listacontrole}`,
     ]
+    if (registro) reasonParts.push(`Registro MS: ${registro}`)
     if (dcb.id) reasonParts.push(`DCB auxiliar: ${dcb.id} (${dcb.nome})`)
     else if (dcbCatalog) reasonParts.push('DCB não encontrado no auxiliar')
     else reasonParts.push('Envie dcb.csv para sugerir o id DCB')
@@ -154,11 +167,12 @@ export function suggestControlados(
       suggestedLista: listaMatch.listacontrole,
       suggestedDcb: dcb.id,
       suggestedDcbNome: dcb.nome,
+      registro,
       currentLista,
       currentDcb,
+      currentRegistro,
       kind,
       tarja: cmed.t,
-      registro: cmed.r,
       produtoCmed: cmed.p,
       reason: reasonParts.join(' · '),
     })
