@@ -66,7 +66,13 @@ export const FARMACIA_POPULAR_HEADERS = [
   'valorfciapop',
 ] as const
 
-export const CONTROLADOS_HEADERS = ['listacontrole', 'dcb'] as const
+export const CONTROLADOS_HEADERS = [
+  'listacontrole',
+  'dcb',
+  'registroms',
+  'unidemb',
+  'unidadesngpc',
+] as const
 
 export const ALL_TEMPLATE_HEADERS = [
   ...REQUIRED_HEADERS,
@@ -125,6 +131,9 @@ export const productCsvRowSchema = z.object({
   valorfciapop: z.string().optional(),
   listacontrole: z.string().optional(),
   dcb: z.string().optional(),
+  registroms: z.string().optional(),
+  unidemb: z.string().optional(),
+  unidadesngpc: z.string().optional(),
 })
 
 export type ProductCsvRow = z.infer<typeof productCsvRowSchema>
@@ -232,6 +241,9 @@ function buildExampleProductRow(values: {
     valorfciapop: '',
     listacontrole: '',
     dcb: '',
+    registroms: '',
+    unidemb: '',
+    unidadesngpc: '',
   }
 
   return ALL_TEMPLATE_HEADERS.map((h) => cols[h]).join(TEMPLATE_DELIMITER)

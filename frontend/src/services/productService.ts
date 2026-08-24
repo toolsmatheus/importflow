@@ -95,7 +95,7 @@ export const productService = {
     const query = tmsBaseUrl ? `?tmsBaseUrl=${encodeURIComponent(tmsBaseUrl)}` : ''
     const response = await fetch(`/api/products/identify-server${query}`)
     const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao identificar o servidor TMS')
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao identificar o servidor')
     return data as { idFilial: number; versao?: string; tmsBaseUrl: string }
   },
 

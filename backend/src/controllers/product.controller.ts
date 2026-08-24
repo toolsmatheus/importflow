@@ -89,6 +89,7 @@ export async function getProductFieldCatalogHandler(
     tmsBaseUrl: getDefaultTmsBaseUrl(),
     rules: {
       controladoSemDcb: 'bloqueia',
+      controladoSemRegistroMs: 'bloqueia',
       markupInconsistente: 'alerta',
       aliquotaZeroStIsento: 'bloqueia (exatamente uma de st/isento = S)',
       aliquotaPercent: 'se não existir em AliquotaICMS, cria tipICMS/alSAIDA',

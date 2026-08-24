@@ -25,17 +25,17 @@ export function SettingsPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Servidor TMS</CardTitle>
+          <CardTitle>Servidor de destino</CardTitle>
           <CardDescription>
             URL base usada na etapa de envio. Guardada neste navegador.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <label htmlFor="tms-url" className="mb-1.5 block text-sm text-muted-foreground">
+          <label htmlFor="server-url" className="mb-1.5 block text-sm text-muted-foreground">
             URL base
           </label>
           <Input
-            id="tms-url"
+            id="server-url"
             value={tmsBaseUrl}
             onChange={(e) => setTmsBaseUrl(e.target.value)}
             placeholder="http://localhost:2001"
@@ -46,12 +46,11 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Sobre esta versão</CardTitle>
-          <CardDescription>Importação de produtos via CSV para a API TMS.</CardDescription>
+          <CardDescription>Importação de produtos via CSV para a API de destino.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Tema, URL do TMS e o último caminho de pasta automática ficam neste navegador.
-            Enquanto a API de insert não estiver disponível, use a simulação na etapa de envio.
+            Tema, URL do servidor e o último caminho de pasta automática ficam neste navegador.
           </p>
         </CardContent>
       </Card>

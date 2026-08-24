@@ -33,8 +33,7 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 px-3 py-4">
         <NavLink
-          to="/"
-          end
+          to="/import"
           onClick={() => setOpen(false)}
           className={({ isActive }) =>
             cn(

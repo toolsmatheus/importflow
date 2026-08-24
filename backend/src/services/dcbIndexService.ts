@@ -45,3 +45,22 @@ export function lookupAnvisaDcb(code: string): { dcb: string; descricao: string 
   if (!descricao) return null
   return { dcb: padded, descricao }
 }
+
+/** Busca código Anvisa pelo nome da substância (match exato, case-insensitive). */
+export function lookupAnvisaDcbByDescricao(
+  descricao: string
+): { dcb: string; descricao: string } | null {
+  const key = String(descricao ?? '')
+    .trim()
+    .toLocaleUpperCase('pt-BR')
+  if (!key) return null
+  const index = getAnvisaDcbIndex()
+  if (!index) return null
+
+  for (const [code, name] of Object.entries(index.byCode)) {
+    if (name.toLocaleUpperCase('pt-BR') === key) {
+      return { dcb: code, descricao: name }
+    }
+  }
+  return null
+}

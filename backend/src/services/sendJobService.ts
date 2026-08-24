@@ -17,7 +17,7 @@ import {
   type ProductLookupCatalogs,
   type TmsAuxiliaryEntity,
 } from './tmsService.js'
-import { lookupAnvisaDcb, padDcbCode } from './dcbIndexService.js'
+import { lookupAnvisaDcb, lookupAnvisaDcbByDescricao, padDcbCode } from './dcbIndexService.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
 import { parseBrazilianNumber } from '../utils/productFormats.js'
 
@@ -278,24 +278,39 @@ async function insertAuxiliaries(job: SendJobInternal): Promise<void> {
     if (job.cancelRequested) return
 
     if (item.entity === 'dcb' && dcbCatalog) {
-      const padded = padDcbCode(item.codigo)
-      const existing = dcbCatalog.get(padded) ?? dcbCatalog.get(item.codigo.trim())
+      // id do auxiliar ≠ código Anvisa: resolve pelo nome (ex.: Clonazepam → 02300).
+      const byName = lookupAnvisaDcbByDescricao(item.descricao)
+      const byCode = byName ? null : lookupAnvisaDcb(padDcbCode(item.codigo))
+      const anvisa = byName ?? byCode
+      if (!anvisa) {
+        job.auxFailed++
+        if (job.errors.length < MAX_STORED_ERRORS) {
+          job.errors.push({
+            index: -1,
+            codigo: item.codigo,
+            message: `DCB auxiliar ${item.codigo} (${item.descricao}): nome não encontrado na lista Anvisa`,
+            batch: 0,
+          })
+        }
+        continue
+      }
+
+      const existing = dcbCatalog.get(anvisa.dcb) ?? dcbCatalog.get(padDcbCode(anvisa.dcb))
       if (existing) {
         job.auxSkipped++
         continue
       }
 
-      const anvisa = lookupAnvisaDcb(padded)
       const toInsert = {
-        codigo: padded,
-        descricao: anvisa?.descricao || item.descricao,
+        codigo: anvisa.dcb,
+        descricao: anvisa.descricao,
       }
       const result = await insertAuxiliaryEntity('dcb', toInsert, job.tmsBaseUrl)
       if (result.ok) {
         job.auxInserted++
-        dcbCatalog.set(padded, {
+        dcbCatalog.set(anvisa.dcb, {
           id: '',
-          dcb: padded,
+          dcb: anvisa.dcb,
           descricao: toInsert.descricao,
         })
         continue
@@ -304,8 +319,8 @@ async function insertAuxiliaries(job: SendJobInternal): Promise<void> {
       if (job.errors.length < MAX_STORED_ERRORS) {
         job.errors.push({
           index: -1,
-          codigo: padded,
-          message: `DCB ${padded} (${toInsert.descricao}): ${result.message || 'falha no insert'}`,
+          codigo: anvisa.dcb,
+          message: `DCB ${anvisa.dcb} (${toInsert.descricao}): ${result.message || 'falha no insert'}`,
           batch: 0,
         })
       }
@@ -590,8 +605,11 @@ async function runJob(job: SendJobInternal): Promise<void> {
       const similarAux = job.auxiliaries
         .filter((a) => a.entity === 'similar')
         .map((a) => ({ codigo: a.codigo, descricao: a.descricao }))
+      const dcbAux = job.auxiliaries
+        .filter((a) => a.entity === 'dcb')
+        .map((a) => ({ codigo: a.codigo, descricao: a.descricao }))
       const [lookup, existence] = await Promise.all([
-        fetchProductLookupCatalogs(job.tmsBaseUrl, similarAux),
+        fetchProductLookupCatalogs(job.tmsBaseUrl, similarAux, dcbAux),
         fetchProductExistenceCatalogs(job.tmsBaseUrl),
       ])
       job.productCatalogs = lookup

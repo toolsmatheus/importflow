@@ -150,7 +150,7 @@ export function PreviewStep({
           setLastResult(null)
           setIssues([])
           const nextColumns = [...columns]
-          for (const col of ['listacontrole', 'dcb'] as const) {
+          for (const col of ['listacontrole', 'dcb', 'registroms'] as const) {
             if (!nextColumns.includes(col)) nextColumns.push(col)
           }
           if (nextColumns.length !== columns.length) {
@@ -158,7 +158,7 @@ export function PreviewStep({
           }
           setVisibleColumns((prev) => {
             const ordered = [...prev]
-            for (const col of ['listacontrole', 'dcb']) {
+            for (const col of ['listacontrole', 'dcb', 'registroms']) {
               if (!ordered.includes(col)) ordered.push(col)
             }
             return ordered

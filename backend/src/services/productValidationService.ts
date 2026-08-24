@@ -529,6 +529,20 @@ function validateRow(
           severity: 'error',
         })
       }
+
+      const registroms = hasColumn(columns, 'registroms')
+        ? cell(record, 'registroms').trim()
+        : ''
+      if (isBlank(registroms)) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'registroms',
+          value: '',
+          message:
+            'Registro MS é obrigatório quando o produto é controlado (listacontrole preenchida).',
+          severity: 'error',
+        })
+      }
     }
   }
 

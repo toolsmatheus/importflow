@@ -4,14 +4,14 @@ import { AppLayout } from '@/layouts/AppLayout'
 import { ImportWizardProvider } from '@/hooks/useImportWizard'
 import { ThemeProvider } from '@/hooks/useTheme'
 import { ImportPage } from '@/pages/ImportPage'
+import { ProductImportPage } from '@/pages/ProductImportPage'
+import { FavorecidosImportPage } from '@/pages/FavorecidosImportPage'
+import { FinanceiroImportPage } from '@/pages/FinanceiroImportPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
+    queries: { retry: 1, refetchOnWindowFocus: false },
   },
 })
 
@@ -23,10 +23,15 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<ImportPage />} />
-                <Route path="/import" element={<Navigate to="/" replace />} />
+                <Route path="/" element={<Navigate to="/import/produtos" replace />} />
+                <Route path="/import" element={<ImportPage />}>
+                  <Route index element={<Navigate to="produtos" replace />} />
+                  <Route path="produtos" element={<ProductImportPage />} />
+                  <Route path="favorecidos" element={<FavorecidosImportPage />} />
+                  <Route path="financeiro" element={<FinanceiroImportPage />} />
+                </Route>
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/import/produtos" replace />} />
               </Route>
             </Routes>
           </BrowserRouter>

@@ -139,11 +139,11 @@ export function SendStep({
         </CardHeader>
         <CardContent className="space-y-5">
           <div>
-            <label htmlFor="send-tms-url" className="mb-1.5 block text-sm text-muted-foreground">
-              URL do servidor TMS
+            <label htmlFor="send-server-url" className="mb-1.5 block text-sm text-muted-foreground">
+              URL do servidor
             </label>
             <Input
-              id="send-tms-url"
+              id="send-server-url"
               value={tmsBaseUrl}
               onChange={(e) => onTmsBaseUrlChange(e.target.value)}
               placeholder="http://localhost:2001"
@@ -240,14 +240,14 @@ export function SendStep({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              Progresso {job.mode === 'simulate' ? '(simulação)' : '(TMS)'}
+              Progresso {job.mode === 'simulate' ? '(simulação)' : '(envio)'}
             </CardTitle>
             <CardDescription>
               Lote {job.currentBatch}/{job.totalBatches}, filial {job.idFilial}, status{' '}
               {job.status}
               {typeof job.auxTotal === 'number' && job.auxTotal > 0
                 ? ` · auxiliares ${job.auxInserted ?? 0}/${job.auxTotal}${
-                    job.auxSkipped ? ` (${job.auxSkipped} já no TMS)` : ''
+                    job.auxSkipped ? ` (${job.auxSkipped} já existentes)` : ''
                   }`
                 : typeof job.gruposTotal === 'number' && job.gruposTotal > 0
                   ? ` · grupos ${job.gruposInserted ?? 0}/${job.gruposTotal}`
@@ -370,14 +370,14 @@ export function SendStep({
 
             {job.mode === 'simulate' && finished && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                Simulação concluída. Nenhum dado foi enviado ao TMS.
+                Simulação concluída. Nenhum dado foi enviado ao servidor.
               </p>
             )}
 
             {(job.skipped?.length ?? 0) > 0 && (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Produtos ignorados (código de barras ou codigo_migracao já no TMS)
+                  Produtos ignorados (código de barras ou codigo_migracao já existentes)
                   {job.skippedTruncated ? ' — lista parcial; use o CSV completo.' : ''}:
                 </p>
                 <div className="max-h-48 overflow-auto rounded-md border">
@@ -387,7 +387,7 @@ export function SendStep({
                         <TableHead>Linha</TableHead>
                         <TableHead>Código</TableHead>
                         <TableHead>Motivo</TableHead>
-                        <TableHead>Id TMS</TableHead>
+                        <TableHead>Id destino</TableHead>
                         <TableHead>Mensagem</TableHead>
                       </TableRow>
                     </TableHeader>

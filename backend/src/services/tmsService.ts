@@ -1,5 +1,9 @@
 import { createHash } from 'crypto'
-import { lookupAnvisaDcb, padDcbCode } from './dcbIndexService.js'
+import {
+  lookupAnvisaDcb,
+  lookupAnvisaDcbByDescricao,
+  padDcbCode,
+} from './dcbIndexService.js'
 import type { ProductLookupCatalogs } from './productTmsMapper.js'
 
 export type { ProductLookupCatalogs } from './productTmsMapper.js'
@@ -256,9 +260,17 @@ function buildAuxiliaryPayload(
     return { descricao }
   }
   if (entity === 'dcb') {
+    // codigo do auxiliar é id local; o código Anvisa vem da descrição.
+    const byName = lookupAnvisaDcbByDescricao(descricao)
+    if (byName) {
+      return { dcb: byName.dcb, descricao: byName.descricao.toLocaleUpperCase('pt-BR') }
+    }
     const padded = padDcbCode(codigo)
-    const anvisa = lookupAnvisaDcb(padded)
-    return { dcb: padded, descricao: anvisa?.descricao ?? descricao }
+    const byCode = lookupAnvisaDcb(padded)
+    if (byCode) {
+      return { dcb: byCode.dcb, descricao: byCode.descricao.toLocaleUpperCase('pt-BR') }
+    }
+    return { dcb: padded, descricao }
   }
   return { codigo_migracao: migrationCodigo(codigo), descricao }
 }
@@ -604,11 +616,12 @@ function buildMigracaoMap(rows: Record<string, unknown>[]): Map<string, number> 
 
 /**
  * Carrega catálogos necessários para resolver refs do produto.
- * `similarAux` = linhas do CSV auxiliar (codigo → descrição).
+ * `similarAux` / `dcbAux` = linhas dos CSV auxiliares (codigo → descrição).
  */
 export async function fetchProductLookupCatalogs(
   baseUrl = DEFAULT_TMS_BASE,
-  similarAux: Array<{ codigo: string; descricao: string }> = []
+  similarAux: Array<{ codigo: string; descricao: string }> = [],
+  dcbAux: Array<{ codigo: string; descricao: string }> = []
 ): Promise<ProductLookupCatalogs> {
   const [
     grupos,
@@ -652,14 +665,36 @@ export async function fetchProductLookupCatalogs(
   }
 
   const dcbByCode = new Map<string, number>()
+  const dcbByDescricao = new Map<string, number>()
   for (const row of dcbs) {
     const id = Number(row.id)
     if (!Number.isFinite(id)) continue
     const dcb = String(row.dcb ?? '').trim()
-    if (!dcb) continue
-    dcbByCode.set(dcb, id)
+    if (dcb) {
+      dcbByCode.set(dcb, id)
+      const padded = padDcbCode(dcb)
+      if (padded) dcbByCode.set(padded, id)
+    }
+    const descricao = String(row.descricao ?? '')
+      .trim()
+      .toLocaleUpperCase('pt-BR')
+    if (!descricao) continue
+    // Preferir códigos Anvisa limpos (5 dígitos) e descrições sem lixo.
+    const existing = dcbByDescricao.get(descricao)
+    if (existing === undefined) {
+      dcbByDescricao.set(descricao, id)
+      continue
+    }
     const padded = padDcbCode(dcb)
-    if (padded) dcbByCode.set(padded, id)
+    const isClean = /^\d{5}$/.test(padded) && !/[|"']/.test(descricao)
+    if (isClean) dcbByDescricao.set(descricao, id)
+  }
+
+  const dcbCodigoToDescricao = new Map<string, string>()
+  for (const item of dcbAux) {
+    const codigo = item.codigo.trim()
+    const descricao = item.descricao.trim().toLocaleUpperCase('pt-BR')
+    if (codigo && descricao) dcbCodigoToDescricao.set(codigo, descricao)
   }
 
   let unidadeUnId = 600
@@ -733,6 +768,8 @@ export async function fetchProductLookupCatalogs(
     similarByDescricao,
     similarCodigoToDescricao,
     dcbByCode,
+    dcbByDescricao,
+    dcbCodigoToDescricao,
     unidadeUnId,
     aliquotaByPercent,
     aliquotaStId,

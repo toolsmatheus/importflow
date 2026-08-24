@@ -1,5 +1,5 @@
 import { parseBrazilianNumber, isBlank } from '../utils/productFormats.js'
-import { padDcbCode } from './dcbIndexService.js'
+import { lookupAnvisaDcbByDescricao, padDcbCode } from './dcbIndexService.js'
 
 /** Catálogos TMS usados para montar refs `@xdata.ref` no insert de produto. */
 export interface ProductLookupCatalogs {
@@ -12,8 +12,12 @@ export interface ProductLookupCatalogs {
   similarByDescricao: Map<string, number>
   /** código do CSV auxiliar similar → descrição */
   similarCodigoToDescricao: Map<string, string>
-  /** código DCB (padded e raw) → id TMS */
+  /** código Anvisa DCB (padded e raw) → id TMS */
   dcbByCode: Map<string, number>
+  /** descrição UPPER → id TMS (preferindo código Anvisa limpo) */
+  dcbByDescricao: Map<string, number>
+  /** código do CSV auxiliar dcb → descrição */
+  dcbCodigoToDescricao: Map<string, string>
   unidadeUnId: number
   /** percentual ICMS (≠ 0) → id AliquotaICMS tipICMS */
   aliquotaByPercent: Map<number, number>
@@ -101,6 +105,32 @@ function mapListaControlado(raw: string | undefined): string {
   return `tl${u}`
 }
 
+/** Extrai unid. por embalagem do nome (ex.: "30CP", "20 COMP"). */
+function parseUnidadesPorEmbalagemFromNome(nome: string): number | undefined {
+  const m = nome.match(/\b(\d+)\s*(?:CP|CPS|COMP|COMPRIMIDOS?|CAPS?|CÁPSULAS?|CAPSULES?)\b/i)
+  if (!m) return undefined
+  const n = Number(m[1])
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
+function mapUnidadeSngpc(raw: string | undefined): string {
+  const v = str(raw)?.toUpperCase()
+  if (!v) return 'tupCaixa'
+  if (v.startsWith('TUP')) return `tup${v.slice(3)}`
+  const map: Record<string, string> = {
+    CAIXA: 'tupCaixa',
+    CX: 'tupCaixa',
+    FRASCO: 'tupFrasco',
+    AMPOLA: 'tupAmpola',
+    CARTELA: 'tupCartela',
+    TUBO: 'tupTubo',
+    ENVELOPE: 'tupEnvelope',
+    NENHUM: 'tupNenhum',
+    NENHUMA: 'tupNenhum',
+  }
+  return map[v] ?? `tup${v.charAt(0)}${v.slice(1).toLowerCase()}`
+}
+
 function resolveMigracaoId(
   code: string | undefined,
   map: Map<string, number>,
@@ -171,15 +201,42 @@ function resolveDcbId(
 ): { id?: number; error?: string } {
   const code = str(row.dcb)
   if (!code) return {}
+
+  // CSV auxiliar usa id local (ex.: 4;Clonazepam) — não é o código Anvisa.
+  const auxDescricao =
+    catalogs.dcbCodigoToDescricao.get(code) ??
+    catalogs.dcbCodigoToDescricao.get(String(Number(code)))
+
+  if (auxDescricao) {
+    const key = auxDescricao.trim().toLocaleUpperCase('pt-BR')
+    const byDesc = catalogs.dcbByDescricao.get(key)
+    if (byDesc !== undefined) return { id: byDesc }
+
+    const anvisa = lookupAnvisaDcbByDescricao(key)
+    if (anvisa) {
+      const id =
+        catalogs.dcbByCode.get(anvisa.dcb) ?? catalogs.dcbByCode.get(padDcbCode(anvisa.dcb))
+      if (id !== undefined) return { id }
+      return {
+        error: `DCB "${auxDescricao}" (Anvisa ${anvisa.dcb}) não encontrado no TMS`,
+      }
+    }
+    return {
+      error: `DCB auxiliar ${code} ("${auxDescricao}") não encontrado no TMS por descrição`,
+    }
+  }
+
   const padded = padDcbCode(code)
-  const id =
+  const byCode =
     catalogs.dcbByCode.get(padded) ??
     catalogs.dcbByCode.get(code) ??
     catalogs.dcbByCode.get(String(Number(code)))
-  if (id === undefined) {
-    return { error: `DCB ${code} não encontrado no TMS` }
-  }
-  return { id }
+  if (byCode !== undefined) return { id: byCode }
+
+  const byDesc = catalogs.dcbByDescricao.get(code.toLocaleUpperCase('pt-BR'))
+  if (byDesc !== undefined) return { id: byDesc }
+
+  return { error: `DCB ${code} não encontrado no TMS` }
 }
 
 /**
@@ -376,6 +433,36 @@ export function mapCsvRowToProductPayload(
   if (valorPop !== undefined) {
     payload.valorfarmaciapopular = valorPop
     payload.valorfinalfarmaciapopular = valorPop
+  }
+
+  const listaControleRaw = str(row.listacontrole)
+  const isControlado = Boolean(listaControleRaw)
+  if (isControlado) {
+    payload.controlaLote = true
+    payload.dataInicioControlado = new Date().toISOString().slice(0, 19)
+    // Classe SNGPC = Controle especial (Portaria 344)
+    payload.tipoclassesngpc = 'tcControleEspecial'
+    // Unidade SNGPC: CSV opcional ou CAIXA por padrão
+    payload.unidadesngpc = mapUnidadeSngpc(row.unidadesngpc)
+    // Unid. por embalagem: coluna opcional, senão tenta extrair do nome (ex.: 30CP)
+    const unidEmb =
+      num(row.unidemb) ??
+      num(row.unidadesporembalagem) ??
+      parseUnidadesPorEmbalagemFromNome(nome)
+    if (unidEmb !== undefined) {
+      payload.unidadesporembalagem = unidEmb
+      payload.qtdcomprimidos = unidEmb
+    }
+    const registroMs = str(row.registroms)
+    if (registroMs) {
+      payload.registroMS = registroMs
+      payload.registrosMS = [
+        {
+          '@xdata.type': 'XData.Default.RegistroMS',
+          registroMS: registroMs,
+        },
+      ]
+    }
   }
 
   if (subgrupo.id !== undefined) {
