@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { productService } from '@/services/productService'
+import { FolderCollectPanel } from '@/components/FolderCollectPanel'
 import { formatNumber } from '@/lib/utils'
-import type { AuxiliaryEntity, AuxiliaryUploadResult } from '@/types'
+import type { AuxiliaryEntity, AuxiliaryUploadResult, FolderCollectResult } from '@/types'
 
 const ENTITIES: { entity: AuxiliaryEntity; label: string; required?: boolean }[] = [
   { entity: 'grupo', label: 'Grupo', required: true },
@@ -22,6 +23,7 @@ const ENTITIES: { entity: AuxiliaryEntity; label: string; required?: boolean }[]
 interface AuxiliaryStepProps {
   auxiliaries: Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
   onUploaded: (entity: AuxiliaryEntity, result: AuxiliaryUploadResult | null) => void
+  onFolderCollected: (result: FolderCollectResult) => void
   onBack: () => void
   onContinue: () => void
   isValidating?: boolean
@@ -30,6 +32,7 @@ interface AuxiliaryStepProps {
 export function AuxiliaryStep({
   auxiliaries,
   onUploaded,
+  onFolderCollected,
   onBack,
   onContinue,
   isValidating,
@@ -59,6 +62,8 @@ export function AuxiliaryStep({
 
   return (
     <div className="space-y-6">
+      <FolderCollectPanel mode="auxiliaries" onCollected={onFolderCollected} />
+
       <Card>
         <CardHeader>
           <CardTitle>Arquivos auxiliares</CardTitle>

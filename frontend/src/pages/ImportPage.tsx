@@ -135,6 +135,12 @@ export function ImportPage() {
         <AuxiliaryStep
           auxiliaries={wizard.auxiliaries}
           onUploaded={wizard.setAuxiliary}
+          onFolderCollected={(result) => {
+            wizard.replaceAuxiliaries({
+              ...wizard.auxiliaries,
+              ...result.auxiliaries,
+            })
+          }}
           onBack={() => wizard.setCurrentStep('template')}
           onContinue={() => wizard.setCurrentStep('file')}
         />

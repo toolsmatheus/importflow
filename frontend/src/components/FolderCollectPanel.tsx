@@ -10,24 +10,32 @@ import { productService } from '@/services/productService'
 import type { FolderCollectResult } from '@/types'
 
 const FOLDER_PATH_KEY = 'importflow.collectFolderPath'
-export const DEFAULT_FOLDER_PATH = 'C:\\ToolsPharma\\Migração'
+export const DEFAULT_FOLDER_PATH = 'C:\\ToolsPharma\\Migracao'
+const LEGACY_FOLDER_PATHS = ['C:\\ToolsPharma\\Migração', 'C:\\ToolsPharma\\Migraçao']
 
 interface FolderCollectPanelProps {
   onCollected: (result: FolderCollectResult) => void
+  /** full = produtos+auxiliares; auxiliaries = só CSVs auxiliares */
+  mode?: 'full' | 'auxiliaries'
 }
 
 function readStoredFolder(): string {
   try {
     const stored = localStorage.getItem(FOLDER_PATH_KEY)?.trim()
-    return stored || DEFAULT_FOLDER_PATH
+    if (!stored || LEGACY_FOLDER_PATHS.includes(stored)) return DEFAULT_FOLDER_PATH
+    return stored
   } catch {
     return DEFAULT_FOLDER_PATH
   }
 }
 
-export function FolderCollectPanel({ onCollected }: FolderCollectPanelProps) {
+export function FolderCollectPanel({
+  onCollected,
+  mode = 'full',
+}: FolderCollectPanelProps) {
   const [folderPath, setFolderPath] = useState(DEFAULT_FOLDER_PATH)
   const [lastResult, setLastResult] = useState<FolderCollectResult | null>(null)
+  const auxiliariesOnly = mode === 'auxiliaries'
 
   useEffect(() => {
     const initial = readStoredFolder()
@@ -62,12 +70,27 @@ export function FolderCollectPanel({ onCollected }: FolderCollectPanelProps) {
       setLastResult(result)
       onCollected(result)
 
+      const auxCount = Object.keys(result.auxiliaries).length
+      const missingAux = result.missing.filter((name) => name !== 'produtos.csv')
+
+      if (auxiliariesOnly) {
+        if (auxCount === 0) {
+          toast.error('Nenhum CSV auxiliar encontrado na pasta')
+          return
+        }
+        toast.success(
+          `Coletados ${auxCount} auxiliar(es)${
+            missingAux.length ? `. Faltando: ${missingAux.join(', ')}` : ''
+          }`
+        )
+        return
+      }
+
       if (!result.products) {
         toast.error('produtos.csv (ou alias) não encontrado na pasta')
         return
       }
 
-      const auxCount = Object.keys(result.auxiliaries).length
       toast.success(
         `Coletados: produtos + ${auxCount} auxiliar(es)${
           result.missing.length ? `. Faltando: ${result.missing.join(', ')}` : ''
@@ -77,6 +100,11 @@ export function FolderCollectPanel({ onCollected }: FolderCollectPanelProps) {
     onError: (error: Error) => toast.error(error.message || 'Erro ao coletar pasta'),
   })
 
+  const expectedItems =
+    expectQuery.data?.expected.filter((item) =>
+      auxiliariesOnly ? item.role !== 'produtos' : true
+    ) ?? []
+
   return (
     <Card>
       <CardHeader>
@@ -85,8 +113,10 @@ export function FolderCollectPanel({ onCollected }: FolderCollectPanelProps) {
           Coletar da pasta
         </CardTitle>
         <CardDescription>
-          Pasta padrão: <span className="font-mono">{DEFAULT_FOLDER_PATH}</span>. O ImportFlow
-          busca arquivos pelo nome (produtos.csv, grupo.csv, etc.).
+          Pasta padrão: <span className="font-mono">{DEFAULT_FOLDER_PATH}</span>.{' '}
+          {auxiliariesOnly
+            ? 'Busca grupo.csv, subgrupo.csv, categoria.csv, etc.'
+            : 'Busca arquivos pelo nome (produtos.csv, grupo.csv, etc.).'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -122,13 +152,13 @@ export function FolderCollectPanel({ onCollected }: FolderCollectPanelProps) {
           </div>
         </div>
 
-        {expectQuery.data && (
+        {expectedItems.length > 0 && (
           <div className="rounded-lg border border-border p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">
               Nomes reconhecidos
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {expectQuery.data.expected.map((item) => (
+              {expectedItems.map((item) => (
                 <Badge key={item.role} variant="outline" className="font-mono font-normal">
                   {item.names[0]}
                 </Badge>
@@ -143,19 +173,26 @@ export function FolderCollectPanel({ onCollected }: FolderCollectPanelProps) {
               Pasta: <span className="font-mono text-foreground">{lastResult.folderPath}</span>
             </p>
             <ul className="space-y-1">
-              {lastResult.found.map((item) => (
-                <li key={`${item.role}-${item.fileName}`} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <span className="font-mono">{item.fileName}</span>
-                  <span className="text-muted-foreground">({item.role})</span>
-                </li>
-              ))}
-              {lastResult.missing.map((name) => (
-                <li key={name} className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-                  <XCircle className="h-4 w-4" />
-                  Faltando: <span className="font-mono">{name}</span>
-                </li>
-              ))}
+              {lastResult.found
+                .filter((item) => (auxiliariesOnly ? item.role !== 'produtos' : true))
+                .map((item) => (
+                  <li key={`${item.role}-${item.fileName}`} className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span className="font-mono">{item.fileName}</span>
+                    <span className="text-muted-foreground">({item.role})</span>
+                  </li>
+                ))}
+              {lastResult.missing
+                .filter((name) => (auxiliariesOnly ? !name.toLowerCase().includes('produto') : true))
+                .map((name) => (
+                  <li
+                    key={name}
+                    className="flex items-center gap-2 text-amber-700 dark:text-amber-300"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Faltando: <span className="font-mono">{name}</span>
+                  </li>
+                ))}
             </ul>
             {lastResult.ignored.length > 0 && (
               <p className="text-xs text-muted-foreground">
