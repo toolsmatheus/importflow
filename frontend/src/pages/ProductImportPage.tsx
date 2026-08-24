@@ -4,7 +4,6 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Loader2, RotateCcw } from 'lucide-react'
 import { Stepper } from '@/components/Stepper'
-import { TemplateStep } from '@/components/TemplateStep'
 import { FileDropzone } from '@/components/FileDropzone'
 import { FileInfo } from '@/components/FileInfo'
 import { FolderCollectPanel } from '@/components/FolderCollectPanel'
@@ -102,22 +101,15 @@ export function ProductImportPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">
-            Produtos
-          </h2>
-          <p className="mt-1 text-muted-foreground">
-            Auxiliares, CSV de produtos e envio ao servidor.
-          </p>
-        </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">Produtos</h2>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => {
             wizard.resetWizard()
             setSelectedFile(null)
-            toast.message('Importação de produtos reiniciada')
+            toast.message('Importação reiniciada')
           }}
         >
           <RotateCcw className="h-4 w-4" />
@@ -126,10 +118,6 @@ export function ProductImportPage() {
       </div>
 
       <Stepper currentStep={wizard.currentStep} />
-
-      {wizard.currentStep === 'template' && (
-        <TemplateStep onContinue={wizard.goToNextStep} />
-      )}
 
       {wizard.currentStep === 'auxiliary' && (
         <AuxiliaryStep
@@ -141,35 +129,30 @@ export function ProductImportPage() {
               ...result.auxiliaries,
             })
           }}
-          onBack={() => wizard.setCurrentStep('template')}
           onContinue={() => wizard.setCurrentStep('file')}
         />
       )}
 
       {wizard.currentStep === 'file' && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-5">
+          <div className="inline-flex rounded-md border border-border p-0.5">
             <Button
               size="sm"
-              variant={inputMode === 'manual' ? 'default' : 'outline'}
+              variant={inputMode === 'manual' ? 'secondary' : 'ghost'}
+              className="h-8"
               onClick={() => setInputMode('manual')}
             >
               Manual
             </Button>
             <Button
               size="sm"
-              variant={inputMode === 'folder' ? 'default' : 'outline'}
+              variant={inputMode === 'folder' ? 'secondary' : 'ghost'}
+              className="h-8"
               onClick={() => setInputMode('folder')}
             >
-              Pasta automática
+              Pasta
             </Button>
           </div>
-
-          {Object.keys(wizard.auxiliaries).length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Auxiliares prontos: {Object.keys(wizard.auxiliaries).join(', ')}.
-            </p>
-          )}
 
           {inputMode === 'manual' ? (
             <FileDropzone
@@ -196,16 +179,9 @@ export function ProductImportPage() {
               disabled={!wizard.csvAnalysis || !wizard.auxiliaries.grupo || validateMutation.isPending}
             >
               {validateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Validar produtos
+              Validar
             </Button>
           </div>
-
-          {validateMutation.isPending && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Validando produtos e vínculos auxiliares...
-            </div>
-          )}
         </div>
       )}
 

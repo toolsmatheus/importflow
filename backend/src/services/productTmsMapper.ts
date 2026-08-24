@@ -99,25 +99,15 @@ function mapListaControlado(raw: string | undefined): string {
   if (!v) return 'tlNenhuma'
   const u = v.toUpperCase()
   if (u === 'NENHUMA' || u === 'NENHUM' || u === 'TLNENHUMA') return 'tlNenhuma'
-  // Antibióticos / antimicrobianos (RDC) usam lista "T" no cadastro.
-  if (
-    u === 'T' ||
-    u === 'TLT' ||
-    u === 'ANTIMICROBIANO' ||
-    u === 'ANTIMICROBIANOS' ||
-    u === 'ANTIBIOTICO' ||
-    u === 'ANTIBIOTICOS' ||
-    u === 'ANTIBIÓTICO' ||
-    u === 'ANTIBIÓTICOS'
-  ) {
-    return 'tlT'
-  }
+  // Antibiótico: no CSV usa-se "T", mas o enum XData não tem tlT —
+  // a classe SNGPC (tcAntimicrobiano) é que marca antimicrobiano.
+  if (isAntimicrobianoLista(u)) return 'tlNenhuma'
   if (u.startsWith('TL')) return `tl${u.slice(2)}`
   return `tl${u}`
 }
 
 function isAntimicrobianoLista(raw: string | undefined): boolean {
-  const u = str(raw)?.toUpperCase()
+  const u = (typeof raw === 'string' ? raw : str(raw))?.toUpperCase()
   if (!u) return false
   return (
     u === 'T' ||

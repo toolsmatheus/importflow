@@ -11,10 +11,9 @@ export function Stepper({ currentStep }: StepperProps) {
   const currentIndex = WIZARD_STEPS.indexOf(currentStep)
 
   return (
-    <div className="mb-8">
-      <p className="mb-3 text-sm text-muted-foreground lg:hidden">
-        Etapa {currentIndex + 1} de {WIZARD_STEPS.length}:{' '}
-        <span className="font-medium text-foreground">{WIZARD_STEP_LABELS[currentStep]}</span>
+    <div className="mb-4">
+      <p className="mb-2 text-sm text-muted-foreground lg:hidden">
+        {currentIndex + 1}/{WIZARD_STEPS.length} · {WIZARD_STEP_LABELS[currentStep]}
       </p>
 
       <div className="hidden items-center justify-between lg:flex">
@@ -29,18 +28,18 @@ export function Stepper({ currentStep }: StepperProps) {
                 <div
                   aria-current={isCurrent ? 'step' : undefined}
                   className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors',
+                    'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
                     isCompleted && 'border-primary bg-primary text-primary-foreground',
                     isCurrent && 'border-primary bg-accent text-primary',
                     isUpcoming && 'border-border bg-card text-muted-foreground'
                   )}
                 >
-                  {isCompleted ? <Check className="h-5 w-5" /> : String(index + 1).padStart(2, '0')}
+                  {isCompleted ? <Check className="h-3.5 w-3.5" /> : index + 1}
                 </div>
                 <span
                   className={cn(
-                    'mt-2 text-center text-xs font-medium',
-                    isCurrent ? 'text-primary' : 'text-muted-foreground'
+                    'mt-1.5 text-center text-xs',
+                    isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground'
                   )}
                 >
                   {WIZARD_STEP_LABELS[stepId]}
@@ -49,7 +48,7 @@ export function Stepper({ currentStep }: StepperProps) {
               {index < WIZARD_STEPS.length - 1 && (
                 <div
                   className={cn(
-                    'mx-2 mb-6 h-0.5 flex-1',
+                    'mx-2 mb-5 h-px flex-1',
                     index < currentIndex ? 'bg-primary' : 'bg-border'
                   )}
                 />
@@ -59,12 +58,12 @@ export function Stepper({ currentStep }: StepperProps) {
         })}
       </div>
 
-      <div className="flex gap-1.5 lg:hidden">
+      <div className="flex gap-1 lg:hidden">
         {WIZARD_STEPS.map((stepId, index) => (
           <div
             key={stepId}
             className={cn(
-              'h-1.5 flex-1 rounded-full',
+              'h-1 flex-1 rounded-full',
               index <= currentIndex ? 'bg-primary' : 'bg-border'
             )}
             title={WIZARD_STEP_LABELS[stepId]}

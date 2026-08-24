@@ -21,7 +21,6 @@ const DEFAULT_TMS_URL = 'http://localhost:2001'
 type AuxiliaryMap = Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
 
 export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
-  template: 'Modelo',
   auxiliary: 'Auxiliares',
   file: 'Produtos',
   errors: 'Erros',
@@ -30,7 +29,6 @@ export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
 }
 
 export const WIZARD_STEPS: WizardStep[] = [
-  'template',
   'auxiliary',
   'file',
   'errors',
@@ -74,7 +72,7 @@ interface ImportWizardContextValue {
 const ImportWizardContext = createContext<ImportWizardContextValue | null>(null)
 
 export function ImportWizardProvider({ children }: { children: ReactNode }) {
-  const [currentStep, setCurrentStep] = useState<WizardStep>('template')
+  const [currentStep, setCurrentStep] = useState<WizardStep>('auxiliary')
   const [csvAnalysis, setCsvAnalysis] = useState<CsvAnalysis | null>(null)
   const [auxiliaries, setAuxiliaries] = useState<AuxiliaryMap>({})
   const [validationResult, setValidationResult] = useState<ProductValidationResult | null>(null)
@@ -116,7 +114,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
   )
 
   const resetWizard = useCallback(() => {
-    setCurrentStep('template')
+    setCurrentStep('auxiliary')
     setCsvAnalysis(null)
     setAuxiliaries({})
     setValidationResult(null)
@@ -139,7 +137,7 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const hasInProgressImport = Boolean(csvAnalysis) || currentStep !== 'template'
+  const hasInProgressImport = Boolean(csvAnalysis) || currentStep !== 'auxiliary'
 
   const value = useMemo<ImportWizardContextValue>(
     () => ({

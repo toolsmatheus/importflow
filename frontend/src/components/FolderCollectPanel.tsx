@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { CheckCircle2, FolderOpen, Loader2, XCircle } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CheckCircle2, ChevronDown, FolderOpen, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { productService } from '@/services/productService'
+import { cn } from '@/lib/utils'
 import type { FolderCollectResult } from '@/types'
 
 const FOLDER_PATH_KEY = 'importflow.collectFolderPath'
@@ -35,6 +34,7 @@ export function FolderCollectPanel({
 }: FolderCollectPanelProps) {
   const [folderPath, setFolderPath] = useState(DEFAULT_FOLDER_PATH)
   const [lastResult, setLastResult] = useState<FolderCollectResult | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const auxiliariesOnly = mode === 'auxiliaries'
 
   useEffect(() => {
@@ -57,17 +57,13 @@ export function FolderCollectPanel({
     }
   }, [folderPath])
 
-  const expectQuery = useQuery({
-    queryKey: ['folder-expect'],
-    queryFn: () => productService.getFolderExpect(),
-  })
-
   const resolvedPath = folderPath.trim() || DEFAULT_FOLDER_PATH
 
   const collectMutation = useMutation({
     mutationFn: () => productService.collectFolder(resolvedPath),
     onSuccess: (result) => {
       setLastResult(result)
+      setDetailsOpen(false)
       onCollected(result)
 
       const auxCount = Object.keys(result.auxiliaries).length
@@ -100,108 +96,97 @@ export function FolderCollectPanel({
     onError: (error: Error) => toast.error(error.message || 'Erro ao coletar pasta'),
   })
 
-  const expectedItems =
-    expectQuery.data?.expected.filter((item) =>
-      auxiliariesOnly ? item.role !== 'produtos' : true
+  const foundFiltered =
+    lastResult?.found.filter((item) => (auxiliariesOnly ? item.role !== 'produtos' : true)) ??
+    []
+  const missingFiltered =
+    lastResult?.missing.filter((name) =>
+      auxiliariesOnly ? !name.toLowerCase().includes('produto') : true
     ) ?? []
 
+  const summaryParts: string[] = []
+  if (lastResult) {
+    if (!auxiliariesOnly && lastResult.products) summaryParts.push('produtos')
+    if (foundFiltered.length) {
+      summaryParts.push(
+        `${foundFiltered.filter((f) => f.role !== 'produtos').length || foundFiltered.length} auxiliar(es)`
+      )
+    }
+    if (missingFiltered.length) summaryParts.push(`${missingFiltered.length} faltando`)
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <FolderOpen className="h-5 w-5 text-primary" />
-          Coletar da pasta
-        </CardTitle>
-        <CardDescription>
-          Pasta padrão: <span className="font-mono">{DEFAULT_FOLDER_PATH}</span>.{' '}
-          {auxiliariesOnly
-            ? 'Busca grupo.csv, subgrupo.csv, categoria.csv, etc.'
-            : 'Busca arquivos pelo nome (produtos.csv, grupo.csv, etc.).'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <label htmlFor="folder-path" className="mb-1.5 block text-sm text-muted-foreground">
-            Caminho da pasta
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="folder-path"
-              value={folderPath}
-              onChange={(e) => setFolderPath(e.target.value)}
-              onBlur={() => {
-                if (!folderPath.trim()) setFolderPath(DEFAULT_FOLDER_PATH)
-              }}
-              placeholder={DEFAULT_FOLDER_PATH}
-            />
-            <Button
+    <div className="space-y-2 rounded-lg border border-border px-3 py-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <FolderOpen className="h-4 w-4 text-muted-foreground" />
+        Coletar pasta
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Input
+          id="folder-path"
+          value={folderPath}
+          onChange={(e) => setFolderPath(e.target.value)}
+          onBlur={() => {
+            if (!folderPath.trim()) setFolderPath(DEFAULT_FOLDER_PATH)
+          }}
+          placeholder={DEFAULT_FOLDER_PATH}
+          className="font-mono text-sm"
+        />
+        <Button
+          type="button"
+          size="sm"
+          className="shrink-0"
+          onClick={() => {
+            if (!folderPath.trim()) setFolderPath(DEFAULT_FOLDER_PATH)
+            collectMutation.mutate()
+          }}
+          disabled={collectMutation.isPending}
+        >
+          {collectMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FolderOpen className="h-4 w-4" />
+          )}
+          Coletar
+        </Button>
+      </div>
+
+      {lastResult && (
+        <div className="space-y-1.5 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">{summaryParts.join(' · ') || 'Sem arquivos'}</p>
+            <button
               type="button"
-              onClick={() => {
-                if (!folderPath.trim()) setFolderPath(DEFAULT_FOLDER_PATH)
-                collectMutation.mutate()
-              }}
-              disabled={collectMutation.isPending}
+              onClick={() => setDetailsOpen((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
-              {collectMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <FolderOpen className="h-4 w-4" />
-              )}
-              Coletar agora
-            </Button>
+              {detailsOpen ? 'Ocultar' : 'Detalhes'}
+              <ChevronDown className={cn('h-3.5 w-3.5', detailsOpen && 'rotate-180')} />
+            </button>
           </div>
-        </div>
 
-        {expectedItems.length > 0 && (
-          <div className="rounded-lg border border-border p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Nomes reconhecidos
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {expectedItems.map((item) => (
-                <Badge key={item.role} variant="outline" className="font-mono font-normal">
-                  {item.names[0]}
-                </Badge>
+          {detailsOpen && (
+            <ul className="space-y-1 text-xs">
+              {foundFiltered.map((item) => (
+                <li key={`${item.role}-${item.fileName}`} className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="font-mono">{item.fileName}</span>
+                </li>
               ))}
-            </div>
-          </div>
-        )}
-
-        {lastResult && (
-          <div className="space-y-2 text-sm">
-            <p className="text-muted-foreground">
-              Pasta: <span className="font-mono text-foreground">{lastResult.folderPath}</span>
-            </p>
-            <ul className="space-y-1">
-              {lastResult.found
-                .filter((item) => (auxiliariesOnly ? item.role !== 'produtos' : true))
-                .map((item) => (
-                  <li key={`${item.role}-${item.fileName}`} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    <span className="font-mono">{item.fileName}</span>
-                    <span className="text-muted-foreground">({item.role})</span>
-                  </li>
-                ))}
-              {lastResult.missing
-                .filter((name) => (auxiliariesOnly ? !name.toLowerCase().includes('produto') : true))
-                .map((name) => (
-                  <li
-                    key={name}
-                    className="flex items-center gap-2 text-amber-700 dark:text-amber-300"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    Faltando: <span className="font-mono">{name}</span>
-                  </li>
-                ))}
+              {missingFiltered.map((name) => (
+                <li
+                  key={name}
+                  className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  <span className="font-mono">{name}</span>
+                </li>
+              ))}
             </ul>
-            {lastResult.ignored.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Ignorados: {lastResult.ignored.join(', ')}
-              </p>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

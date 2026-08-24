@@ -90,6 +90,13 @@ function classifyKind(
   return 'confirm'
 }
 
+/** CMED "Tarja Sem Tarja" = OTC; não sugerir Portaria 344 (ex.: Doricin / orfenadrina). */
+function isTarjaSemControle(tarja: string): boolean {
+  const t = tarja.trim().toLocaleLowerCase('pt-BR')
+  if (!t) return false
+  return t.includes('sem tarja') || t === 'isento' || t.includes('sem restri')
+}
+
 /**
  * Gera sugestões de listacontrole/DCB/registroms a partir de EAN → CMED → Portaria 344.
  * Nunca altera linhas; apenas sugere.
@@ -124,6 +131,9 @@ export function suggestControlados(
     const cmed = lookupCmedByEan(ean)
     if (!cmed) return
     foundInCmed++
+
+    // OTC na CMED: não marcar como controlado mesmo se a substância aparece na Portaria.
+    if (isTarjaSemControle(cmed.t)) return
 
     const listaMatch = matchSubstanceToLista(cmed.s)
     if (!listaMatch) return

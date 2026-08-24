@@ -1,5 +1,4 @@
 export type WizardStep =
-  | 'template'
   | 'file'
   | 'auxiliary'
   | 'errors'
