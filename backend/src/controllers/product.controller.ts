@@ -37,6 +37,7 @@ import {
   collectFromFolder,
   expectedFolderFiles,
 } from '../services/folderCollectService.js'
+import { suggestControlados } from '../services/controladoSuggestService.js'
 
 export async function downloadProductTemplateHandler(
   _request: FastifyRequest,
@@ -204,6 +205,48 @@ const startSendBodySchema = z.object({
   batchSize: z.number().int().min(10).max(500).optional(),
   concurrency: z.number().int().min(1).max(8).optional(),
 })
+
+const suggestControladosBodySchema = z.object({
+  rows: z.array(z.record(z.string())).min(1).max(50000),
+  auxiliary: z
+    .object({
+      dcb: z.string().uuid().optional(),
+    })
+    .optional(),
+})
+
+export async function suggestControladosHandler(request: FastifyRequest, reply: FastifyReply) {
+  const parsed = suggestControladosBodySchema.safeParse(request.body)
+
+  if (!parsed.success) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Envie as linhas do produtos.csv para gerar sugestões.',
+      errors: parsed.error.flatten().fieldErrors,
+    })
+  }
+
+  try {
+    let dcbCatalog = undefined
+    const dcbFileId = parsed.data.auxiliary?.dcb
+    if (dcbFileId) {
+      const file = getStoredFile(dcbFileId)
+      if (file) {
+        const loaded = await loadAuxiliaryCatalog(file)
+        dcbCatalog = loaded.catalog
+      }
+    }
+
+    const result = suggestControlados(parsed.data.rows, dcbCatalog)
+    return reply.send(result)
+  } catch (error) {
+    request.log.error({ err: error }, 'Controlado suggest failed')
+    return reply.status(500).send({
+      success: false,
+      message: error instanceof Error ? error.message : 'Erro ao sugerir controlados',
+    })
+  }
+}
 
 export async function getFolderExpectHandler(_request: FastifyRequest, reply: FastifyReply) {
   return reply.send({

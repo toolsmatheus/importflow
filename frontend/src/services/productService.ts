@@ -1,6 +1,7 @@
 import type {
   AuxiliaryEntity,
   AuxiliaryUploadResult,
+  ControladoSuggestResult,
   FolderCollectResult,
   ProductFieldCatalog,
   ProductValidationResult,
@@ -69,6 +70,23 @@ export const productService = {
     const data = await response.json()
     if (!response.ok) throw new Error(data?.message ?? 'Erro ao revalidar as linhas')
     return data as ProductValidationResult
+  },
+
+  async suggestControlados(
+    rows: Record<string, string>[],
+    auxiliary?: Partial<Record<AuxiliaryEntity, string>>
+  ): Promise<ControladoSuggestResult> {
+    const response = await fetch('/api/products/suggest-controlados', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rows,
+        auxiliary: auxiliary?.dcb ? { dcb: auxiliary.dcb } : undefined,
+      }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao sugerir controlados')
+    return data as ControladoSuggestResult
   },
 
   async identifyServer(tmsBaseUrl?: string): Promise<{ idFilial: number; tmsBaseUrl: string }> {

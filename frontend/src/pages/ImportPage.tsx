@@ -213,6 +213,7 @@ export function ImportPage() {
           columns={wizard.previewColumns}
           rows={wizard.previewRows}
           onRowsChange={wizard.setPreviewRows}
+          onColumnsChange={wizard.setPreviewColumns}
           auxiliary={wizard.auxiliaryFileIds}
           onBack={() => wizard.setCurrentStep('errors')}
           onContinue={() => wizard.setCurrentStep('send')}

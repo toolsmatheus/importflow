@@ -12,6 +12,7 @@ import {
   resumeSendJobHandler,
   retryFailedSendJobHandler,
   startSendJobHandler,
+  suggestControladosHandler,
   uploadAuxiliaryHandler,
   validateProductHandler,
   validateProductRowsHandler,
@@ -26,6 +27,7 @@ export async function productRoutes(app: FastifyInstance) {
   app.post('/products/auxiliary/:entity', uploadAuxiliaryHandler)
   app.post('/products/validate', validateProductHandler)
   app.post('/products/validate-rows', validateProductRowsHandler)
+  app.post('/products/suggest-controlados', suggestControladosHandler)
   app.get('/products/identify-server', identifyServerHandler)
   app.post('/products/send/start', startSendJobHandler)
   app.get('/products/send/:jobId', getSendJobHandler)

@@ -131,6 +131,39 @@ export interface FolderCollectResult {
 
 export type FileInputMode = 'manual' | 'folder'
 
+export type ControladoSuggestKind = 'empty' | 'conflict' | 'confirm'
+
+export interface ControladoSuggestion {
+  rowIndex: number
+  row: number
+  ean: string
+  codigo: string
+  nome: string
+  substance: string
+  matchedName: string
+  suggestedLista: string
+  suggestedDcb: string
+  suggestedDcbNome: string
+  currentLista: string
+  currentDcb: string
+  kind: ControladoSuggestKind
+  tarja: string
+  registro: string
+  produtoCmed: string
+  reason: string
+}
+
+export interface ControladoSuggestResult {
+  available: boolean
+  message?: string
+  cmedSource?: string
+  totalRows: number
+  withEan: number
+  foundInCmed: number
+  controlledCandidates: number
+  suggestions: ControladoSuggestion[]
+}
+
 /** @deprecated Prefer SendJobSnapshot */
 export type TmsSendResult = Pick<
   SendJobSnapshot,

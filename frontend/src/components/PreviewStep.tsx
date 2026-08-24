@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { productService } from '@/services/productService'
+import { ControladoSuggestPanel } from '@/components/ControladoSuggestPanel'
 import { cn, formatNumber } from '@/lib/utils'
 import type { AuxiliaryEntity, ProductValidationResult, ValidationIssue } from '@/types'
 
@@ -26,6 +27,7 @@ interface PreviewStepProps {
   columns: string[]
   rows: Record<string, string>[]
   onRowsChange: (rows: Record<string, string>[]) => void
+  onColumnsChange?: (columns: string[]) => void
   auxiliary: Partial<Record<AuxiliaryEntity, string>>
   onBack: () => void
   onContinue: () => void
@@ -35,6 +37,7 @@ export function PreviewStep({
   columns,
   rows,
   onRowsChange,
+  onColumnsChange,
   auxiliary,
   onBack,
   onContinue,
@@ -140,6 +143,30 @@ export function PreviewStep({
 
   return (
     <div className="space-y-6">
+      <ControladoSuggestPanel
+        rows={localRows}
+        auxiliary={auxiliary}
+        onApply={(next) => {
+          commitRows(next)
+          setLastResult(null)
+          setIssues([])
+          const nextColumns = [...columns]
+          for (const col of ['listacontrole', 'dcb'] as const) {
+            if (!nextColumns.includes(col)) nextColumns.push(col)
+          }
+          if (nextColumns.length !== columns.length) {
+            onColumnsChange?.(nextColumns)
+          }
+          setVisibleColumns((prev) => {
+            const ordered = [...prev]
+            for (const col of ['listacontrole', 'dcb']) {
+              if (!ordered.includes(col)) ordered.push(col)
+            }
+            return ordered
+          })
+        }}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Prévia editável</CardTitle>
