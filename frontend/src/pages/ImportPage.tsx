@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Package, Users, Wallet } from 'lucide-react'
+import { Package, Puzzle, Users, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const IMPORT_TABS = [
@@ -7,6 +7,11 @@ const IMPORT_TABS = [
     to: '/import/produtos',
     label: 'Produtos',
     icon: Package,
+  },
+  {
+    to: '/import/opcionais',
+    label: 'Opcionais',
+    icon: Puzzle,
   },
   {
     to: '/import/favorecidos',

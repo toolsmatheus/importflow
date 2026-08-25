@@ -5,6 +5,14 @@ export type WizardStep =
   | 'preview'
   | 'send'
 
+/** Importações complementares (aba Opcionais), independentes do wizard de produtos. */
+export type OptionalImportKind =
+  | 'barcodes'
+  | 'supplierRefs'
+  | 'validity'
+  | 'stock'
+  | 'lots'
+
 export type IssueSeverity = 'error' | 'warning'
 
 export type AuxiliaryEntity =

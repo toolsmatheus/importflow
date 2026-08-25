@@ -82,11 +82,11 @@ export function SendStep({
       setVersaoPreview(data.versao ?? null)
       toast.success(
         data.versao
-          ? `Servidor ok. Filial ${data.idFilial}, versão ${data.versao}`
-          : `Servidor ok. Filial ${data.idFilial}`
+          ? `Banco ok. Filial ${data.idFilial}, versão ${data.versao}`
+          : `Banco ok. Filial ${data.idFilial}`
       )
     },
-    onError: (error: Error) => toast.error(error.message || 'Servidor indisponível'),
+    onError: (error: Error) => toast.error(error.message || 'Banco de dados indisponível'),
   })
 
   const startMutation = useMutation({
@@ -140,7 +140,7 @@ export function SendStep({
         <CardContent className="space-y-5">
           <div>
             <label htmlFor="send-server-url" className="mb-1.5 block text-sm text-muted-foreground">
-              URL do servidor
+              URL do banco de dados
             </label>
             <Input
               id="send-server-url"
@@ -202,7 +202,7 @@ export function SendStep({
               ) : (
                 <Server className="h-4 w-4" />
               )}
-              Testar servidor
+              Testar conexão
             </Button>
             <Button
               onClick={() => startMutation.mutate('live')}
@@ -370,7 +370,7 @@ export function SendStep({
 
             {job.mode === 'simulate' && finished && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                Simulação concluída. Nenhum dado foi enviado ao servidor.
+                Simulação concluída. Nenhum dado foi enviado ao banco.
               </p>
             )}
 

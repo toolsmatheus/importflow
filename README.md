@@ -1,6 +1,6 @@
 # ImportFlow
 
-Importação de produtos via CSV para a API TMS (ToolsPharma), com validação e envio em lotes.
+Importação de produtos via CSV para o banco de dados (ToolsPharma), com validação e envio em lotes.
 
 ## Fluxo
 
@@ -9,7 +9,7 @@ Importação de produtos via CSV para a API TMS (ToolsPharma), com validação e
 3. Auxiliares: `grupo.csv` (obrigatório) e demais usados (`id;nome`)
 4. Erros: validação com filtros e export CSV
 5. Prévia: grid editável e revalidação
-6. Envio: lotes com progresso, pausa, retomar e reenvio de falhas (ou simulação sem TMS)
+6. Envio: lotes com progresso, pausa, retomar e reenvio de falhas (ou simulação sem gravar no banco)
 
 ## Uso no cliente
 
@@ -62,7 +62,7 @@ Endpoints:
 | `POST` | `/api/products/send/:jobId/cancel` | Cancela |
 | `POST` | `/api/products/send/:jobId/retry-failures` | Reenvia só falhas |
 
-Enquanto a API TMS não existir, use **Simular lotes** para testar 5k–20k produtos.
+Enquanto o banco de destino não estiver disponível, use **Simular lotes** para testar 5k–20k produtos.
 
 ## Outros endpoints
 
@@ -88,4 +88,4 @@ Enquanto a API TMS não existir, use **Simular lotes** para testar 5k–20k prod
 | `data/exemplos/*.csv` | Auxiliares de exemplo |
 | `data/produtos-invalid-example.csv` | Casos de erro/alerta |
 
-Variáveis úteis: `PORT`, `TMS_BASE_URL`, `SEND_BATCH_SIZE`, `SEND_CONCURRENCY`.
+Variáveis úteis: `PORT`, `TMS_BASE_URL` (URL do banco), `SEND_BATCH_SIZE`, `SEND_CONCURRENCY`.

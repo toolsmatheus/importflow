@@ -100,7 +100,7 @@ export async function fetchServerIdentification(
     })
   } catch {
     throw new Error(
-      `Não foi possível conectar ao TMS em ${url}. Verifique se o servidor está no ar.`
+      `Não foi possível conectar ao banco em ${url}. Verifique se o serviço está no ar.`
     )
   }
 
@@ -126,7 +126,7 @@ export async function fetchServerIdentification(
   const versao = extractVersao(data)
   if (!versao) {
     throw new Error(
-      'Resposta de IdentificacaoServidor sem Versao. Ela é necessária para autenticar no TMS.'
+      'Resposta de IdentificacaoServidor sem Versao. Ela é necessária para autenticar no banco.'
     )
   }
 
@@ -578,7 +578,7 @@ async function fetchTmsEntityRows(
     const url = `${root}/tms/xdata/${entityPath}?$top=${pageSize}&$skip=${skip}`
     const result = await tmsJsonRequest(url, { method: 'GET' }, baseUrl)
     if (!result.ok) {
-      throw new Error(result.message || `Falha ao listar ${entityPath} no TMS`)
+      throw new Error(result.message || `Falha ao listar ${entityPath} no banco`)
     }
 
     let parsed: unknown = null

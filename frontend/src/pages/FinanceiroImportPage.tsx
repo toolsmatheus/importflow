@@ -23,7 +23,7 @@ export function FinanceiroImportPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li>Modelo CSV de despesas / títulos</li>
           <li>Validação de contas, vencimentos e valores</li>
-          <li>Envio em lotes para a API de destino</li>
+          <li>Envio em lotes para o banco de dados</li>
         </ul>
       </CardContent>
     </Card>

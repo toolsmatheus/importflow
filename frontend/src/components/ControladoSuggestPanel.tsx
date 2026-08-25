@@ -122,7 +122,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
         </CardTitle>
         <CardDescription>
           Apenas sugestão: confira e aplique em todas ou só nas marcadas. Nada é gravado até você
-          aplicar. DCB da base validada usa a tabela DCB do TMS; o auxiliar dcb.csv cobre o restante.
+          aplicar. DCB da base validada usa a tabela DCB do banco; o auxiliar dcb.csv cobre o restante.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -223,7 +223,7 @@ function validateAuxiliaryRefs(
           field,
           value,
           message: tmsDcb
-            ? `dcb "${value}" não encontrado no arquivo auxiliar nem na tabela DCB do TMS.`
+            ? `dcb "${value}" não encontrado no arquivo auxiliar nem na tabela DCB do banco.`
             : `dcb "${value}" não encontrado no arquivo auxiliar.`,
           severity: 'error',
         })
@@ -232,7 +232,7 @@ function validateAuxiliaryRefs(
           row: rowNumber,
           field,
           value,
-          message: `Arquivo auxiliar de dcb não enviado e TMS indisponível — não foi possível validar o id ${value}.`,
+          message: `Arquivo auxiliar de dcb não enviado e banco indisponível — não foi possível validar o id ${value}.`,
           severity: 'error',
         })
       } else {
@@ -240,7 +240,7 @@ function validateAuxiliaryRefs(
           row: rowNumber,
           field,
           value,
-          message: `dcb "${value}" não encontrado na tabela DCB do TMS.`,
+          message: `dcb "${value}" não encontrado na tabela DCB do banco.`,
           severity: 'error',
         })
       }

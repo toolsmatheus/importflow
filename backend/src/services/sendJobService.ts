@@ -417,7 +417,7 @@ async function processOneBatch(
         job.errors.push({
           index,
           codigo: String(job.rows[index]?.codigo ?? ''),
-          message: 'Catálogos TMS não carregados para mapear o produto',
+          message: 'Catálogos do banco não carregados para mapear o produto',
           batch: batchNumber,
         })
       }
@@ -452,7 +452,7 @@ async function processOneBatch(
         reason: 'codigo_migracao',
         message:
           existingMigracaoId > 0
-            ? `codigo_migracao já existe no produto TMS id ${existingMigracaoId}`
+            ? `codigo_migracao já existe no produto (banco id ${existingMigracaoId})`
             : 'codigo_migracao duplicado neste envio',
         tmsProdutoId: existingMigracaoId > 0 ? existingMigracaoId : null,
       })
@@ -471,7 +471,7 @@ async function processOneBatch(
           reason: 'codigo_barras',
           message:
             existingBarcodeId > 0
-              ? `código de barras já existe no produto TMS id ${existingBarcodeId}`
+              ? `código de barras já existe no produto (banco id ${existingBarcodeId})`
               : 'código de barras duplicado neste envio',
           tmsProdutoId: existingBarcodeId > 0 ? existingBarcodeId : null,
         })
@@ -491,7 +491,7 @@ async function processOneBatch(
         reason: 'codigo_migracao',
         message:
           id && id > 0
-            ? `codigo_migracao já existe no produto TMS id ${id}`
+            ? `codigo_migracao já existe no produto (banco id ${id})`
             : 'codigo_migracao duplicado neste envio',
         tmsProdutoId: id && id > 0 ? id : null,
       })
@@ -509,7 +509,7 @@ async function processOneBatch(
         reason: 'codigo_barras',
         message:
           id && id > 0
-            ? `código de barras já existe no produto TMS id ${id}`
+            ? `código de barras já existe no produto (banco id ${id})`
             : 'código de barras duplicado neste envio',
         tmsProdutoId: id && id > 0 ? id : null,
       })

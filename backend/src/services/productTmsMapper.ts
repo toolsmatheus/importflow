@@ -210,7 +210,7 @@ function resolveMigracaoId(
   if (!v) return {}
   const id = map.get(v) ?? map.get(String(Number(v)))
   if (id === undefined) {
-    return { error: `${label} codigo_migracao=${v} não encontrado no TMS` }
+    return { error: `${label} codigo_migracao=${v} não encontrado no banco` }
   }
   return { id }
 }
@@ -241,7 +241,7 @@ function resolveAliquotaId(
   if (found !== undefined && found > 0) return { id: found }
 
   return {
-    error: `AliquotaICMS com aliquota=${aliquota} não encontrada no TMS (deveria ter sido criada antes do produto)`,
+    error: `AliquotaICMS com aliquota=${aliquota} não encontrada no banco (deveria ter sido criada antes do produto)`,
   }
 }
 
@@ -260,7 +260,7 @@ function resolveSimilarId(
   const key = descricao.trim().toLocaleUpperCase('pt-BR')
   const id = catalogs.similarByDescricao.get(key)
   if (id === undefined) {
-    return { error: `Similar "${descricao}" não encontrado no TMS por descrição` }
+    return { error: `Similar "${descricao}" não encontrado no banco por descrição` }
   }
   return { id }
 }
@@ -288,7 +288,7 @@ function resolveDcbId(
         catalogs.dcbByCode.get(anvisa.dcb) ?? catalogs.dcbByCode.get(padDcbCode(anvisa.dcb))
       if (id !== undefined) return { id }
       return {
-        warning: `DCB "${auxDescricao}" (Anvisa ${anvisa.dcb}) não encontrado no TMS — DCB não vinculado`,
+        warning: `DCB "${auxDescricao}" (Anvisa ${anvisa.dcb}) não encontrado no banco — DCB não vinculado`,
       }
     }
     return {
@@ -306,7 +306,7 @@ function resolveDcbId(
   const byDesc = catalogs.dcbByDescricao.get(code.toLocaleUpperCase('pt-BR'))
   if (byDesc !== undefined) return { id: byDesc }
 
-  return { warning: `DCB ${code} não encontrado no TMS — DCB não vinculado` }
+  return { warning: `DCB ${code} não encontrado no banco — DCB não vinculado` }
 }
 
 /**
@@ -405,7 +405,7 @@ export function mapCsvRowToProductPayload(
   if (cfopCode) {
     cfopId = catalogs.cfopByCode.get(cfopCode)
     if (cfopId === undefined) {
-      return { ok: false, message: `CFOP ${cfopCode} não encontrado no TMS` }
+      return { ok: false, message: `CFOP ${cfopCode} não encontrado no banco` }
     }
   }
 

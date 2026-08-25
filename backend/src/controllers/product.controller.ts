@@ -91,7 +91,7 @@ export async function getProductFieldCatalogHandler(
       markupInconsistente: 'alerta',
       aliquotaZeroStIsento: 'bloqueia (exatamente uma de st/isento = S)',
       aliquotaPercent: 'se não existir em AliquotaICMS, cria tipICMS/alSAIDA',
-      unidadeEstoque: 'sempre UN no TMS (coluna unidade do CSV ignorada)',
+      unidadeEstoque: 'sempre UN no banco (coluna unidade do CSV ignorada)',
     },
   })
 }
@@ -315,7 +315,7 @@ export async function identifyServerHandler(request: FastifyRequest, reply: Fast
       tmsBaseUrl: query.tmsBaseUrl ?? getDefaultTmsBaseUrl(),
     })
   } catch (error) {
-    request.log.error({ err: error }, 'TMS identification failed')
+    request.log.error({ err: error }, 'Database identification failed')
     return reply.status(502).send({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao consultar IdentificacaoServidor',

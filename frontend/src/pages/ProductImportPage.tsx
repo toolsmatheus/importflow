@@ -240,7 +240,7 @@ export function ProductImportPage() {
             wizard.resetWizard()
             setSelectedFile(null)
             navigate('/import/produtos')
-            toast.success('Importação de produtos concluída')
+            toast.success('Produtos concluídos. Opcionais ficam na aba Opcionais.')
           }}
         />
       )}
