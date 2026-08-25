@@ -16,6 +16,7 @@ import type {
 } from '@/types'
 
 const TMS_URL_KEY = 'importflow.tmsBaseUrl'
+const CLIENT_UF_KEY = 'importflow.clientUf'
 const DEFAULT_TMS_URL = 'http://localhost:2001'
 
 type AuxiliaryMap = Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
@@ -44,6 +45,14 @@ function readStoredTmsUrl(): string {
   }
 }
 
+function readStoredClientUf(): string {
+  try {
+    return localStorage.getItem(CLIENT_UF_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
 interface ImportWizardContextValue {
   currentStep: WizardStep
   setCurrentStep: (step: WizardStep) => void
@@ -62,6 +71,8 @@ interface ImportWizardContextValue {
   setSendJob: (job: SendJobSnapshot | null) => void
   tmsBaseUrl: string
   setTmsBaseUrl: (url: string) => void
+  clientUf: string
+  setClientUf: (uf: string) => void
   resetWizard: () => void
   goToNextStep: () => void
   goToPreviousStep: () => void
@@ -80,11 +91,22 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
   const [previewColumns, setPreviewColumns] = useState<string[]>([])
   const [sendJob, setSendJob] = useState<SendJobSnapshot | null>(null)
   const [tmsBaseUrl, setTmsBaseUrlState] = useState(readStoredTmsUrl)
+  const [clientUf, setClientUfState] = useState(readStoredClientUf)
 
   const setTmsBaseUrl = useCallback((url: string) => {
     setTmsBaseUrlState(url)
     try {
       localStorage.setItem(TMS_URL_KEY, url)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const setClientUf = useCallback((uf: string) => {
+    setClientUfState(uf)
+    try {
+      if (uf) localStorage.setItem(CLIENT_UF_KEY, uf)
+      else localStorage.removeItem(CLIENT_UF_KEY)
     } catch {
       /* ignore */
     }
@@ -158,6 +180,8 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
       setSendJob,
       tmsBaseUrl,
       setTmsBaseUrl,
+      clientUf,
+      setClientUf,
       resetWizard,
       goToNextStep,
       goToPreviousStep,
@@ -176,6 +200,8 @@ export function ImportWizardProvider({ children }: { children: ReactNode }) {
       sendJob,
       tmsBaseUrl,
       setTmsBaseUrl,
+      clientUf,
+      setClientUf,
       resetWizard,
       goToNextStep,
       goToPreviousStep,

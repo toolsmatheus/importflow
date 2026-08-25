@@ -20,6 +20,12 @@ import {
   parseBrazilianNumber,
 } from '../utils/productFormats.js'
 import {
+  aliquotaMatchesUf,
+  formatAliquotaCsv,
+  getUfIcms,
+  UF_ICMS_TABLE,
+} from '../utils/icmsByUf.js'
+import {
   FIELD_TO_AUXILIARY,
   loadAuxiliaryCatalog,
   type AuxiliaryCatalogs,
@@ -98,10 +104,15 @@ const KNOWN_HEADERS = new Set<string>([
 /** Colunas antigas do modelo — aceitas no CSV mas ignoradas no envio. */
 const LEGACY_IGNORED_HEADERS = new Set(['unidade', 'field5'])
 
+const brazilianUfSchema = z.enum(
+  UF_ICMS_TABLE.map((e) => e.uf) as [string, ...string[]]
+)
+
 export const validateBodySchema = z.object({
   fileId: z.string().uuid(),
   delimiter: z.string().min(1).max(1).optional(),
   encoding: z.string().min(1).optional(),
+  clientUf: brazilianUfSchema.optional(),
   auxiliary: z
     .record(z.enum(AUXILIARY_ENTITIES), z.string().uuid())
     .optional(),
@@ -109,6 +120,7 @@ export const validateBodySchema = z.object({
 
 export const validateRowsBodySchema = z.object({
   rows: z.array(z.record(z.string())).min(1),
+  clientUf: brazilianUfSchema.optional(),
   auxiliary: z.record(z.enum(AUXILIARY_ENTITIES), z.string().uuid()).optional(),
 })
 
@@ -279,7 +291,8 @@ function validateRow(
   catalogs: AuxiliaryCatalogs,
   issues: ValidationIssue[],
   counters: { errors: number; warnings: number; total: number },
-  tmsDcb: Map<string, TmsDcbRecord> | null = null
+  tmsDcb: Map<string, TmsDcbRecord> | null = null,
+  clientUf?: string
 ) {
   for (const field of REQUIRED_HEADERS) {
     if (!hasColumn(columns, field)) continue
@@ -404,6 +417,21 @@ function validateRow(
         severity: 'error',
       })
     }
+  } else if (
+    aliquotaNum !== null &&
+    aliquotaNum > 0 &&
+    clientUf &&
+    !aliquotaMatchesUf(aliquotaNum, clientUf)
+  ) {
+    const entry = getUfIcms(clientUf)
+    const expected = entry ? formatAliquotaCsv(entry.aliquota) : '?'
+    pushIssue(issues, counters, {
+      row: rowNumber,
+      field: 'aliquota',
+      value: aliquotaRaw,
+      message: `Alíquota diferente da padrão da UF ${clientUf} (esperada ${expected}%).`,
+      severity: 'warning',
+    })
   }
 
   const lista = cell(record, 'listapiscofins').trim().toUpperCase()
@@ -704,7 +732,16 @@ export async function validateProductCsv(
     }
 
     if (missingRequiredHeaders.length === 0) {
-      validateRow(record, rowNumber, columnSet, catalogs, issues, counters, tmsDcb)
+      validateRow(
+        record,
+        rowNumber,
+        columnSet,
+        catalogs,
+        issues,
+        counters,
+        tmsDcb,
+        input.clientUf
+      )
     }
 
     const codigo = cell(record, 'codigo').trim()
@@ -779,7 +816,16 @@ export async function validateProductRows(
 
   rows.forEach((record, index) => {
     const rowNumber = index + 2
-    validateRow(record, rowNumber, columnSet, catalogs, issues, counters, tmsDcb)
+    validateRow(
+      record,
+      rowNumber,
+      columnSet,
+      catalogs,
+      issues,
+      counters,
+      tmsDcb,
+      input.clientUf
+    )
 
     const codigo = cell(record, 'codigo').trim()
     if (codigo && isValidMigrationCode(codigo)) {

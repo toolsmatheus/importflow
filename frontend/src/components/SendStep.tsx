@@ -26,6 +26,7 @@ import type { AuxiliaryEntity, SendJobSnapshot, SendMode } from '@/types'
 
 interface SendStepProps {
   rows: Record<string, string>[]
+  onRowsChange?: (rows: Record<string, string>[]) => void
   tmsBaseUrl: string
   onTmsBaseUrlChange: (url: string) => void
   job: SendJobSnapshot | null
@@ -90,10 +91,10 @@ export function SendStep({
   })
 
   const startMutation = useMutation({
-    mutationFn: (mode: SendMode) =>
+    mutationFn: (payload: { mode: SendMode; rows: Record<string, string>[] }) =>
       productService.startSend({
-        rows,
-        mode,
+        rows: payload.rows,
+        mode: payload.mode,
         tmsBaseUrl,
         batchSize,
         concurrency,
@@ -121,6 +122,10 @@ export function SendStep({
     onSuccess: (snapshot) => onJobChange(snapshot),
     onError: (error: Error) => toast.error(error.message || 'Falha no controle do envio'),
   })
+
+  const requestStart = (mode: SendMode) => {
+    startMutation.mutate({ mode, rows })
+  }
 
   const finished =
     job &&
@@ -205,7 +210,7 @@ export function SendStep({
               Testar conexão
             </Button>
             <Button
-              onClick={() => startMutation.mutate('live')}
+              onClick={() => requestStart('live')}
               disabled={startMutation.isPending || rows.length === 0 || Boolean(active)}
             >
               {startMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -213,7 +218,7 @@ export function SendStep({
             </Button>
             <Button
               variant="secondary"
-              onClick={() => startMutation.mutate('simulate')}
+              onClick={() => requestStart('simulate')}
               disabled={startMutation.isPending || rows.length === 0 || Boolean(active)}
             >
               <Sparkles className="h-4 w-4" />

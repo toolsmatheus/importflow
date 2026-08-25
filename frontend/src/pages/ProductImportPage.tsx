@@ -12,11 +12,52 @@ import { ErrorsStep } from '@/components/ErrorsStep'
 import { PreviewStep } from '@/components/PreviewStep'
 import { SendStep } from '@/components/SendStep'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useImportWizard } from '@/hooks/useImportWizard'
 import { csvService, type UploadAnalyzeProgress } from '@/services/csvService'
 import { productService } from '@/services/productService'
+import {
+  applyExpectedAliquota,
+  findAliquotaMismatches,
+  formatAliquotaCsv,
+  getUfIcms,
+  UF_ICMS_TABLE,
+} from '@/lib/icmsByUf'
 import { formatNumber } from '@/lib/utils'
-import type { FileInputMode, FolderCollectResult } from '@/types'
+import type { FileInputMode, FolderCollectResult, ProductValidationResult } from '@/types'
+
+function isAliquotaUfWarning(issue: { field: string; message: string }) {
+  return issue.field === 'aliquota' && issue.message.includes('padrão da UF')
+}
+
+function applyAliquotaFixToResult(
+  result: ProductValidationResult,
+  uf: string
+): ProductValidationResult | null {
+  const mismatch = findAliquotaMismatches(result.rows, uf)
+  if (!mismatch || mismatch.mismatches.length === 0) return null
+
+  const nextRows = applyExpectedAliquota(result.rows, mismatch.mismatches, mismatch.expected)
+  const removed = result.issues.filter(isAliquotaUfWarning)
+  const kept = result.issues.filter((i) => !isAliquotaUfWarning(i))
+
+  return {
+    ...result,
+    rows: nextRows,
+    issues: kept,
+    warningCount: Math.max(
+      0,
+      result.warningCount - Math.max(removed.length, mismatch.mismatches.length)
+    ),
+  }
+}
 
 export function ProductImportPage() {
   const navigate = useNavigate()
@@ -24,6 +65,8 @@ export function ProductImportPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [inputMode, setInputMode] = useState<FileInputMode>('manual')
   const [uploadProgress, setUploadProgress] = useState<UploadAnalyzeProgress | null>(null)
+
+  const selectedUfEntry = getUfIcms(wizard.clientUf)
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -59,9 +102,11 @@ export function ProductImportPage() {
   const validateMutation = useMutation({
     mutationFn: async () => {
       if (!wizard.csvAnalysis) throw new Error('Envie o arquivo antes de validar')
+      if (!wizard.clientUf) throw new Error('Selecione o estado (UF) do cliente antes de validar')
       return productService.validate(wizard.csvAnalysis.fileId, {
         delimiter: wizard.csvAnalysis.delimiter,
         encoding: wizard.csvAnalysis.encoding,
+        clientUf: wizard.clientUf,
         auxiliary: wizard.auxiliaryFileIds,
       })
     },
@@ -108,6 +153,23 @@ export function ProductImportPage() {
     wizard.setValidationResult(null)
     wizard.setPreviewRows([])
     wizard.setSendJob(null)
+  }
+
+  const handleFixAliquotas = () => {
+    if (!wizard.validationResult || !wizard.clientUf) return
+    const fixed = findAliquotaMismatches(wizard.validationResult.rows, wizard.clientUf)
+    const next = applyAliquotaFixToResult(wizard.validationResult, wizard.clientUf)
+    if (!next) {
+      toast.message('Nenhuma alíquota divergente para corrigir na prévia')
+      return
+    }
+    wizard.setValidationResult(next)
+    wizard.setPreviewRows(next.rows)
+    toast.success(
+      `${formatNumber(fixed?.mismatches.length ?? 0)} alíquota(s) ajustada(s) para ${formatAliquotaCsv(
+        fixed?.expected ?? 0
+      )}% (${wizard.clientUf})`
+    )
   }
 
   return (
@@ -178,6 +240,39 @@ export function ProductImportPage() {
 
           {wizard.csvAnalysis && <FileInfo analysis={wizard.csvAnalysis} />}
 
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Estado (UF) do cliente</CardTitle>
+              <CardDescription>
+                Usado na validação da coluna aliquota (quando &gt; 0). Obrigatório antes de
+                validar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select value={wizard.clientUf || undefined} onValueChange={wizard.setClientUf}>
+                <SelectTrigger id="client-uf" className="w-full sm:max-w-md">
+                  <SelectValue placeholder="Selecione a UF da loja / cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {UF_ICMS_TABLE.map((entry) => (
+                    <SelectItem key={entry.uf} value={entry.uf}>
+                      {entry.uf} — {entry.name} ({formatAliquotaCsv(entry.aliquota)}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedUfEntry ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Alíquota ICMS esperada:{' '}
+                  <span className="font-medium text-foreground">
+                    {formatAliquotaCsv(selectedUfEntry.aliquota)}%
+                  </span>
+                  {selectedUfEntry.note ? ` · ${selectedUfEntry.note}` : ''}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <div className="flex justify-between">
             <Button
               variant="outline"
@@ -187,8 +282,19 @@ export function ProductImportPage() {
               Voltar
             </Button>
             <Button
-              onClick={() => validateMutation.mutate()}
-              disabled={!wizard.csvAnalysis || !wizard.auxiliaries.grupo || validateMutation.isPending}
+              onClick={() => {
+                if (!wizard.clientUf) {
+                  toast.error('Selecione o estado (UF) do cliente antes de validar')
+                  return
+                }
+                validateMutation.mutate()
+              }}
+              disabled={
+                !wizard.csvAnalysis ||
+                !wizard.auxiliaries.grupo ||
+                !wizard.clientUf ||
+                validateMutation.isPending
+              }
             >
               {validateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Validar
@@ -200,11 +306,13 @@ export function ProductImportPage() {
       {wizard.currentStep === 'errors' && (
         <ErrorsStep
           result={wizard.validationResult}
+          clientUf={wizard.clientUf}
           onBack={() => wizard.setCurrentStep('file')}
           onFixFile={() => wizard.setCurrentStep('file')}
           onFixAuxiliary={() => wizard.setCurrentStep('auxiliary')}
           onRevalidate={() => validateMutation.mutate()}
           isRevalidating={validateMutation.isPending}
+          onFixAliquotas={handleFixAliquotas}
           onContinue={() => {
             if (wizard.validationResult?.rows?.length) {
               wizard.setPreviewRows(wizard.validationResult.rows)
@@ -222,6 +330,7 @@ export function ProductImportPage() {
           onRowsChange={wizard.setPreviewRows}
           onColumnsChange={wizard.setPreviewColumns}
           auxiliary={wizard.auxiliaryFileIds}
+          clientUf={wizard.clientUf}
           onBack={() => wizard.setCurrentStep('errors')}
           onContinue={() => wizard.setCurrentStep('send')}
         />

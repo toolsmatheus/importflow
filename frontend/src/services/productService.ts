@@ -40,6 +40,7 @@ export const productService = {
     options?: {
       delimiter?: string
       encoding?: string
+      clientUf?: string
       auxiliary?: Partial<Record<AuxiliaryEntity, string>>
     }
   ): Promise<ProductValidationResult> {
@@ -50,6 +51,7 @@ export const productService = {
         fileId,
         delimiter: options?.delimiter ?? ';',
         encoding: options?.encoding,
+        clientUf: options?.clientUf,
         auxiliary: options?.auxiliary,
       }),
     })
@@ -60,12 +62,13 @@ export const productService = {
 
   async validateRows(
     rows: Record<string, string>[],
-    auxiliary?: Partial<Record<AuxiliaryEntity, string>>
+    auxiliary?: Partial<Record<AuxiliaryEntity, string>>,
+    clientUf?: string
   ): Promise<ProductValidationResult> {
     const response = await fetch('/api/products/validate-rows', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows, auxiliary }),
+      body: JSON.stringify({ rows, auxiliary, clientUf }),
     })
     const data = await response.json()
     if (!response.ok) throw new Error(data?.message ?? 'Erro ao revalidar as linhas')

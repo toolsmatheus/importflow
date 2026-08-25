@@ -30,6 +30,7 @@ interface PreviewStepProps {
   onRowsChange: (rows: Record<string, string>[]) => void
   onColumnsChange?: (columns: string[]) => void
   auxiliary: Partial<Record<AuxiliaryEntity, string>>
+  clientUf?: string
   onBack: () => void
   onContinue: () => void
 }
@@ -40,6 +41,7 @@ export function PreviewStep({
   onRowsChange,
   onColumnsChange,
   auxiliary,
+  clientUf,
   onBack,
   onContinue,
 }: PreviewStepProps) {
@@ -110,7 +112,7 @@ export function PreviewStep({
   }
 
   const revalidateMutation = useMutation({
-    mutationFn: () => productService.validateRows(localRows, auxiliary),
+    mutationFn: () => productService.validateRows(localRows, auxiliary, clientUf),
     onSuccess: (result) => {
       setLastResult(result)
       setIssues(result.issues)

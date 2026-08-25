@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatAliquotaCsv, getUfIcms } from '@/lib/icmsByUf'
 import { formatNumber } from '@/lib/utils'
 import type { IssueSeverity, ProductValidationResult } from '@/types'
 
@@ -11,12 +12,18 @@ type SeverityFilter = 'all' | IssueSeverity
 
 interface ErrorsStepProps {
   result: ProductValidationResult | null
+  clientUf?: string
   onBack: () => void
   onFixFile: () => void
   onFixAuxiliary: () => void
   onRevalidate: () => void
+  onFixAliquotas?: () => void
   onContinue: () => void
   isRevalidating?: boolean
+}
+
+function isAliquotaUfWarning(issue: { field: string; message: string }) {
+  return issue.field === 'aliquota' && issue.message.includes('padrão da UF')
 }
 
 function downloadIssuesCsv(result: ProductValidationResult) {
@@ -35,14 +42,23 @@ function downloadIssuesCsv(result: ProductValidationResult) {
 
 export function ErrorsStep({
   result,
+  clientUf,
   onBack,
   onFixFile,
   onFixAuxiliary,
   onRevalidate,
+  onFixAliquotas,
   onContinue,
   isRevalidating,
 }: ErrorsStepProps) {
   const [filter, setFilter] = useState<SeverityFilter>('all')
+
+  const aliquotaUfWarnings = useMemo(() => {
+    if (!result) return []
+    return result.issues.filter(isAliquotaUfWarning)
+  }, [result])
+
+  const ufEntry = clientUf ? getUfIcms(clientUf) : null
 
   const filteredIssues = useMemo(() => {
     if (!result) return []
@@ -99,6 +115,28 @@ export function ErrorsStep({
           </CardContent>
         </Card>
       </div>
+
+      {aliquotaUfWarnings.length > 0 && ufEntry && (
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
+          <CardContent className="space-y-3 p-4 text-sm text-amber-900 dark:text-amber-100">
+            <p>
+              <span className="font-medium">Alíquota × UF {clientUf}:</span> esperada{' '}
+              <span className="font-mono font-medium">
+                {formatAliquotaCsv(ufEntry.aliquota)}%
+              </span>
+              {ufEntry.note ? ` (${ufEntry.note})` : ''}. Há{' '}
+              <span className="font-medium">{formatNumber(aliquotaUfWarnings.length)}</span>{' '}
+              alerta(s) de divergência
+              {result.truncated ? ' (lista pode estar truncada)' : ''}. Isso não bloqueia o envio.
+            </p>
+            {onFixAliquotas ? (
+              <Button size="sm" variant="outline" onClick={onFixAliquotas}>
+                Corrigir todas para {formatAliquotaCsv(ufEntry.aliquota)}%
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
 
       {canContinue ? (
         <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40">
