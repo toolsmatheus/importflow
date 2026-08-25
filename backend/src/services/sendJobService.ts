@@ -283,15 +283,9 @@ async function insertAuxiliaries(job: SendJobInternal): Promise<void> {
       const byCode = byName ? null : lookupAnvisaDcb(padDcbCode(item.codigo))
       const anvisa = byName ?? byCode
       if (!anvisa) {
-        job.auxFailed++
-        if (job.errors.length < MAX_STORED_ERRORS) {
-          job.errors.push({
-            index: -1,
-            codigo: item.codigo,
-            message: `DCB auxiliar ${item.codigo} (${item.descricao}): nome não encontrado na lista Anvisa`,
-            batch: 0,
-          })
-        }
+        // Sem código Anvisa: não cadastra o auxiliar; produtos controlados
+        // recebem aviso na hora do insert (DCB omitido no payload).
+        job.auxSkipped++
         continue
       }
 
@@ -570,6 +564,16 @@ async function processOneBatch(
       // Mantém a reserva (-1) como ocupado neste envio; id real virá no próximo catálogo.
       if (codigo) confirmExistenceKey(existence.byMigracao, codigo, -1)
       if (barcode) confirmExistenceKey(existence.byBarcode, barcode, -1)
+      for (const warning of mapped.warnings ?? []) {
+        if (job.errors.length < MAX_STORED_ERRORS) {
+          job.errors.push({
+            index,
+            codigo,
+            message: `Aviso: ${warning}`,
+            batch: batchNumber,
+          })
+        }
+      }
     } else {
       if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
       if (barcode) releaseExistenceKey(existence.byBarcode, barcode)

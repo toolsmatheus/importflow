@@ -56,9 +56,6 @@ export async function loadAuxiliaryCatalog(
       issues.push(`Linha ${row}: id vazio no arquivo auxiliar.`)
       continue
     }
-    if (isBlank(nome)) {
-      issues.push(`Linha ${row}: nome vazio para id ${id}.`)
-    }
     if (catalog.has(id)) {
       issues.push(`Linha ${row}: id ${id} duplicado no arquivo auxiliar.`)
       continue

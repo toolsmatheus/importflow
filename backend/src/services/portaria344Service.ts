@@ -5,10 +5,18 @@ import { fileURLToPath } from 'url'
 interface Portaria344File {
   source: string
   note?: string
+  count?: number
   lists: Record<string, string>
 }
 
-let cached: Portaria344File | null = null
+interface AntimicrobianosFile {
+  source: string
+  note?: string
+  substances: string[]
+}
+
+let cachedPortaria: Portaria344File | null = null
+let cachedAm: Set<string> | null | undefined
 
 const SALT_PREFIXES = [
   'CLORIDRATO DE',
@@ -34,6 +42,8 @@ const SALT_PREFIXES = [
   'VALERATO DE',
   'FEMPROPIONATO DE',
   'ISOCAPROATO DE',
+  'TARTARATO DE',
+  'DIPROPIONATO DE',
 ]
 
 const SALT_FIRST = new Set([
@@ -56,12 +66,14 @@ const SALT_FIRST = new Set([
   'ACETATO',
   'PROPIONATO',
   'UNDECILATO',
+  'TARTARATO',
+  'DIPROPIONATO',
 ])
 
 const HYDRATION_RE =
-  /\b(MONOIDRATAD[OA]|DI-?HIDRATAD[OA]|PENTAIDRATAD[OA]|HEMI-?HIDRATAD[OA]|ANIDRO)\b/g
+  /\b(MONOIDRATAD[OA]|DI-?HIDRATAD[OA]|TRI-?HIDRATAD[OA]|PENTAIDRATAD[OA]|HEMI-?HIDRATAD[OA]|ANIDRO)\b/g
 
-/** Prioridade: lista mais restritiva quando há associação. */
+/** Prioridade: lista mais restritiva quando há associação. T = antimicrobiano. */
 const LIST_PRIORITY: Record<string, number> = {
   A1: 100,
   A2: 95,
@@ -73,6 +85,7 @@ const LIST_PRIORITY: Record<string, number> = {
   C3: 50,
   C4: 45,
   C5: 40,
+  T: 35,
   D1: 30,
   D2: 25,
   F1: 20,
@@ -81,22 +94,34 @@ const LIST_PRIORITY: Record<string, number> = {
   F4: 5,
 }
 
-function resolvePortariaPath(): string | null {
+function resolveDataPath(...relative: string[]): string | null {
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
   const candidates = [
-    path.resolve(process.cwd(), 'data/reference/portaria344.json'),
-    path.resolve(process.cwd(), '../data/reference/portaria344.json'),
-    path.resolve(__dirname, '../../../data/reference/portaria344.json'),
+    path.resolve(process.cwd(), ...relative),
+    path.resolve(process.cwd(), '..', ...relative),
+    path.resolve(__dirname, '../../../', ...relative),
   ]
   return candidates.find((p) => existsSync(p)) ?? null
 }
 
 export function getPortaria344(): Portaria344File | null {
-  if (cached) return cached
-  const filePath = resolvePortariaPath()
+  if (cachedPortaria) return cachedPortaria
+  const filePath = resolveDataPath('data', 'reference', 'portaria344.json')
   if (!filePath) return null
-  cached = JSON.parse(readFileSync(filePath, 'utf-8')) as Portaria344File
-  return cached
+  cachedPortaria = JSON.parse(readFileSync(filePath, 'utf-8')) as Portaria344File
+  return cachedPortaria
+}
+
+function getAntimicrobianosSet(): Set<string> | null {
+  if (cachedAm !== undefined) return cachedAm
+  const filePath = resolveDataPath('data', 'reference', 'antimicrobianos.json')
+  if (!filePath) {
+    cachedAm = null
+    return null
+  }
+  const file = JSON.parse(readFileSync(filePath, 'utf-8')) as AntimicrobianosFile
+  cachedAm = new Set((file.substances ?? []).map((s) => normalizeSubstanceName(s)))
+  return cachedAm
 }
 
 export function normalizeSubstanceName(value: string): string {
@@ -113,6 +138,7 @@ function stripHydrationAndNotes(name: string): string {
   return name
     .replace(/\([^)]*\)/g, ' ')
     .replace(HYDRATION_RE, ' ')
+    .replace(/\b(SODIC[OA]|POTASSIC[OA]|CALCIC[OA]|MAGNESIC[OA])\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -151,33 +177,60 @@ export interface SubstanceListMatch {
   listacontrole: string
 }
 
+function matchInMap(
+  base: string,
+  lists: Record<string, string>
+): SubstanceListMatch | null {
+  if (lists[base]) {
+    return { matchedName: base, listacontrole: lists[base] }
+  }
+  for (const [key, lista] of Object.entries(lists)) {
+    if (key.length < 4) continue
+    if (
+      base === key ||
+      base.endsWith(` ${key}`) ||
+      base.startsWith(`${key} `) ||
+      ` ${base} `.includes(` ${key} `)
+    ) {
+      return { matchedName: key, listacontrole: lista }
+    }
+  }
+  return null
+}
+
+function matchAntimicrobiano(base: string, am: Set<string>): SubstanceListMatch | null {
+  if (am.has(base)) {
+    return { matchedName: base, listacontrole: 'T' }
+  }
+  for (const key of am) {
+    if (key.length < 4) continue
+    if (
+      base === key ||
+      base.endsWith(` ${key}`) ||
+      base.startsWith(`${key} `) ||
+      ` ${base} `.includes(` ${key} `)
+    ) {
+      return { matchedName: key, listacontrole: 'T' }
+    }
+  }
+  return null
+}
+
+/**
+ * Resolve substância CMED → lista de controle.
+ * Portaria 344 (A1–C5) tem prioridade sobre antimicrobianos (T / RDC 471).
+ */
 export function matchSubstanceToLista(substance: string): SubstanceListMatch | null {
   const portaria = getPortaria344()
-  if (!portaria) return null
+  const am = getAntimicrobianosSet()
+  if (!portaria && !am) return null
 
-  const lists = portaria.lists
+  const lists = portaria?.lists ?? {}
   let best: SubstanceListMatch | null = null
 
   for (const base of extractBaseNames(substance)) {
-    let hit: SubstanceListMatch | null = null
-
-    if (lists[base]) {
-      hit = { matchedName: base, listacontrole: lists[base] }
-    } else {
-      for (const [key, lista] of Object.entries(lists)) {
-        if (key.length < 5) continue
-        if (
-          base === key ||
-          base.endsWith(` ${key}`) ||
-          base.startsWith(`${key} `) ||
-          ` ${base} `.includes(` ${key} `)
-        ) {
-          hit = { matchedName: key, listacontrole: lista }
-          break
-        }
-      }
-    }
-
+    const hit =
+      matchInMap(base, lists) ?? (am ? matchAntimicrobiano(base, am) : null)
     if (!hit) continue
     if (
       !best ||

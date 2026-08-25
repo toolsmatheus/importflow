@@ -17,7 +17,6 @@ import {
   isValidMigrationCode,
   isValidNcm,
   isValidProductName,
-  markupMatchesSale,
   parseBrazilianNumber,
 } from '../utils/productFormats.js'
 import {
@@ -27,6 +26,8 @@ import {
 } from './auxiliaryService.js'
 import { getStoredFile, type StoredCsvFile } from './csvFileService.js'
 import { createRecordStream, normalizeRecord, resolveCsvOptions } from './csvService.js'
+import { padDcbCode } from './dcbIndexService.js'
+import { fetchTmsDcbCatalog, type TmsDcbRecord } from './tmsService.js'
 
 export type IssueSeverity = 'error' | 'warning'
 
@@ -171,13 +172,31 @@ async function resolveAuxiliaryCatalogs(
   return { catalogs, loadIssues }
 }
 
+/** Códigos Anvisa da base validada (controlados.txt) existem na tabela DCB do TMS, não no CSV auxiliar. */
+function dcbExistsInTms(value: string, tmsDcb: Map<string, TmsDcbRecord> | null): boolean {
+  if (!tmsDcb || tmsDcb.size === 0) return false
+  const padded = padDcbCode(value)
+  if (tmsDcb.has(padded) || tmsDcb.has(value)) return true
+  const asNumber = String(Number(value))
+  return asNumber !== 'NaN' && tmsDcb.has(asNumber)
+}
+
+async function loadTmsDcbForValidation(): Promise<Map<string, TmsDcbRecord> | null> {
+  try {
+    return await fetchTmsDcbCatalog()
+  } catch {
+    return null
+  }
+}
+
 function validateAuxiliaryRefs(
   record: Record<string, string>,
   rowNumber: number,
   columns: Set<string>,
   catalogs: AuxiliaryCatalogs,
   issues: ValidationIssue[],
-  counters: { errors: number; warnings: number; total: number }
+  counters: { errors: number; warnings: number; total: number },
+  tmsDcb: Map<string, TmsDcbRecord> | null = null
 ) {
   for (const [field, entity] of Object.entries(FIELD_TO_AUXILIARY)) {
     if (!hasColumn(columns, field) && field !== 'codigogrupo') continue
@@ -193,6 +212,41 @@ function validateAuxiliaryRefs(
     if (!isValidIntegerId(value)) continue
 
     const catalog = catalogs[entity]
+
+    // DCB da base validada = código Anvisa → resolve na tabela DCB do TMS.
+    if (field === 'dcb') {
+      if (catalog?.has(value) || catalog?.has(String(Number(value)))) continue
+      if (dcbExistsInTms(value, tmsDcb)) continue
+      if (catalog) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field,
+          value,
+          message: tmsDcb
+            ? `dcb "${value}" não encontrado no arquivo auxiliar nem na tabela DCB do TMS.`
+            : `dcb "${value}" não encontrado no arquivo auxiliar.`,
+          severity: 'error',
+        })
+      } else if (!tmsDcb) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field,
+          value,
+          message: `Arquivo auxiliar de dcb não enviado e TMS indisponível — não foi possível validar o id ${value}.`,
+          severity: 'error',
+        })
+      } else {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field,
+          value,
+          message: `dcb "${value}" não encontrado na tabela DCB do TMS.`,
+          severity: 'error',
+        })
+      }
+      continue
+    }
+
     if (!catalog) {
       if (field === 'codigogrupo' || !isBlank(value)) {
         pushIssue(issues, counters, {
@@ -224,7 +278,8 @@ function validateRow(
   columns: Set<string>,
   catalogs: AuxiliaryCatalogs,
   issues: ValidationIssue[],
-  counters: { errors: number; warnings: number; total: number }
+  counters: { errors: number; warnings: number; total: number },
+  tmsDcb: Map<string, TmsDcbRecord> | null = null
 ) {
   for (const field of REQUIRED_HEADERS) {
     if (!hasColumn(columns, field)) continue
@@ -349,17 +404,6 @@ function validateRow(
         severity: 'error',
       })
     }
-  }
-
-  if (custo !== null && markup !== null && venda !== null && !markupMatchesSale(custo, markup, venda)) {
-    const expected = custo * (1 + markup / 100)
-    pushIssue(issues, counters, {
-      row: rowNumber,
-      field: 'venda',
-      value: vendaRaw,
-      message: `Inconsistência de markup: esperado venda ≈ ${expected.toFixed(2)} (custo × (1 + markup/100)).`,
-      severity: 'warning',
-    })
   }
 
   const lista = cell(record, 'listapiscofins').trim().toUpperCase()
@@ -525,7 +569,7 @@ function validateRow(
           row: rowNumber,
           field: 'dcb',
           value: dcb,
-          message: 'DCB deve ser um número inteiro (id no arquivo auxiliar).',
+          message: 'DCB deve ser um número inteiro (código Anvisa ou id do auxiliar).',
           severity: 'error',
         })
       }
@@ -546,7 +590,7 @@ function validateRow(
     }
   }
 
-  validateAuxiliaryRefs(record, rowNumber, columns, catalogs, issues, counters)
+  validateAuxiliaryRefs(record, rowNumber, columns, catalogs, issues, counters, tmsDcb)
 }
 
 function finalizeResult(
@@ -576,6 +620,7 @@ export async function validateProductCsv(
   input: ValidateProductInput
 ): Promise<ProductValidationResult> {
   const { catalogs, loadIssues } = await resolveAuxiliaryCatalogs(input.auxiliary)
+  const tmsDcb = await loadTmsDcbForValidation()
 
   const options = await resolveCsvOptions(file.filePath, {
     delimiter: input.delimiter ?? TEMPLATE_DELIMITER,
@@ -659,7 +704,7 @@ export async function validateProductCsv(
     }
 
     if (missingRequiredHeaders.length === 0) {
-      validateRow(record, rowNumber, columnSet, catalogs, issues, counters)
+      validateRow(record, rowNumber, columnSet, catalogs, issues, counters, tmsDcb)
     }
 
     const codigo = cell(record, 'codigo').trim()
@@ -708,6 +753,7 @@ export async function validateProductRows(
   input: ValidateRowsInput
 ): Promise<ProductValidationResult> {
   const { catalogs, loadIssues } = await resolveAuxiliaryCatalogs(input.auxiliary)
+  const tmsDcb = await loadTmsDcbForValidation()
 
   const issues: ValidationIssue[] = [...loadIssues]
   const counters = {
@@ -733,7 +779,7 @@ export async function validateProductRows(
 
   rows.forEach((record, index) => {
     const rowNumber = index + 2
-    validateRow(record, rowNumber, columnSet, catalogs, issues, counters)
+    validateRow(record, rowNumber, columnSet, catalogs, issues, counters, tmsDcb)
 
     const codigo = cell(record, 'codigo').trim()
     if (codigo && isValidMigrationCode(codigo)) {

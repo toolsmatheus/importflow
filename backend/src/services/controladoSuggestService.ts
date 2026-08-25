@@ -1,5 +1,9 @@
 import type { AuxiliaryCatalog } from './auxiliaryService.js'
 import { lookupCmedByEan, getCmedIndex } from './cmedIndexService.js'
+import {
+  lookupControladoByEan,
+  getControladosEanIndex,
+} from './controladosEanIndexService.js'
 import { matchSubstanceToLista, normalizeSubstanceName } from './portaria344Service.js'
 
 export type ControladoSuggestKind = 'empty' | 'conflict' | 'confirm'
@@ -121,19 +125,21 @@ function isTarjaSemControle(tarja: string): boolean {
 }
 
 /**
- * Gera sugestões de listacontrole/DCB/registroms a partir de EAN → CMED → Portaria 344.
+ * Gera sugestões de listacontrole/DCB/registroms.
+ * Ordem: EAN na base validada (controlados.txt) → senão CMED + Portaria/antimicrobianos.
  * Nunca altera linhas; apenas sugere.
  */
 export function suggestControlados(
   rows: Record<string, string>[],
   dcbCatalog?: AuxiliaryCatalog
 ): ControladoSuggestResult {
-  const index = getCmedIndex()
-  if (!index) {
+  const cmedIndex = getCmedIndex()
+  const validatedIndex = getControladosEanIndex()
+  if (!cmedIndex && !validatedIndex) {
     return {
       available: false,
       message:
-        'Índice CMED não encontrado. Gere data/reference/cmed-ean-index.json a partir de cmed.xlsx.',
+        'Nenhum índice de controlados encontrado (CMED ou controlados-ean-index.json).',
       totalRows: rows.length,
       withEan: 0,
       foundInCmed: 0,
@@ -153,68 +159,105 @@ export function suggestControlados(
     withEan++
 
     const cmed = lookupCmedByEan(ean)
-    if (!cmed) return
-    foundInCmed++
+    if (cmed) foundInCmed++
 
-    // OTC na CMED: não marcar como controlado mesmo se a substância aparece na Portaria.
-    if (isTarjaSemControle(cmed.t)) return
+    const validated = lookupControladoByEan(ean)
 
-    const listaMatch = matchSubstanceToLista(cmed.s)
-    if (!listaMatch) return
+    let suggestedLista = ''
+    let matchedName = ''
+    let substance = cmed?.s ?? ''
+    let registro = ''
+    let reasonParts: string[] = []
 
-    const dcb = findDcbId(cmed.s, listaMatch.matchedName, dcbIndex)
+    if (validated) {
+      // Base validada por EAN tem prioridade (não depende de tarja CMED).
+      suggestedLista = validated.lista
+      matchedName = validated.tipo === 'ANTIMICROBIANO' ? 'ANTIMICROBIANO' : validated.lista
+      registro = (validated.registro || cmed?.r || '').trim()
+      reasonParts = [
+        `Base validada (EAN): ${validated.tipo} → ${validated.lista}`,
+      ]
+      if (cmed?.s) reasonParts.push(`CMED: ${cmed.s}`)
+    } else {
+      if (!cmed) return
+      // OTC na CMED: não marcar via Portaria/substância.
+      if (isTarjaSemControle(cmed.t)) return
+
+      const listaMatch = matchSubstanceToLista(cmed.s)
+      if (!listaMatch) return
+
+      suggestedLista = listaMatch.listacontrole
+      matchedName = listaMatch.matchedName
+      substance = cmed.s
+      registro = (cmed.r ?? '').trim()
+      reasonParts = [
+        `CMED: ${cmed.s}`,
+        suggestedLista === 'T'
+          ? `Antimicrobiano (RDC 471): ${matchedName} → T`
+          : `Portaria 344: ${matchedName} → ${suggestedLista}`,
+      ]
+    }
+
+    const dcbFromName = findDcbId(substance || matchedName, matchedName, dcbIndex)
+    const suggestedDcb = (validated?.dcb || dcbFromName.id || '').trim()
+    const suggestedDcbNome =
+      validated?.dcb && dcbCatalog?.get(validated.dcb)
+        ? dcbCatalog.get(validated.dcb)!
+        : dcbFromName.nome
     const currentLista = (row.listacontrole ?? '').trim()
     const currentDcb = (row.dcb ?? '').trim()
     const currentRegistro = (row.registroms ?? '').trim()
-    const registro = (cmed.r ?? '').trim()
     const kind = classifyKind(
       currentLista,
       currentDcb,
       currentRegistro,
-      listaMatch.listacontrole,
-      dcb.id,
+      suggestedLista,
+      suggestedDcb,
       registro
     )
 
-    // Já igual ao sugerido (lista/DCB/registro MS): não listar
-    if (kind === 'confirm') {
-      return
-    }
+    if (kind === 'confirm') return
 
-    const reasonParts = [
-      `CMED: ${cmed.s}`,
-      `Portaria 344: ${listaMatch.matchedName} → ${listaMatch.listacontrole}`,
-    ]
     if (registro) reasonParts.push(`Registro MS: ${registro}`)
-    if (dcb.id) reasonParts.push(`DCB auxiliar: ${dcb.id} (${dcb.nome})`)
-    else if (dcbCatalog) reasonParts.push('DCB não encontrado no auxiliar')
-    else reasonParts.push('Envie dcb.csv para sugerir o id DCB')
+    if (validated?.dcb) reasonParts.push(`DCB Anvisa (base): ${validated.dcb}`)
+    if (dcbFromName.id && dcbFromName.id !== validated?.dcb) {
+      reasonParts.push(`DCB auxiliar: ${dcbFromName.id} (${dcbFromName.nome})`)
+    } else if (!suggestedDcb && dcbCatalog) {
+      reasonParts.push('DCB não encontrado no auxiliar')
+    } else if (!suggestedDcb) {
+      reasonParts.push('Envie dcb.csv para sugerir o id DCB')
+    }
 
     suggestions.push({
       rowIndex,
       row: rowIndex + 2,
       ean,
       codigo: (row.codigo ?? '').trim(),
-      nome: (row.nome ?? cmed.p ?? '').trim(),
-      substance: cmed.s,
-      matchedName: listaMatch.matchedName,
-      suggestedLista: listaMatch.listacontrole,
-      suggestedDcb: dcb.id,
-      suggestedDcbNome: dcb.nome,
+      nome: (row.nome ?? cmed?.p ?? '').trim(),
+      substance,
+      matchedName,
+      suggestedLista,
+      suggestedDcb,
+      suggestedDcbNome,
       registro,
       currentLista,
       currentDcb,
       currentRegistro,
       kind,
-      tarja: cmed.t,
-      produtoCmed: cmed.p,
+      tarja: cmed?.t ?? '',
+      produtoCmed: cmed?.p ?? '',
       reason: reasonParts.join(' · '),
     })
   })
 
   return {
     available: true,
-    cmedSource: index.source,
+    cmedSource: [
+      cmedIndex?.source,
+      validatedIndex ? `controlados.txt (${validatedIndex.eanCount} EANs)` : null,
+    ]
+      .filter(Boolean)
+      .join(' + '),
     totalRows: rows.length,
     withEan,
     foundInCmed,

@@ -30,6 +30,8 @@ export interface ProductLookupCatalogs {
 export interface MapProductResult {
   ok: true
   payload: Record<string, unknown>
+  /** Avisos que não impedem o insert (ex.: DCB omitido em controlado). */
+  warnings?: string[]
 }
 
 export interface MapProductError {
@@ -71,6 +73,15 @@ function padCstDigits(raw: string, width = 2): string {
   return digits.padStart(width, '0')
 }
 
+/** CST PIS/COFINS no SPED é 2 dígitos; CSV legado usa 004/049. */
+function normalizeCstPisCofinsDigits(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  const n = Number(digits)
+  if (!Number.isFinite(n)) return digits.slice(-2).padStart(2, '0')
+  return String(n).padStart(2, '0').slice(-2)
+}
+
 function mapCstIcms(raw: string | undefined, prefix: 'cic'): string | undefined {
   const v = str(raw)
   if (!v) return undefined
@@ -78,19 +89,62 @@ function mapCstIcms(raw: string | undefined, prefix: 'cic'): string | undefined 
   return `${prefix}${padCstDigits(v)}`
 }
 
+/** Valores aceitos pelo enum XData `cpCstPis` / `ccCstCofins` no TMS. */
+const VALID_CST_PIS_COFINS = new Set([
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '07',
+  '08',
+  '09',
+  '49',
+  '50',
+  '51',
+  '52',
+  '53',
+  '54',
+  '55',
+  '56',
+  '60',
+  '61',
+  '62',
+  '63',
+  '64',
+  '65',
+  '66',
+  '67',
+  '70',
+  '71',
+  '72',
+  '73',
+  '74',
+  '75',
+  '98',
+  '99',
+])
+
+/**
+ * Coluna CSV `cstpiscofins` define o mesmo CST para PIS e COFINS
+ * (enums XData `cpCstPis` / `ccCstCofins`).
+ */
 function mapCstPisCofins(
   raw: string | undefined
 ): { cstpis?: string; cstcofins?: string } {
   const v = str(raw)
   if (!v) return {}
   const lower = v.toLowerCase()
-  if (lower.startsWith('cp') || lower.startsWith('cc')) {
-    return {
-      cstpis: lower.startsWith('cp') ? v : undefined,
-      cstcofins: lower.startsWith('cc') ? v : undefined,
-    }
+
+  if (lower === 'cpnenhum' || lower === 'ccnenhum' || lower === 'nenhum') {
+    return { cstpis: 'cpNenhum', cstcofins: 'ccNenhum' }
   }
-  const digits = padCstDigits(v)
+
+  const digitSource =
+    lower.startsWith('cp') || lower.startsWith('cc') ? lower.slice(2) : v
+  const digits = normalizeCstPisCofinsDigits(digitSource)
+  if (!VALID_CST_PIS_COFINS.has(digits)) return {}
   return { cstpis: `cp${digits}`, cstcofins: `cc${digits}` }
 }
 
@@ -214,7 +268,7 @@ function resolveSimilarId(
 function resolveDcbId(
   row: Record<string, string>,
   catalogs: ProductLookupCatalogs
-): { id?: number; error?: string } {
+): { id?: number; warning?: string } {
   const code = str(row.dcb)
   if (!code) return {}
 
@@ -234,11 +288,11 @@ function resolveDcbId(
         catalogs.dcbByCode.get(anvisa.dcb) ?? catalogs.dcbByCode.get(padDcbCode(anvisa.dcb))
       if (id !== undefined) return { id }
       return {
-        error: `DCB "${auxDescricao}" (Anvisa ${anvisa.dcb}) não encontrado no TMS`,
+        warning: `DCB "${auxDescricao}" (Anvisa ${anvisa.dcb}) não encontrado no TMS — DCB não vinculado`,
       }
     }
     return {
-      error: `DCB auxiliar ${code} ("${auxDescricao}") não encontrado no TMS por descrição`,
+      warning: `DCB auxiliar ${code} (${auxDescricao}): nome não encontrado na lista Anvisa — DCB não vinculado`,
     }
   }
 
@@ -252,7 +306,7 @@ function resolveDcbId(
   const byDesc = catalogs.dcbByDescricao.get(code.toLocaleUpperCase('pt-BR'))
   if (byDesc !== undefined) return { id: byDesc }
 
-  return { error: `DCB ${code} não encontrado no TMS` }
+  return { warning: `DCB ${code} não encontrado no TMS — DCB não vinculado` }
 }
 
 /**
@@ -344,7 +398,6 @@ export function mapCsvRowToProductPayload(
   if (similar.error) return { ok: false, message: similar.error }
 
   const dcb = resolveDcbId(row, catalogs)
-  if (dcb.error) return { ok: false, message: dcb.error }
 
   const fiscal = resolveFiscalOverrides(row)
   const cfopCode = fiscal.cfopCode ?? str(row.cfop)
@@ -453,6 +506,11 @@ export function mapCsvRowToProductPayload(
 
   const listaControleRaw = str(row.listacontrole)
   const isControlado = Boolean(listaControleRaw)
+  const warnings: string[] = []
+  if (dcb.warning) {
+    warnings.push(dcb.warning)
+  }
+
   if (isControlado) {
     payload.controlaLote = true
     payload.dataInicioControlado = new Date().toISOString().slice(0, 19)
@@ -505,5 +563,5 @@ export function mapCsvRowToProductPayload(
     payload['cfopvenda@xdata.ref'] = xdataRef('CFOP', cfopId)
   }
 
-  return { ok: true, payload }
+  return warnings.length > 0 ? { ok: true, payload, warnings } : { ok: true, payload }
 }
