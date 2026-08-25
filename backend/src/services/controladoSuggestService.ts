@@ -39,28 +39,51 @@ export interface ControladoSuggestResult {
   suggestions: ControladoSuggestion[]
 }
 
+type DcbNameIndex = {
+  exact: Map<string, { id: string; nome: string }>
+  entries: Array<{ id: string; nome: string; norm: string }>
+}
+
+/** Normaliza nomes do catálogo DCB uma vez por chamada de sugestão. */
+function buildDcbNameIndex(dcbCatalog: AuxiliaryCatalog): DcbNameIndex {
+  const exact = new Map<string, { id: string; nome: string }>()
+  const entries: Array<{ id: string; nome: string; norm: string }> = []
+  for (const [id, nome] of dcbCatalog.entries()) {
+    const norm = normalizeSubstanceName(nome)
+    if (!norm) continue
+    if (!exact.has(norm)) exact.set(norm, { id, nome })
+    entries.push({ id, nome, norm })
+  }
+  return { exact, entries }
+}
+
 function findDcbId(
   substanceName: string,
   matchedName: string,
-  dcbCatalog?: AuxiliaryCatalog
+  dcbIndex?: DcbNameIndex
 ): { id: string; nome: string } {
-  if (!dcbCatalog || dcbCatalog.size === 0) return { id: '', nome: '' }
+  if (!dcbIndex || dcbIndex.entries.length === 0) return { id: '', nome: '' }
 
   const targets = [matchedName, ...substanceName.split(';').map((s) => s.trim())]
     .map(normalizeSubstanceName)
     .filter(Boolean)
 
-  let best: { id: string; nome: string; score: number } | null = null
+  for (const t of targets) {
+    const hit = dcbIndex.exact.get(t)
+    if (hit) return hit
+  }
 
-  for (const [id, nome] of dcbCatalog.entries()) {
-    const n = normalizeSubstanceName(nome)
-    if (!n) continue
+  let best: { id: string; nome: string; score: number } | null = null
+  for (const entry of dcbIndex.entries) {
     for (const t of targets) {
       let score = 0
-      if (n === t) score = 100
-      else if (n.includes(t) || t.includes(n)) score = Math.min(n.length, t.length)
+      if (entry.norm === t) score = 100
+      else if (entry.norm.includes(t) || t.includes(entry.norm)) {
+        score = Math.min(entry.norm.length, t.length)
+      }
       if (score > 0 && (!best || score > best.score)) {
-        best = { id, nome, score }
+        best = { id: entry.id, nome: entry.nome, score }
+        if (score === 100) return { id: entry.id, nome: entry.nome }
       }
     }
   }
@@ -122,6 +145,7 @@ export function suggestControlados(
   let withEan = 0
   let foundInCmed = 0
   const suggestions: ControladoSuggestion[] = []
+  const dcbIndex = dcbCatalog && dcbCatalog.size > 0 ? buildDcbNameIndex(dcbCatalog) : undefined
 
   rows.forEach((row, rowIndex) => {
     const ean = (row.codigobarras ?? '').replace(/\D/g, '')
@@ -138,7 +162,7 @@ export function suggestControlados(
     const listaMatch = matchSubstanceToLista(cmed.s)
     if (!listaMatch) return
 
-    const dcb = findDcbId(cmed.s, listaMatch.matchedName, dcbCatalog)
+    const dcb = findDcbId(cmed.s, listaMatch.matchedName, dcbIndex)
     const currentLista = (row.listacontrole ?? '').trim()
     const currentDcb = (row.dcb ?? '').trim()
     const currentRegistro = (row.registroms ?? '').trim()

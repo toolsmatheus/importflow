@@ -95,7 +95,7 @@ const KNOWN_HEADERS = new Set<string>([
 ])
 
 /** Colunas antigas do modelo — aceitas no CSV mas ignoradas no envio. */
-const LEGACY_IGNORED_HEADERS = new Set(['unidade'])
+const LEGACY_IGNORED_HEADERS = new Set(['unidade', 'field5'])
 
 export const validateBodySchema = z.object({
   fileId: z.string().uuid(),
@@ -610,13 +610,14 @@ export async function validateProductCsv(
   }
 
   const stream = createRecordStream(file.filePath, { ...options, hasHeader: true })
+  let columnSet = new Set<string>()
 
   for await (const raw of stream) {
     const record = normalizeRecord(raw as Record<string, string> | string[])
 
     if (!headersChecked) {
       columns = Object.keys(record)
-      const columnSet = new Set(columns)
+      columnSet = new Set(columns)
       missingRequiredHeaders = REQUIRED_HEADERS.filter((h) => !columnSet.has(h))
       unknownHeaders = columns.filter(
         (h) => !KNOWN_HEADERS.has(h) && !LEGACY_IGNORED_HEADERS.has(h)
@@ -652,7 +653,6 @@ export async function validateProductCsv(
 
     totalRecords++
     const rowNumber = totalRecords + 1
-    const columnSet = new Set(columns)
 
     if (rows.length < MAX_PREVIEW_ROWS) {
       rows.push({ ...record })

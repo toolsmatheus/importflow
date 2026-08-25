@@ -51,8 +51,8 @@ function resolveOptions(
   overrides?: CsvAnalyzeOptions
 ): ResolvedOptions {
   return {
-    delimiter: overrides?.delimiter ?? auto.delimiter,
-    encoding: overrides?.encoding ?? auto.encoding,
+    delimiter: overrides?.delimiter?.trim() || auto.delimiter,
+    encoding: overrides?.encoding?.trim() || auto.encoding,
     hasHeader: overrides?.hasHeader ?? auto.hasHeader,
   }
 }
@@ -90,28 +90,71 @@ export function createRecordStream(filePath: string, options: ResolvedOptions) {
   return stream.pipe(parser)
 }
 
+/** Sinônimos comuns de exportações legadas → cabeçalho do modelo. */
+const HEADER_ALIASES: Record<string, string> = {
+  codgrupo: 'codigogrupo',
+}
+
+function applyHeaderAliases(record: Record<string, string>): Record<string, string> {
+  let changed = false
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(record)) {
+    const canonical = HEADER_ALIASES[key.toLowerCase()] ?? key
+    if (canonical !== key) changed = true
+    // Preferir o valor já canônico se ambos existirem
+    if (out[canonical] === undefined || canonical === key) {
+      out[canonical] = value
+    }
+  }
+  return changed ? out : record
+}
+
 /** Arquivos sem cabeçalho chegam como array; converte para as chaves `coluna_N`. */
 export function normalizeRecord(raw: Record<string, string> | string[]): Record<string, string> {
-  if (!Array.isArray(raw)) return raw
-
-  const record: Record<string, string> = {}
-  raw.forEach((value, index) => {
-    record[`coluna_${index + 1}`] = value
-  })
-  return record
+  if (Array.isArray(raw)) {
+    const record: Record<string, string> = {}
+    raw.forEach((value, index) => {
+      record[`coluna_${index + 1}`] = value
+    })
+    return record
+  }
+  return applyHeaderAliases(raw)
 }
+
+export interface AnalyzeProgressEvent {
+  bytesRead: number
+  bytesTotal: number
+  recordCount: number
+  percent: number
+}
+
+export type AnalyzeProgressCallback = (event: AnalyzeProgressEvent) => void
 
 async function streamAnalyze(
   file: StoredCsvFile,
-  options: ResolvedOptions
+  options: ResolvedOptions,
+  onProgress?: AnalyzeProgressCallback
 ): Promise<Omit<CsvAnalysisResult, 'fileId' | 'fileName' | 'fileSize'>> {
   const streamEncoding = getStreamEncoding(options.encoding)
+  const bytesTotal = file.fileSize
 
   return new Promise((resolve, reject) => {
     let recordCount = 0
     let columns: string[] = []
     let columnCount = 0
     let headersCaptured = false
+    let bytesRead = 0
+    let lastEmitAt = 0
+
+    const emitProgress = (force = false) => {
+      if (!onProgress) return
+      const now = Date.now()
+      if (!force && now - lastEmitAt < 80) return
+      lastEmitAt = now
+      const percent =
+        bytesTotal > 0 ? Math.min(100, Math.round((bytesRead / bytesTotal) * 1000) / 10) : 0
+      onProgress({ bytesRead, bytesTotal, recordCount, percent })
+    }
 
     const parser = parse({
       delimiter: options.delimiter,
@@ -123,6 +166,11 @@ async function streamAnalyze(
     })
 
     const stream = createReadStream(file.filePath, { encoding: streamEncoding })
+
+    stream.on('data', (chunk: string | Buffer) => {
+      bytesRead += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
+      emitProgress()
+    })
 
     parser.on('readable', () => {
       let record: Record<string, string> | string[] | null
@@ -147,6 +195,8 @@ async function streamAnalyze(
     parser.on('error', reject)
 
     parser.on('end', () => {
+      bytesRead = bytesTotal
+      emitProgress(true)
       resolve({
         recordCount,
         columnCount: columnCount || columns.length,
@@ -164,11 +214,12 @@ async function streamAnalyze(
 
 export async function analyzeCsvFile(
   file: StoredCsvFile,
-  overrides?: CsvAnalyzeOptions
+  overrides?: CsvAnalyzeOptions,
+  onProgress?: AnalyzeProgressCallback
 ): Promise<CsvAnalysisResult> {
   const auto = await autoDetectOptions(file.filePath)
   const options = resolveOptions(auto, overrides)
-  let analysis = await streamAnalyze(file, options)
+  let analysis = await streamAnalyze(file, options, onProgress)
 
   if (analysis.columns.length === 0 && options.hasHeader) {
     const sampleBuffer = await readSample(file.filePath)

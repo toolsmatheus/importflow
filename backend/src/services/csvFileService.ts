@@ -1,8 +1,10 @@
 import { randomUUID } from 'crypto'
 import { createWriteStream, promises as fs } from 'fs'
 import path from 'path'
+import { Transform } from 'stream'
 import { pipeline } from 'stream/promises'
 import type { Readable } from 'stream'
+import { invalidateAuxiliaryCatalogCache } from './auxiliaryService.js'
 
 export interface StoredCsvFile {
   id: string
@@ -27,6 +29,7 @@ function cleanupExpiredFiles(): void {
   for (const [id, file] of files) {
     if (now - file.lastAccessedAt.getTime() > FILE_TTL_MS) {
       files.delete(id)
+      invalidateAuxiliaryCatalogCache(id)
       fs.unlink(file.filePath).catch(() => undefined)
     }
   }
@@ -60,7 +63,8 @@ export function startFileCleanupTimer(): void {
 
 export async function saveUploadedFile(
   fileName: string,
-  stream: Readable
+  stream: Readable,
+  onProgress?: (bytesWritten: number) => void
 ): Promise<StoredCsvFile> {
   cleanupExpiredFiles()
   await ensureUploadDir()
@@ -69,7 +73,16 @@ export async function saveUploadedFile(
   const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_')
   const filePath = path.join(UPLOAD_DIR, `${id}-${safeName}`)
 
-  await pipeline(stream, createWriteStream(filePath))
+  let bytesWritten = 0
+  const counter = new Transform({
+    transform(chunk, _encoding, callback) {
+      bytesWritten += chunk.length
+      onProgress?.(bytesWritten)
+      callback(null, chunk)
+    },
+  })
+
+  await pipeline(stream, counter, createWriteStream(filePath))
   const stats = await fs.stat(filePath)
   const fileSize = stats.size
 
@@ -92,6 +105,7 @@ export function getStoredFile(fileId: string): StoredCsvFile | undefined {
 
   if (Date.now() - file.lastAccessedAt.getTime() > FILE_TTL_MS) {
     files.delete(fileId)
+    invalidateAuxiliaryCatalogCache(fileId)
     fs.unlink(file.filePath).catch(() => undefined)
     return undefined
   }
@@ -105,6 +119,7 @@ export function deleteStoredFile(fileId: string): boolean {
   if (!file) return false
 
   files.delete(fileId)
+  invalidateAuxiliaryCatalogCache(fileId)
   fs.unlink(file.filePath).catch(() => undefined)
   return true
 }

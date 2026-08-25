@@ -22,6 +22,8 @@ const PRIORITY_COLUMNS = [
   'codigobarras',
 ]
 
+const PAGE_SIZE = 50
+
 interface PreviewStepProps {
   columns: string[]
   rows: Record<string, string>[]
@@ -45,6 +47,7 @@ export function PreviewStep({
   const [filter, setFilter] = useState('')
   const [onlyProblems, setOnlyProblems] = useState(false)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const [page, setPage] = useState(0)
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
     const ordered = [
       ...PRIORITY_COLUMNS.filter((c) => columns.includes(c)),
@@ -58,6 +61,10 @@ export function PreviewStep({
   useEffect(() => {
     setLocalRows(rows)
   }, [rows])
+
+  useEffect(() => {
+    setPage(0)
+  }, [filter, onlyProblems])
 
   const issueByRow = useMemo(() => {
     const map = new Map<number, ValidationIssue[]>()
@@ -81,6 +88,12 @@ export function PreviewStep({
       })
       .map(({ i }) => i)
   }, [filter, localRows, onlyProblems, issueByRow])
+
+  const pageCount = Math.max(1, Math.ceil(filteredIndexes.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageIndexes = filteredIndexes.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const rangeStart = filteredIndexes.length === 0 ? 0 : safePage * PAGE_SIZE + 1
+  const rangeEnd = Math.min((safePage + 1) * PAGE_SIZE, filteredIndexes.length)
 
   const commitRows = (next: Record<string, string>[]) => {
     setLocalRows(next)
@@ -175,7 +188,7 @@ export function PreviewStep({
             {columns.length > visibleColumns.length
               ? ` (${columns.length - visibleColumns.length} ocultas)`
               : ''}
-            .
+            . Exibindo {PAGE_SIZE} por página.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -263,7 +276,7 @@ export function PreviewStep({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredIndexes.map((rowIndex) => {
+                {pageIndexes.map((rowIndex) => {
                   const row = localRows[rowIndex]
                   const csvRowNumber = rowIndex + 2
                   const rowIssues = issueByRow.get(csvRowNumber) ?? []
@@ -294,7 +307,7 @@ export function PreviewStep({
                     </TableRow>
                   )
                 })}
-                {filteredIndexes.length === 0 && (
+                {pageIndexes.length === 0 && (
                   <TableRow>
                     <TableCell
                       colSpan={visibleColumns.length + 1}
@@ -306,6 +319,35 @@ export function PreviewStep({
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>
+              {filteredIndexes.length === 0
+                ? '0 linhas'
+                : `${formatNumber(rangeStart)}–${formatNumber(rangeEnd)} de ${formatNumber(filteredIndexes.length)}`}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage <= 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="font-mono text-xs">
+                {safePage + 1}/{pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= pageCount - 1}
+                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              >
+                Próxima
+              </Button>
+            </div>
           </div>
 
           {issues.length > 0 && (

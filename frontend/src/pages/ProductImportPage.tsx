@@ -13,7 +13,7 @@ import { PreviewStep } from '@/components/PreviewStep'
 import { SendStep } from '@/components/SendStep'
 import { Button } from '@/components/ui/button'
 import { useImportWizard } from '@/hooks/useImportWizard'
-import { csvService } from '@/services/csvService'
+import { csvService, type UploadAnalyzeProgress } from '@/services/csvService'
 import { productService } from '@/services/productService'
 import { formatNumber } from '@/lib/utils'
 import type { FileInputMode, FolderCollectResult } from '@/types'
@@ -23,15 +23,25 @@ export function ProductImportPage() {
   const wizard = useImportWizard()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [inputMode, setInputMode] = useState<FileInputMode>('manual')
+  const [uploadProgress, setUploadProgress] = useState<UploadAnalyzeProgress | null>(null)
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       if (wizard.csvAnalysis?.fileId) {
         await csvService.discard(wizard.csvAnalysis.fileId).catch(() => undefined)
       }
-      return csvService.uploadAndAnalyze(file, { delimiter: ';', hasHeader: true })
+      setUploadProgress({
+        phase: 'upload',
+        percent: 0,
+        loaded: 0,
+        total: file.size,
+        etaSeconds: null,
+        label: 'Enviando arquivo…',
+      })
+      return csvService.uploadAndAnalyze(file, { delimiter: ';', hasHeader: true }, setUploadProgress)
     },
     onSuccess: (analysis) => {
+      setUploadProgress(null)
       wizard.setCsvAnalysis(analysis)
       wizard.setValidationResult(null)
       wizard.setPreviewRows([])
@@ -41,6 +51,7 @@ export function ProductImportPage() {
       )
     },
     onError: (error: Error) => {
+      setUploadProgress(null)
       toast.error(error.message || 'Erro ao enviar o arquivo')
     },
   })
@@ -158,6 +169,7 @@ export function ProductImportPage() {
             <FileDropzone
               onFileSelect={handleFileSelect}
               isLoading={uploadMutation.isPending}
+              progress={uploadProgress}
               selectedFile={selectedFile}
             />
           ) : (

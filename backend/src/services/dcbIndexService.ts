@@ -8,7 +8,11 @@ interface DcbIndexFile {
   byCode: Record<string, string>
 }
 
+type AnvisaDcbHit = { dcb: string; descricao: string }
+
 let cached: DcbIndexFile | null | undefined
+/** Nome uppercased → código Anvisa (montado uma vez). */
+let byNameCache: Map<string, AnvisaDcbHit> | null | undefined
 
 export function padDcbCode(value: string): string {
   const digits = String(value ?? '').replace(/\D/g, '')
@@ -31,13 +35,33 @@ export function getAnvisaDcbIndex(): DcbIndexFile | null {
   const filePath = resolveIndexPath()
   if (!filePath) {
     cached = null
+    byNameCache = null
     return null
   }
   cached = JSON.parse(readFileSync(filePath, 'utf-8')) as DcbIndexFile
+  byNameCache = undefined
   return cached
 }
 
-export function lookupAnvisaDcb(code: string): { dcb: string; descricao: string } | null {
+function getAnvisaDcbByNameMap(): Map<string, AnvisaDcbHit> | null {
+  if (byNameCache !== undefined) return byNameCache
+  const index = getAnvisaDcbIndex()
+  if (!index) {
+    byNameCache = null
+    return null
+  }
+  const map = new Map<string, AnvisaDcbHit>()
+  for (const [code, name] of Object.entries(index.byCode)) {
+    const key = name.toLocaleUpperCase('pt-BR')
+    if (!map.has(key)) {
+      map.set(key, { dcb: code, descricao: name })
+    }
+  }
+  byNameCache = map
+  return map
+}
+
+export function lookupAnvisaDcb(code: string): AnvisaDcbHit | null {
   const padded = padDcbCode(code)
   const index = getAnvisaDcbIndex()
   if (!index || !padded) return null
@@ -47,20 +71,12 @@ export function lookupAnvisaDcb(code: string): { dcb: string; descricao: string 
 }
 
 /** Busca código Anvisa pelo nome da substância (match exato, case-insensitive). */
-export function lookupAnvisaDcbByDescricao(
-  descricao: string
-): { dcb: string; descricao: string } | null {
+export function lookupAnvisaDcbByDescricao(descricao: string): AnvisaDcbHit | null {
   const key = String(descricao ?? '')
     .trim()
     .toLocaleUpperCase('pt-BR')
   if (!key) return null
-  const index = getAnvisaDcbIndex()
-  if (!index) return null
-
-  for (const [code, name] of Object.entries(index.byCode)) {
-    if (name.toLocaleUpperCase('pt-BR') === key) {
-      return { dcb: code, descricao: name }
-    }
-  }
-  return null
+  const map = getAnvisaDcbByNameMap()
+  if (!map) return null
+  return map.get(key) ?? null
 }

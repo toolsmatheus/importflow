@@ -22,9 +22,19 @@ export const FIELD_TO_AUXILIARY: Record<string, AuxiliaryEntity> = {
   dcb: 'dcb',
 }
 
+const catalogCache = new Map<string, { catalog: AuxiliaryCatalog; issues: string[] }>()
+
+export function invalidateAuxiliaryCatalogCache(fileId?: string): void {
+  if (fileId) catalogCache.delete(fileId)
+  else catalogCache.clear()
+}
+
 export async function loadAuxiliaryCatalog(
   file: StoredCsvFile
 ): Promise<{ catalog: AuxiliaryCatalog; issues: string[] }> {
+  const cached = catalogCache.get(file.id)
+  if (cached) return cached
+
   const options = await resolveCsvOptions(file.filePath, {
     delimiter: TEMPLATE_DELIMITER,
     hasHeader: true,
@@ -56,7 +66,9 @@ export async function loadAuxiliaryCatalog(
     catalog.set(id, nome)
   }
 
-  return { catalog, issues }
+  const result = { catalog, issues }
+  catalogCache.set(file.id, result)
+  return result
 }
 
 export function emptyAuxiliaryCatalogs(): AuxiliaryCatalogs {
