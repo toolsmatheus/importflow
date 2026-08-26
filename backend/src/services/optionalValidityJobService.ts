@@ -1,45 +1,38 @@
 import { randomUUID } from 'crypto'
 import { parse } from 'csv-parse/sync'
 import {
-  favorecidoMigracaoExists,
-  fetchFavorecidoMigracaoKeys,
-  fetchProductCodigoFornecedorKeys,
   fetchProductExistenceCatalogs,
   fetchServerIdentification,
   getDefaultTmsBaseUrl,
-  insertCodigoFornecedor,
-  parseFavorecidoMigracao,
+  insertValidadeSistemaAntigo,
 } from './tmsService.js'
-import { parseBrazilianNumber } from '../utils/productFormats.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
 
-export type SupplierJobStatus =
+export type ValidityJobStatus =
   | 'queued'
   | 'running'
   | 'completed'
   | 'failed'
   | 'cancelled'
 
-export type SupplierSendMode = 'live' | 'simulate'
+export type ValiditySendMode = 'live' | 'simulate'
 
-export interface SupplierJobError {
+export interface ValidityJobError {
   index: number
   codigo: string
-  codigofornecedor: string
   message: string
 }
 
-export interface SupplierJobSkipped {
+export interface ValidityJobSkipped {
   index: number
   codigo: string
-  codigofornecedor: string
   message: string
 }
 
-export interface SupplierJobSnapshot {
+export interface ValidityJobSnapshot {
   id: string
-  status: SupplierJobStatus
-  mode: SupplierSendMode
+  status: ValidityJobStatus
+  mode: ValiditySendMode
   tmsBaseUrl: string
   idFilial: number
   total: number
@@ -48,19 +41,19 @@ export interface SupplierJobSnapshot {
   errorCount: number
   skippedCount: number
   percent: number
-  errors: SupplierJobError[]
+  errors: ValidityJobError[]
   errorsTruncated: boolean
-  skipped: SupplierJobSkipped[]
+  skipped: ValidityJobSkipped[]
   skippedTruncated: boolean
   startedAt: string | null
   finishedAt: string | null
   message?: string
 }
 
-interface SupplierJobInternal {
+interface ValidityJobInternal {
   id: string
-  status: SupplierJobStatus
-  mode: SupplierSendMode
+  status: ValidityJobStatus
+  mode: ValiditySendMode
   tmsBaseUrl: string
   idFilial: number
   rows: Record<string, string>[]
@@ -68,17 +61,18 @@ interface SupplierJobInternal {
   successCount: number
   errorCount: number
   skippedCount: number
-  errors: SupplierJobError[]
-  skipped: SupplierJobSkipped[]
+  errors: ValidityJobError[]
+  skipped: ValidityJobSkipped[]
   cancelRequested: boolean
   startedAt: number | null
   finishedAt: number | null
   runPromise?: Promise<void>
 }
 
-const jobs = new Map<string, SupplierJobInternal>()
+const jobs = new Map<string, ValidityJobInternal>()
 const MAX_STORED_ERRORS = 200
 const MAX_STORED_SKIPPED = 200
+const NON_CONTROLLED = 'tcNenhuma'
 
 function stripAccents(value: string): string {
   return value.normalize('NFD').replace(/\p{M}/gu, '')
@@ -97,11 +91,48 @@ function cell(row: Record<string, string>, ...keys: string[]): string {
   return ''
 }
 
-function supplierKey(favorecidoMigracao: number, codigoOriginal: string): string {
-  return `${favorecidoMigracao}|${codigoOriginal}`
+/** Converte dd/mm/yyyy (ou yyyy-mm-dd) para ISO yyyy-mm-dd. */
+export function parseValidityDate(raw: string): string | null {
+  const value = raw.trim()
+  if (!value) return null
+
+  const br = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (br) {
+    const day = Number(br[1])
+    const month = Number(br[2])
+    const year = Number(br[3])
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null
+    const dt = new Date(year, month - 1, day)
+    if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) {
+      return null
+    }
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) {
+    const year = Number(iso[1])
+    const month = Number(iso[2])
+    const day = Number(iso[3])
+    const dt = new Date(year, month - 1, day)
+    if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) {
+      return null
+    }
+    return `${iso[1]}-${iso[2]}-${iso[3]}`
+  }
+
+  return null
 }
 
-function snapshot(job: SupplierJobInternal): SupplierJobSnapshot {
+function parseQuantidade(raw: string): number | null {
+  const cleaned = raw.trim().replace(/\s/g, '')
+  if (!cleaned) return null
+  const n = Number(cleaned.replace(',', '.'))
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null
+  return n
+}
+
+function snapshot(job: ValidityJobInternal): ValidityJobSnapshot {
   const total = job.rows.length
   const percent = total === 0 ? 100 : Math.min(100, Math.round((job.processed / total) * 100))
   return {
@@ -125,12 +156,12 @@ function snapshot(job: SupplierJobInternal): SupplierJobSnapshot {
   }
 }
 
-export function getSupplierJob(jobId: string): SupplierJobSnapshot | null {
+export function getValidityJob(jobId: string): ValidityJobSnapshot | null {
   const job = jobs.get(jobId)
   return job ? snapshot(job) : null
 }
 
-export function parseSupplierCsvText(text: string): Record<string, string>[] {
+export function parseValidityCsvText(text: string): Record<string, string>[] {
   const records = parse(text, {
     columns: true,
     delimiter: TEMPLATE_DELIMITER,
@@ -148,11 +179,11 @@ export function parseSupplierCsvText(text: string): Record<string, string>[] {
   })
 }
 
-export async function startSupplierJob(input: {
+export async function startValidityJob(input: {
   rows: Record<string, string>[]
   tmsBaseUrl?: string
-  mode?: SupplierSendMode
-}): Promise<SupplierJobSnapshot> {
+  mode?: ValiditySendMode
+}): Promise<ValidityJobSnapshot> {
   if (!input.rows.length) {
     throw new Error('Nenhuma linha para importar')
   }
@@ -160,7 +191,7 @@ export async function startSupplierJob(input: {
   const tmsBaseUrl = (input.tmsBaseUrl || getDefaultTmsBaseUrl()).replace(/\/$/, '')
   const identification = await fetchServerIdentification(tmsBaseUrl)
   const id = randomUUID()
-  const job: SupplierJobInternal = {
+  const job: ValidityJobInternal = {
     id,
     status: 'queued',
     mode: input.mode ?? 'live',
@@ -178,11 +209,11 @@ export async function startSupplierJob(input: {
     finishedAt: null,
   }
   jobs.set(id, job)
-  job.runPromise = runSupplierJob(job)
+  job.runPromise = runValidityJob(job)
   return snapshot(job)
 }
 
-export function cancelSupplierJob(jobId: string): SupplierJobSnapshot | null {
+export function cancelValidityJob(jobId: string): ValidityJobSnapshot | null {
   const job = jobs.get(jobId)
   if (!job) return null
   job.cancelRequested = true
@@ -193,23 +224,12 @@ export function cancelSupplierJob(jobId: string): SupplierJobSnapshot | null {
   return snapshot(job)
 }
 
-function parseFatorCompra(raw: string): number | null {
-  if (!raw.trim()) return 1
-  const parsed = parseBrazilianNumber(raw)
-  if (parsed === null || !Number.isFinite(parsed) || parsed < 0) return null
-  const asInt = Math.round(parsed)
-  if (Math.abs(parsed - asInt) > 0.001) return null
-  return asInt
-}
-
-async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
+async function runValidityJob(job: ValidityJobInternal): Promise<void> {
   job.status = 'running'
   job.startedAt = Date.now()
 
   try {
     const existence = await fetchProductExistenceCatalogs(job.tmsBaseUrl)
-    const favorecidoMigracaoKeys = await fetchFavorecidoMigracaoKeys(job.tmsBaseUrl)
-    const productSupplierKeys = new Map<number, Set<string>>()
 
     for (let index = 0; index < job.rows.length; index++) {
       if (job.cancelRequested) {
@@ -220,146 +240,79 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       const row = job.rows[index]
       const codigo = cell(row, 'codigo')
-      const codigobarras = cell(row, 'codigobarras', 'codigobarra')
-      const codigofornecedor = cell(row, 'codigofornecedor')
-      const codigooriginal = cell(row, 'codigooriginal')
-      const fatorRaw = cell(row, 'fator')
-      const fatorCompra = parseFatorCompra(fatorRaw)
+      const validadeRaw = cell(row, 'validade')
+      const quantidadeRaw = cell(row, 'quantidade')
 
-      if (!codigooriginal) {
+      if (!codigo) {
         job.errorCount++
         pushError(job, {
           index,
-          codigo,
-          codigofornecedor,
-          message: 'codigooriginal obrigatório (código do produto no fornecedor)',
+          codigo: '',
+          message: 'codigo (codigo_migracao do produto) obrigatório',
         })
         job.processed++
         continue
       }
 
-      if (!codigofornecedor) {
+      const validadeIso = parseValidityDate(validadeRaw)
+      if (!validadeIso) {
         job.errorCount++
         pushError(job, {
           index,
           codigo,
-          codigofornecedor: '',
-          message: 'codigofornecedor obrigatório (codigo_migracao do favorecido/fornecedor)',
+          message: `validade inválida (use dd/mm/yyyy): ${validadeRaw || '(vazio)'}`,
         })
         job.processed++
         continue
       }
 
-      const favorecidoMigracao = parseFavorecidoMigracao(codigofornecedor)
-      if (favorecidoMigracao === null) {
+      const quantidade = parseQuantidade(quantidadeRaw)
+      if (quantidade === null) {
         job.errorCount++
         pushError(job, {
           index,
           codigo,
-          codigofornecedor,
-          message: `codigofornecedor inválido (use codigo_migracao inteiro do fornecedor): ${codigofornecedor}`,
+          message: `quantidade inválida (use inteiro ≥ 0): ${quantidadeRaw || '(vazio)'}`,
         })
         job.processed++
         continue
       }
 
-      if (!favorecidoMigracaoExists(favorecidoMigracaoKeys, codigofornecedor)) {
-        job.errorCount++
-        pushError(job, {
-          index,
-          codigo,
-          codigofornecedor,
-          message: `Fornecedor codigo_migracao=${codigofornecedor} não encontrado no banco`,
-        })
-        job.processed++
-        continue
-      }
-
-      if (!codigo && !codigobarras) {
-        job.errorCount++
-        pushError(job, {
-          index,
-          codigo,
-          codigofornecedor,
-          message:
-            'Informe codigobarras (EAN principal) ou codigo (migração do produto) para localizar o produto',
-        })
-        job.processed++
-        continue
-      }
-
-      if (fatorCompra === null) {
-        job.errorCount++
-        pushError(job, {
-          index,
-          codigo,
-          codigofornecedor,
-          message: `fator inválido (use inteiro): ${fatorRaw || '(vazio)'}`,
-        })
-        job.processed++
-        continue
-      }
-
-      let produtoId: number | undefined
-      if (codigo) {
-        produtoId =
-          existence.byMigracao.get(codigo) ??
-          existence.byMigracao.get(String(Number(codigo)))
-      }
-      if (produtoId === undefined && codigobarras) {
-        produtoId =
-          existence.byBarcode.get(codigobarras) ??
-          existence.byBarcode.get(codigobarras.replace(/\D/g, ''))
-      }
+      const produtoId =
+        existence.byMigracao.get(codigo) ??
+        existence.byMigracao.get(String(Number(codigo)))
 
       if (produtoId === undefined) {
         job.errorCount++
         pushError(job, {
           index,
           codigo,
-          codigofornecedor,
-          message: codigo
-            ? `Produto codigo_migracao=${codigo} não encontrado no banco`
-            : `Produto com código de barras ${codigobarras} não encontrado no banco`,
+          message: `Produto codigo_migracao=${codigo} não encontrado no banco`,
         })
         job.processed++
         continue
       }
 
-      if (!productSupplierKeys.has(produtoId)) {
-        productSupplierKeys.set(
-          produtoId,
-          await fetchProductCodigoFornecedorKeys(produtoId, job.tmsBaseUrl)
-        )
-      }
-      const existingForProduct = productSupplierKeys.get(produtoId)!
-      const dedupeKey = supplierKey(favorecidoMigracao, codigooriginal)
-
-      if (existingForProduct.has(dedupeKey)) {
+      const tipoclasse = existence.tipoclassesngpcById.get(produtoId) ?? NON_CONTROLLED
+      if (tipoclasse !== NON_CONTROLLED) {
+        // Espelha o Delphi: controlado → não importa validade
         pushSkipped(job, {
           index,
-          codigo: codigo || codigobarras,
-          codigofornecedor: String(favorecidoMigracao),
-          message: `código de fornecedor já cadastrado (favorecido ${favorecidoMigracao}, original ${codigooriginal})`,
+          codigo,
+          message: `produto controlado (${tipoclasse}) — use Lotes`,
         })
         job.processed++
         continue
       }
 
       if (job.mode === 'simulate') {
-        existingForProduct.add(dedupeKey)
         job.successCount++
         job.processed++
         continue
       }
 
-      const result = await insertCodigoFornecedor(
-        produtoId,
-        {
-          codigo: codigooriginal,
-          fatorCompra,
-          favorecidoMigracao,
-        },
+      const result = await insertValidadeSistemaAntigo(
+        { idproduto: produtoId, validade: validadeIso, quantidade },
         job.tmsBaseUrl
       )
 
@@ -368,14 +321,12 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
         pushError(job, {
           index,
           codigo,
-          codigofornecedor,
-          message: result.message || 'Falha ao inserir CodigoFornecedor',
+          message: result.message || 'Falha ao inserir ValidadeSistemaAntigo',
         })
         job.processed++
         continue
       }
 
-      existingForProduct.add(dedupeKey)
       job.successCount++
       job.processed++
     }
@@ -388,18 +339,17 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
     pushError(job, {
       index: -1,
       codigo: '',
-      codigofornecedor: '',
       message:
-        error instanceof Error ? error.message : 'Falha interna no job de códigos de fornecedor',
+        error instanceof Error ? error.message : 'Falha interna no job de validade',
     })
   }
 }
 
-function pushError(job: SupplierJobInternal, error: SupplierJobError) {
+function pushError(job: ValidityJobInternal, error: ValidityJobError) {
   if (job.errors.length < MAX_STORED_ERRORS) job.errors.push(error)
 }
 
-function pushSkipped(job: SupplierJobInternal, skip: SupplierJobSkipped) {
+function pushSkipped(job: ValidityJobInternal, skip: ValidityJobSkipped) {
   job.skippedCount++
   if (job.skipped.length < MAX_STORED_SKIPPED) job.skipped.push(skip)
 }

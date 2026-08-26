@@ -956,6 +956,8 @@ export interface ProductExistenceCatalogs {
   byBarcode: Map<string, number>
   /** codigo_migracao → id do produto TMS */
   byMigracao: Map<string, number>
+  /** id do produto → tipoclassesngpc (ex.: tcNenhuma) */
+  tipoclassesngpcById: Map<number, string>
 }
 
 function addExistenceKey(map: Map<string, number>, key: unknown, id: number) {
@@ -972,6 +974,7 @@ export async function fetchProductExistenceCatalogs(
 ): Promise<ProductExistenceCatalogs> {
   const byBarcode = new Map<string, number>()
   const byMigracao = new Map<string, number>()
+  const tipoclassesngpcById = new Map<number, string>()
   const rows = await fetchTmsEntityRows('Produto', baseUrl)
 
   for (const row of rows) {
@@ -979,9 +982,134 @@ export async function fetchProductExistenceCatalogs(
     if (!Number.isFinite(id)) continue
     addExistenceKey(byBarcode, row.codigoBarras ?? row.CodigoBarras, id)
     addExistenceKey(byMigracao, row.codigo_migracao, id)
+    tipoclassesngpcById.set(id, String(row.tipoclassesngpc ?? 'tcNenhuma'))
   }
 
-  return { byBarcode, byMigracao }
+  return { byBarcode, byMigracao, tipoclassesngpcById }
+}
+
+/**
+ * Insere validade de produto não controlado (sistema antigo).
+ * Rota: POST /tms/xdata/ValidadeSistemaAntigo
+ * validade no formato ISO YYYY-MM-DD.
+ */
+export async function insertValidadeSistemaAntigo(
+  data: { idproduto: number; validade: string; quantidade: number },
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<BatchInsertResult> {
+  const root = baseUrl.replace(/\/$/, '')
+  const body = JSON.stringify({
+    '@xdata.type': 'XData.Default.ValidadeSistemaAntigo',
+    idproduto: data.idproduto,
+    validade: data.validade,
+    quantidade: data.quantidade,
+  })
+  return tmsJsonRequest(`${root}/tms/xdata/ValidadeSistemaAntigo`, { method: 'POST', body }, baseUrl)
+}
+
+/**
+ * Importa estoque via XData (lote interno INT000 no servidor).
+ * Rota: POST /tms/xdata/ImportacaoProdutoService/SalvarListaEstoques
+ * Body: array de DTOS.ImportacaoEstoque.TImportacaoEstoqueDTO
+ *
+ * Resposta: { "Importado": "chave;quantidade\\r\\n..." }
+ * — chave = CodigoBarras ou IdProduto (não é contagem de sucesso/falha).
+ */
+export interface ImportacaoEstoqueDto {
+  /** EAN — layout código de barras (Delphi). */
+  CodigoBarras?: string
+  QuantidadeEstoque: number
+  IsCodigoBarra: boolean
+  IdFilial: number
+  /** Quando não usa barras: id interno do produto. */
+  IdProduto?: number
+}
+
+export interface SalvarListaEstoquesResult extends BatchInsertResult {
+  /** Quantidade de linhas confirmadas em Importado (chave;qtd). */
+  imported?: number
+}
+
+function extractImportadoRaw(message?: string): string {
+  if (!message) return ''
+  try {
+    const json = JSON.parse(message) as { Importado?: string; importado?: string }
+    return String(json.Importado ?? json.importado ?? '').trim()
+  } catch {
+    const m = message.match(/"Importado"\s*:\s*"((?:\\.|[^"\\])*)"/i)
+    if (m) {
+      return m[1].replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\"/g, '"').trim()
+    }
+    return message.trim()
+  }
+}
+
+/** Linhas `chave;quantidade` confirmadas pelo servidor (chave ≠ 0 e qtd > 0). */
+function parseImportadoLines(
+  message?: string
+): Array<{ key: string; quantidade: number }> {
+  const raw = extractImportadoRaw(message)
+  if (!raw) return []
+
+  const lines: Array<{ key: string; quantidade: number }> = []
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const m = trimmed.match(/^([^;]*);(-?\d+(?:[.,]\d+)?)\s*$/)
+    if (!m) continue
+    const key = m[1].trim()
+    const quantidade = Number(String(m[2]).replace(',', '.'))
+    if (!key || key === '0') continue
+    if (!Number.isFinite(quantidade) || quantidade <= 0) continue
+    lines.push({ key, quantidade })
+  }
+  return lines
+}
+
+export async function salvarListaEstoques(
+  items: ImportacaoEstoqueDto[],
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<SalvarListaEstoquesResult> {
+  if (!items.length) {
+    return { ok: true, imported: 0, message: '{"Importado":"0;0"}' }
+  }
+
+  const root = baseUrl.replace(/\/$/, '')
+  const body = JSON.stringify(
+    items.map((item) => ({
+      '@xdata.type': 'DTOS.ImportacaoEstoque.TImportacaoEstoqueDTO',
+      QuantidadeEstoque: Math.trunc(item.QuantidadeEstoque),
+      IsCodigoBarra: item.IsCodigoBarra,
+      IdFilial: item.IdFilial,
+      ...(item.CodigoBarras !== undefined ? { CodigoBarras: item.CodigoBarras } : {}),
+      ...(item.IdProduto !== undefined ? { IdProduto: item.IdProduto } : {}),
+    }))
+  )
+
+  const result = await tmsJsonRequest(
+    `${root}/tms/xdata/ImportacaoProdutoService/SalvarListaEstoques`,
+    { method: 'POST', body },
+    baseUrl
+  )
+
+  if (!result.ok) {
+    return result
+  }
+
+  const confirmed = parseImportadoLines(result.message)
+  if (confirmed.length > 0) {
+    return { ...result, ok: true, imported: confirmed.length }
+  }
+
+  // HTTP ok mas Importado vazio / 0;0 → não confirmou inclusão
+  return {
+    ...result,
+    ok: false,
+    imported: 0,
+    message:
+      'SalvarListaEstoques não confirmou inclusão (Importado sem chave;quantidade). ' +
+      (result.message ?? ''),
+  }
 }
 
 export function getDefaultTmsBaseUrl() {

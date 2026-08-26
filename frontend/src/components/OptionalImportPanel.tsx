@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   ClipboardCopy,
   Download,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   Loader2,
   Sparkles,
@@ -40,6 +42,12 @@ function errorDetail(err: OptionalJobSnapshot['errors'][number]): string {
   return err.codigoadicional || err.codigofornecedor || err.codigo || '-'
 }
 
+function skippedDetail(
+  skip: NonNullable<OptionalJobSnapshot['skipped']>[number]
+): string {
+  return skip.codigoadicional || skip.codigofornecedor || skip.codigo || '-'
+}
+
 export function OptionalImportPanel({
   kind,
   onBack,
@@ -55,15 +63,24 @@ export function OptionalImportPanel({
   const [isDragging, setIsDragging] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [job, setJob] = useState<OptionalJobSnapshot | null>(null)
+  const [showSkipped, setShowSkipped] = useState(false)
 
   const headerLine = meta.columns.join(';')
-  const importReady = kind === 'barcodes' || kind === 'supplierRefs'
+  const importReady =
+    kind === 'barcodes' ||
+    kind === 'supplierRefs' ||
+    kind === 'validity' ||
+    kind === 'stock'
   const templateUrl =
     kind === 'barcodes'
       ? optionalService.barcodeTemplateUrl
       : kind === 'supplierRefs'
         ? optionalService.supplierTemplateUrl
-        : null
+        : kind === 'validity'
+          ? optionalService.validityTemplateUrl
+          : kind === 'stock'
+            ? optionalService.stockTemplateUrl
+            : null
   const active = job?.status === 'queued' || job?.status === 'running'
   const finished =
     job &&
@@ -72,6 +89,7 @@ export function OptionalImportPanel({
   useEffect(() => {
     setSelectedFile(null)
     setJob(null)
+    setShowSkipped(false)
   }, [kind])
 
   useEffect(() => {
@@ -81,7 +99,11 @@ export function OptionalImportPanel({
         const next =
           kind === 'supplierRefs'
             ? await optionalService.getSupplierJob(job.id)
-            : await optionalService.getBarcodeJob(job.id)
+            : kind === 'validity'
+              ? await optionalService.getValidityJob(job.id)
+              : kind === 'stock'
+                ? await optionalService.getStockJob(job.id)
+                : await optionalService.getBarcodeJob(job.id)
         setJob(next)
       } catch {
         /* ignore poll errors */
@@ -98,6 +120,7 @@ export function OptionalImportPanel({
     }
     setSelectedFile(file)
     setJob(null)
+    setShowSkipped(false)
   }, [])
 
   const copyHeader = async () => {
@@ -127,14 +150,22 @@ export function OptionalImportPanel({
       const snapshot =
         kind === 'supplierRefs'
           ? await optionalService.startSupplierSend(selectedFile, { tmsBaseUrl, mode })
-          : await optionalService.startBarcodeSend(selectedFile, { tmsBaseUrl, mode })
+          : kind === 'validity'
+            ? await optionalService.startValiditySend(selectedFile, { tmsBaseUrl, mode })
+            : kind === 'stock'
+              ? await optionalService.startStockSend(selectedFile, { tmsBaseUrl, mode })
+              : await optionalService.startBarcodeSend(selectedFile, { tmsBaseUrl, mode })
       setJob(snapshot)
       toast.success(
         mode === 'simulate'
           ? 'Simulação iniciada'
           : kind === 'supplierRefs'
             ? 'Importação de códigos de fornecedor iniciada'
-            : 'Importação de códigos de barras iniciada'
+            : kind === 'validity'
+              ? 'Importação de validade iniciada'
+              : kind === 'stock'
+                ? 'Importação de estoque iniciada'
+                : 'Importação de códigos de barras iniciada'
       )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao iniciar importação')
@@ -310,6 +341,7 @@ export function OptionalImportPanel({
                       e.stopPropagation()
                       setSelectedFile(null)
                       setJob(null)
+                      setShowSkipped(false)
                     }}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -356,6 +388,53 @@ export function OptionalImportPanel({
                     </p>
                   </div>
                 </div>
+                {job.skippedCount > 0 ? (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setShowSkipped((v) => !v)}
+                    >
+                      {showSkipped ? (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                      {showSkipped ? 'Ocultar ignorados' : 'Ver ignorados'}
+                      {job.skippedTruncated ? ' (lista parcial)' : ''}
+                    </Button>
+                    {showSkipped && (job.skipped?.length ?? 0) > 0 ? (
+                      <div className="max-h-48 overflow-auto rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Linha</TableHead>
+                              <TableHead>Código</TableHead>
+                              <TableHead>Motivo</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {job.skipped!.map((skip) => (
+                              <TableRow key={`skip-${skip.index}-${skippedDetail(skip)}`}>
+                                <TableCell>
+                                  {skip.index >= 0 ? skip.index + 2 : '-'}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {skippedDetail(skip)}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {skip.message}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {job.errors.length > 0 ? (
                   <div className="max-h-40 overflow-auto rounded-md border">
                     <Table>

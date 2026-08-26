@@ -7,11 +7,23 @@ import {
   startBarcodeJob,
 } from '../services/optionalBarcodeJobService.js'
 import {
+  cancelStockJob,
+  getStockJob,
+  parseStockCsvText,
+  startStockJob,
+} from '../services/optionalStockJobService.js'
+import {
   cancelSupplierJob,
   getSupplierJob,
   parseSupplierCsvText,
   startSupplierJob,
 } from '../services/optionalSupplierJobService.js'
+import {
+  cancelValidityJob,
+  getValidityJob,
+  parseValidityCsvText,
+  startValidityJob,
+} from '../services/optionalValidityJobService.js'
 import { getDefaultTmsBaseUrl } from '../services/tmsService.js'
 
 const startBodySchema = z.object({
@@ -206,6 +218,102 @@ export async function supplierTemplateHandler(_request: FastifyRequest, reply: F
   reply.header(
     'Content-Disposition',
     'attachment; filename="modelo-codigos-fornecedor.csv"'
+  )
+  return reply.send(csv)
+}
+
+export async function startValiditySendHandler(request: FastifyRequest, reply: FastifyReply) {
+  return startOptionalSend(request, reply, {
+    parseRows: parseValidityCsvText,
+    startJob: startValidityJob,
+    emptyMessage:
+      'CSV sem registros. Esperado: codigo;validade;quantidade (validade em dd/mm/yyyy; só produtos não controlados)',
+    failMessage: 'Erro ao iniciar importação de validade',
+    logLabel: 'Validity send start failed',
+  })
+}
+
+export async function getValiditySendHandler(request: FastifyRequest, reply: FastifyReply) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = getValidityJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function cancelValiditySendHandler(request: FastifyRequest, reply: FastifyReply) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = cancelValidityJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function validityTemplateHandler(_request: FastifyRequest, reply: FastifyReply) {
+  const csv =
+    'codigo;validade;quantidade\n' +
+    '1001;31/12/2027;24\n' +
+    '1002;15/06/2028;12\n'
+  reply.header('Content-Type', 'text/csv; charset=utf-8')
+  reply.header(
+    'Content-Disposition',
+    'attachment; filename="modelo-validade-produtos.csv"'
+  )
+  return reply.send(csv)
+}
+
+export async function startStockSendHandler(request: FastifyRequest, reply: FastifyReply) {
+  return startOptionalSend(request, reply, {
+    parseRows: parseStockCsvText,
+    startJob: startStockJob,
+    emptyMessage:
+      'CSV sem registros. Esperado: codigo;estoque (Produto.csv) ou codigobarras;estoque (layout barras). Só quantidade > 0 em produtos não controlados.',
+    failMessage: 'Erro ao iniciar importação de estoque',
+    logLabel: 'Stock send start failed',
+  })
+}
+
+export async function getStockSendHandler(request: FastifyRequest, reply: FastifyReply) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = getStockJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function cancelStockSendHandler(request: FastifyRequest, reply: FastifyReply) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = cancelStockJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function stockTemplateHandler(_request: FastifyRequest, reply: FastifyReply) {
+  const csv =
+    'codigo;codigobarras;estoque\n' +
+    '1001;7891234567890;24\n' +
+    ';7891234567891;12\n'
+  reply.header('Content-Type', 'text/csv; charset=utf-8')
+  reply.header(
+    'Content-Disposition',
+    'attachment; filename="modelo-estoque.csv"'
   )
   return reply.send(csv)
 }

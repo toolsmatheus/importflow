@@ -28,6 +28,14 @@ export interface OptionalJobSnapshot {
     message: string
   }>
   errorsTruncated: boolean
+  skipped?: Array<{
+    index: number
+    codigo: string
+    codigoadicional?: string
+    codigofornecedor?: string
+    message: string
+  }>
+  skippedTruncated?: boolean
   startedAt: string | null
   finishedAt: string | null
   message?: string
@@ -77,6 +85,8 @@ async function cancelOptionalJob(url: string, failMessage: string): Promise<Opti
 export const optionalService = {
   barcodeTemplateUrl: '/api/opcionais/barcodes/template',
   supplierTemplateUrl: '/api/opcionais/supplier-refs/template',
+  validityTemplateUrl: '/api/opcionais/validity/template',
+  stockTemplateUrl: '/api/opcionais/stock/template',
 
   async startBarcodeSend(
     file: File,
@@ -123,6 +133,52 @@ export const optionalService = {
   async cancelSupplierJob(jobId: string): Promise<OptionalJobSnapshot> {
     return cancelOptionalJob(
       `/api/opcionais/supplier-refs/send/${jobId}/cancel`,
+      'Erro ao cancelar job'
+    )
+  },
+
+  async startValiditySend(
+    file: File,
+    options?: { tmsBaseUrl?: string; mode?: OptionalSendMode }
+  ): Promise<OptionalJobSnapshot> {
+    return startOptionalSend(
+      '/api/opcionais/validity/send/start',
+      file,
+      options,
+      'Erro ao iniciar importação de validade'
+    )
+  },
+
+  async getValidityJob(jobId: string): Promise<OptionalJobSnapshot> {
+    return getOptionalJob(`/api/opcionais/validity/send/${jobId}`, 'Erro ao consultar job')
+  },
+
+  async cancelValidityJob(jobId: string): Promise<OptionalJobSnapshot> {
+    return cancelOptionalJob(
+      `/api/opcionais/validity/send/${jobId}/cancel`,
+      'Erro ao cancelar job'
+    )
+  },
+
+  async startStockSend(
+    file: File,
+    options?: { tmsBaseUrl?: string; mode?: OptionalSendMode }
+  ): Promise<OptionalJobSnapshot> {
+    return startOptionalSend(
+      '/api/opcionais/stock/send/start',
+      file,
+      options,
+      'Erro ao iniciar importação de estoque'
+    )
+  },
+
+  async getStockJob(jobId: string): Promise<OptionalJobSnapshot> {
+    return getOptionalJob(`/api/opcionais/stock/send/${jobId}`, 'Erro ao consultar job')
+  },
+
+  async cancelStockJob(jobId: string): Promise<OptionalJobSnapshot> {
+    return cancelOptionalJob(
+      `/api/opcionais/stock/send/${jobId}/cancel`,
       'Erro ao cancelar job'
     )
   },

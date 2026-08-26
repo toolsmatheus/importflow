@@ -26,6 +26,13 @@ export interface BarcodeJobError {
   message: string
 }
 
+export interface BarcodeJobSkipped {
+  index: number
+  codigo: string
+  codigoadicional: string
+  message: string
+}
+
 export interface BarcodeJobSnapshot {
   id: string
   status: BarcodeJobStatus
@@ -40,6 +47,8 @@ export interface BarcodeJobSnapshot {
   percent: number
   errors: BarcodeJobError[]
   errorsTruncated: boolean
+  skipped: BarcodeJobSkipped[]
+  skippedTruncated: boolean
   startedAt: string | null
   finishedAt: string | null
   message?: string
@@ -57,6 +66,7 @@ interface BarcodeJobInternal {
   errorCount: number
   skippedCount: number
   errors: BarcodeJobError[]
+  skipped: BarcodeJobSkipped[]
   cancelRequested: boolean
   startedAt: number | null
   finishedAt: number | null
@@ -65,6 +75,7 @@ interface BarcodeJobInternal {
 
 const jobs = new Map<string, BarcodeJobInternal>()
 const MAX_STORED_ERRORS = 200
+const MAX_STORED_SKIPPED = 200
 
 function cell(row: Record<string, string>, ...keys: string[]): string {
   for (const key of keys) {
@@ -93,6 +104,8 @@ function snapshot(job: BarcodeJobInternal): BarcodeJobSnapshot {
     percent,
     errors: job.errors,
     errorsTruncated: job.errors.length >= MAX_STORED_ERRORS,
+    skipped: job.skipped,
+    skippedTruncated: job.skipped.length >= MAX_STORED_SKIPPED,
     startedAt: job.startedAt ? new Date(job.startedAt).toISOString() : null,
     finishedAt: job.finishedAt ? new Date(job.finishedAt).toISOString() : null,
   }
@@ -145,6 +158,7 @@ export async function startBarcodeJob(input: {
     errorCount: 0,
     skippedCount: 0,
     errors: [],
+    skipped: [],
     cancelRequested: false,
     startedAt: null,
     finishedAt: null,
@@ -260,7 +274,12 @@ async function runBarcodeJob(job: BarcodeJobInternal): Promise<void> {
       }
 
       if (existingBarras.has(codigoadicional)) {
-        job.skippedCount++
+        pushSkipped(job, {
+          index,
+          codigo: codigo || codigobarras,
+          codigoadicional,
+          message: `código de barras adicional já cadastrado: ${codigoadicional}`,
+        })
         job.processed++
         continue
       }
@@ -311,4 +330,9 @@ async function runBarcodeJob(job: BarcodeJobInternal): Promise<void> {
 
 function pushError(job: BarcodeJobInternal, error: BarcodeJobError) {
   if (job.errors.length < MAX_STORED_ERRORS) job.errors.push(error)
+}
+
+function pushSkipped(job: BarcodeJobInternal, skip: BarcodeJobSkipped) {
+  job.skippedCount++
+  if (job.skipped.length < MAX_STORED_SKIPPED) job.skipped.push(skip)
 }

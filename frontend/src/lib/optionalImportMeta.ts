@@ -51,23 +51,28 @@ export const OPTIONAL_IMPORT_META: Record<OptionalImportKind, OptionalImportMeta
     id: 'validity',
     title: 'Validade dos produtos',
     shortLabel: 'Validade',
-    description: 'Datas de validade por produto (lote opcional).',
-    columns: ['codigo', 'validade', 'lote'],
-    sampleRow: ['1001', '31/12/2027', 'L2026A'],
-    sourceHint: 'Formato de data preferencial: DD/MM/AAAA. Lote pode ficar em branco.',
+    description:
+      'Importa validade/quantidade só para produtos não controlados (tipoclassesngpc = tcNenhuma).',
+    columns: ['codigo', 'validade', 'quantidade'],
+    sampleRow: ['1001', '31/12/2027', '24'],
+    sourceHint:
+      'codigo = codigo_migracao do produto; validade em dd/mm/yyyy; quantidade = inteiro. Controlados são ignorados.',
     exampleFileName: 'validade-produtos.csv',
-    whenToUse: 'Quando precisar atualizar validade sem reenviar o produto.',
+    whenToUse: 'Depois que os produtos já estiverem no banco. Não preenche controlados (use Lotes).',
   },
   stock: {
     id: 'stock',
     title: 'Importação de estoque',
     shortLabel: 'Estoque',
-    description: 'Atualiza quantidades. Aceita o Produto.csv (coluna estoque).',
-    columns: ['codigo', 'estoque'],
-    sampleRow: ['1001', '24'],
-    sourceHint: 'Pode enviar só codigo;estoque ou o CSV completo de produtos da migração.',
+    description:
+      'Estoque (> 0) para não controlados via ImportacaoProdutoService/SalvarListaEstoques (lote INT000).',
+    columns: ['codigo', 'codigobarras', 'estoque'],
+    sampleRow: ['1001', '7891234567890', '24'],
+    sourceHint:
+      'Produto.csv: codigo + estoque (resolve IdProduto). Layout barras (Delphi): codigobarras + quantidade (> 0). Controlados e qtd ≤ 0 são ignorados.',
     exampleFileName: 'Produto.csv',
-    whenToUse: 'Após o cadastro dos produtos (o estoque não vai no envio principal).',
+    whenToUse:
+      'Após o cadastro dos produtos. Usa o mesmo serviço XData da importação Delphi.',
   },
   lots: {
     id: 'lots',
