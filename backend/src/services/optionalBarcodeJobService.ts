@@ -6,6 +6,8 @@ import {
   fetchServerIdentification,
   getDefaultTmsBaseUrl,
   insertCodigoBarraProduto,
+  resolveProdutoIdFromCsv,
+  usableMigracaoCodigo,
 } from './tmsService.js'
 import { parseBrazilianNumber } from '../utils/productFormats.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
@@ -247,17 +249,8 @@ async function runBarcodeJob(job: BarcodeJobInternal): Promise<void> {
         continue
       }
 
-      let produtoId: number | undefined
-      if (codigo) {
-        produtoId =
-          existence.byMigracao.get(codigo) ??
-          existence.byMigracao.get(String(Number(codigo)))
-      }
-      if (produtoId === undefined && codigobarras) {
-        produtoId =
-          existence.byBarcode.get(codigobarras) ??
-          existence.byBarcode.get(codigobarras.replace(/\D/g, ''))
-      }
+      const migracao = usableMigracaoCodigo(codigo)
+      const produtoId = resolveProdutoIdFromCsv(existence, codigo, codigobarras)
 
       if (produtoId === undefined) {
         job.errorCount++
@@ -265,8 +258,8 @@ async function runBarcodeJob(job: BarcodeJobInternal): Promise<void> {
           index,
           codigo,
           codigoadicional,
-          message: codigo
-            ? `Produto codigo_migracao=${codigo} não encontrado no banco`
+          message: migracao
+            ? `Produto codigo_migracao=${migracao} não encontrado no banco`
             : `Produto com código de barras ${codigobarras} não encontrado no banco`,
         })
         job.processed++
@@ -276,7 +269,7 @@ async function runBarcodeJob(job: BarcodeJobInternal): Promise<void> {
       if (existingBarras.has(codigoadicional)) {
         pushSkipped(job, {
           index,
-          codigo: codigo || codigobarras,
+          codigo: migracao || codigobarras || codigo,
           codigoadicional,
           message: `código de barras adicional já cadastrado: ${codigoadicional}`,
         })

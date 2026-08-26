@@ -12,7 +12,6 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -64,13 +63,15 @@ export function OptionalImportPanel({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [job, setJob] = useState<OptionalJobSnapshot | null>(null)
   const [showSkipped, setShowSkipped] = useState(false)
+  const [showErrors, setShowErrors] = useState(false)
 
   const headerLine = meta.columns.join(';')
   const importReady =
     kind === 'barcodes' ||
     kind === 'supplierRefs' ||
     kind === 'validity' ||
-    kind === 'stock'
+    kind === 'stock' ||
+    kind === 'lots'
   const templateUrl =
     kind === 'barcodes'
       ? optionalService.barcodeTemplateUrl
@@ -80,7 +81,9 @@ export function OptionalImportPanel({
           ? optionalService.validityTemplateUrl
           : kind === 'stock'
             ? optionalService.stockTemplateUrl
-            : null
+            : kind === 'lots'
+              ? optionalService.lotsTemplateUrl
+              : null
   const active = job?.status === 'queued' || job?.status === 'running'
   const finished =
     job &&
@@ -90,6 +93,7 @@ export function OptionalImportPanel({
     setSelectedFile(null)
     setJob(null)
     setShowSkipped(false)
+    setShowErrors(false)
   }, [kind])
 
   useEffect(() => {
@@ -103,7 +107,9 @@ export function OptionalImportPanel({
               ? await optionalService.getValidityJob(job.id)
               : kind === 'stock'
                 ? await optionalService.getStockJob(job.id)
-                : await optionalService.getBarcodeJob(job.id)
+                : kind === 'lots'
+                  ? await optionalService.getLotJob(job.id)
+                  : await optionalService.getBarcodeJob(job.id)
         setJob(next)
       } catch {
         /* ignore poll errors */
@@ -121,6 +127,7 @@ export function OptionalImportPanel({
     setSelectedFile(file)
     setJob(null)
     setShowSkipped(false)
+    setShowErrors(false)
   }, [])
 
   const copyHeader = async () => {
@@ -139,8 +146,8 @@ export function OptionalImportPanel({
     }
 
     if (!importReady) {
-      toast.message('Backend ainda não conectado', {
-        description: `${meta.shortLabel}: a tela está pronta; o envio será ligado em seguida.`,
+      toast.message('Em breve', {
+        description: `${meta.shortLabel}: envio ainda não disponível.`,
       })
       return
     }
@@ -154,19 +161,11 @@ export function OptionalImportPanel({
             ? await optionalService.startValiditySend(selectedFile, { tmsBaseUrl, mode })
             : kind === 'stock'
               ? await optionalService.startStockSend(selectedFile, { tmsBaseUrl, mode })
-              : await optionalService.startBarcodeSend(selectedFile, { tmsBaseUrl, mode })
+              : kind === 'lots'
+                ? await optionalService.startLotSend(selectedFile, { tmsBaseUrl, mode })
+                : await optionalService.startBarcodeSend(selectedFile, { tmsBaseUrl, mode })
       setJob(snapshot)
-      toast.success(
-        mode === 'simulate'
-          ? 'Simulação iniciada'
-          : kind === 'supplierRefs'
-            ? 'Importação de códigos de fornecedor iniciada'
-            : kind === 'validity'
-              ? 'Importação de validade iniciada'
-              : kind === 'stock'
-                ? 'Importação de estoque iniciada'
-                : 'Importação de códigos de barras iniciada'
-      )
+      toast.success(mode === 'simulate' ? 'Simulação iniciada' : 'Importação iniciada')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao iniciar importação')
     } finally {
@@ -175,268 +174,236 @@ export function OptionalImportPanel({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        <button
-          type="button"
-          onClick={onBackToThemes ?? onBack}
-          className="rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="space-y-3">
+        <nav
+          aria-label="Navegação"
+          className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground"
         >
-          Opcionais
-        </button>
-        <span aria-hidden>/</span>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-        >
-          {themeLabel}
-        </button>
-        <span aria-hidden>/</span>
-        <span className="font-medium text-foreground">{meta.shortLabel}</span>
+          <button
+            type="button"
+            onClick={onBackToThemes ?? onBack}
+            className="rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+          >
+            Opcionais
+          </button>
+          <span aria-hidden>/</span>
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+          >
+            {themeLabel}
+          </button>
+          <span aria-hidden>/</span>
+          <span className="font-medium text-foreground">{meta.shortLabel}</span>
+        </nav>
+
+        <div className="flex items-start gap-3">
+          {icon ? (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+              {icon}
+            </div>
+          ) : null}
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold tracking-tight">{meta.title}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">{meta.description}</p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-        <Card className="order-2 lg:order-1">
-          <CardHeader className="space-y-3">
-            <div className="flex items-start gap-3">
-              {icon ? (
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                  {icon}
-                </div>
-              ) : null}
-              <div className="min-w-0 space-y-1">
-                <CardTitle className="text-lg leading-snug">{meta.title}</CardTitle>
-                <CardDescription>{meta.description}</CardDescription>
-              </div>
-            </div>
-            <p className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-              {meta.whenToUse}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium">Modelo do CSV</p>
-              <div className="flex flex-wrap gap-2">
-                {templateUrl ? (
-                  <Button type="button" variant="outline" size="sm" asChild>
-                    <a href={templateUrl} download>
-                      <Download className="h-3.5 w-3.5" />
-                      Baixar modelo
-                    </a>
-                  </Button>
-                ) : null}
-                <Button type="button" variant="outline" size="sm" onClick={() => void copyHeader()}>
-                  <ClipboardCopy className="h-3.5 w-3.5" />
-                  Copiar cabeçalho
-                </Button>
-              </div>
-            </div>
+      {/* Modelo compacto */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">CSV · {headerLine}</p>
+          <div className="flex flex-wrap gap-2">
+            {templateUrl ? (
+              <Button type="button" variant="outline" size="sm" asChild>
+                <a href={templateUrl} download>
+                  <Download className="h-3.5 w-3.5" />
+                  Modelo
+                </a>
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" onClick={() => void copyHeader()}>
+              <ClipboardCopy className="h-3.5 w-3.5" />
+              Copiar
+            </Button>
+          </div>
+        </div>
+        <p className="mt-2 font-mono text-xs text-muted-foreground">
+          Ex.: {meta.sampleRow.join(';')}
+        </p>
+        <p className="mt-1.5 text-xs text-muted-foreground">{meta.sourceHint}</p>
+      </div>
 
-            <div className="overflow-hidden rounded-lg border border-border">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    {meta.columns.map((col) => (
-                      <TableHead key={col} className="font-mono text-xs">
-                        {col}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    {meta.sampleRow.map((value, i) => (
-                      <TableCell
-                        key={`${meta.columns[i]}-${i}`}
-                        className="font-mono text-xs text-muted-foreground"
-                      >
-                        {value}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableBody>
-              </Table>
+      {/* Upload */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          accept=".csv,text/csv"
+          className="sr-only"
+          onChange={(e) => {
+            acceptFile(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              inputRef.current?.click()
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setIsDragging(true)
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setIsDragging(false)
+            acceptFile(e.dataTransfer.files[0])
+          }}
+          onClick={() => inputRef.current?.click()}
+          className={cn(
+            'relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-all outline-none',
+            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            isDragging && 'border-primary bg-accent/60',
+            !isDragging &&
+              !selectedFile &&
+              'border-border bg-muted/20 hover:border-primary/50 hover:bg-accent/30',
+            selectedFile && !isDragging && 'border-primary/40 bg-accent/20'
+          )}
+        >
+          {selectedFile ? (
+            <>
+              <CheckCircle2 className="mb-2 h-7 w-7 text-primary" />
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <FileSpreadsheet className="h-4 w-4 text-primary" />
+                {selectedFile.name}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatBytes(selectedFile.size)}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-3"
+                disabled={Boolean(active)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedFile(null)
+                  setJob(null)
+                  setShowSkipped(false)
+                  setShowErrors(false)
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+                Remover
+              </Button>
+            </>
+          ) : (
+            <>
+              <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
+              <p className="text-sm font-medium">Solte o CSV ou clique para escolher</p>
+            </>
+          )}
+        </div>
+
+        {job ? (
+          <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium">
+                {job.mode === 'simulate' ? 'Simulação' : 'Envio'} · {job.status}
+              </span>
+              <span className="text-muted-foreground">{job.percent}%</span>
             </div>
-
-            <p className="text-sm text-muted-foreground">{meta.sourceHint}</p>
-            <p className="font-mono text-xs text-muted-foreground">
-              Ex.: {meta.exampleFileName} · delimitador ;
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="order-1 lg:order-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base">Arquivo</CardTitle>
-              <Badge variant={selectedFile ? 'default' : 'secondary'}>
-                {selectedFile ? 'Pronto' : 'Aguardando CSV'}
+            <Progress value={job.percent} />
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="gap-1 font-normal">
+                Ok {formatNumber(job.successCount)}
+              </Badge>
+              <Badge variant="outline" className="gap-1 font-normal">
+                Ignorados {formatNumber(job.skippedCount)}
+              </Badge>
+              <Badge
+                variant={job.errorCount > 0 ? 'destructive' : 'outline'}
+                className="gap-1 font-normal"
+              >
+                Falhas {formatNumber(job.errorCount)}
               </Badge>
             </div>
-            <CardDescription>Arraste o arquivo ou selecione no computador.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <input
-              ref={inputRef}
-              id={inputId}
-              type="file"
-              accept=".csv,text/csv"
-              className="sr-only"
-              onChange={(e) => {
-                acceptFile(e.target.files?.[0])
-                e.target.value = ''
-              }}
-            />
 
-            <div
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  inputRef.current?.click()
-                }
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setIsDragging(true)
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-                acceptFile(e.dataTransfer.files[0])
-              }}
-              onClick={() => inputRef.current?.click()}
-              className={cn(
-                'relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-all outline-none',
-                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                isDragging && 'scale-[1.01] border-primary bg-accent/60 shadow-sm',
-                !isDragging &&
-                  !selectedFile &&
-                  'border-border bg-muted/20 hover:border-primary/50 hover:bg-accent/30',
-                selectedFile && !isDragging && 'border-primary/40 bg-accent/20'
-              )}
-            >
-              {selectedFile ? (
-                <>
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <CheckCircle2 className="h-6 w-6" />
-                  </div>
-                  <p className="flex items-center gap-2 font-medium">
-                    <FileSpreadsheet className="h-4 w-4 text-primary" />
-                    {selectedFile.name}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {formatBytes(selectedFile.size)}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="mt-4"
-                    disabled={Boolean(active)}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedFile(null)
-                      setJob(null)
-                      setShowSkipped(false)
-                    }}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Remover
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <Upload className="h-5 w-5" />
-                  </div>
-                  <p className="font-medium">Solte o CSV aqui</p>
-                  <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-                    ou clique para escolher · apenas .csv
-                  </p>
-                </>
-              )}
-            </div>
-
-            {job ? (
-              <div className="space-y-3 rounded-lg border border-border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span className="font-medium">
-                    {job.mode === 'simulate' ? 'Simulação' : 'Envio'} · {job.status}
-                  </span>
-                  <span className="text-muted-foreground">{job.percent}%</span>
-                </div>
-                <Progress value={job.percent} />
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-md bg-muted/50 p-2">
-                    <p className="text-muted-foreground">Ok</p>
-                    <p className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {formatNumber(job.successCount)}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/50 p-2">
-                    <p className="text-muted-foreground">Ignorados</p>
-                    <p className="font-semibold">{formatNumber(job.skippedCount)}</p>
-                  </div>
-                  <div className="rounded-md bg-muted/50 p-2">
-                    <p className="text-muted-foreground">Falhas</p>
-                    <p className="font-semibold text-destructive">
-                      {formatNumber(job.errorCount)}
-                    </p>
-                  </div>
-                </div>
-                {job.skippedCount > 0 ? (
-                  <div className="space-y-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => setShowSkipped((v) => !v)}
-                    >
-                      {showSkipped ? (
-                        <EyeOff className="h-3.5 w-3.5" />
-                      ) : (
-                        <Eye className="h-3.5 w-3.5" />
-                      )}
-                      {showSkipped ? 'Ocultar ignorados' : 'Ver ignorados'}
-                      {job.skippedTruncated ? ' (lista parcial)' : ''}
-                    </Button>
-                    {showSkipped && (job.skipped?.length ?? 0) > 0 ? (
-                      <div className="max-h-48 overflow-auto rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Linha</TableHead>
-                              <TableHead>Código</TableHead>
-                              <TableHead>Motivo</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {job.skipped!.map((skip) => (
-                              <TableRow key={`skip-${skip.index}-${skippedDetail(skip)}`}>
-                                <TableCell>
-                                  {skip.index >= 0 ? skip.index + 2 : '-'}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  {skippedDetail(skip)}
-                                </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  {skip.message}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : null}
+            {job.skippedCount > 0 ? (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => setShowSkipped((v) => !v)}
+                >
+                  {showSkipped ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                  {showSkipped ? 'Ocultar ignorados' : 'Ver ignorados'}
+                </Button>
+                {showSkipped && (job.skipped?.length ?? 0) > 0 ? (
+                  <div className="max-h-44 overflow-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Linha</TableHead>
+                          <TableHead>Código</TableHead>
+                          <TableHead>Motivo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {job.skipped!.map((skip) => (
+                          <TableRow key={`skip-${skip.index}-${skippedDetail(skip)}`}>
+                            <TableCell>{skip.index >= 0 ? skip.index + 2 : '-'}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {skippedDetail(skip)}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {skip.message}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : null}
-                {job.errors.length > 0 ? (
-                  <div className="max-h-40 overflow-auto rounded-md border">
+              </div>
+            ) : null}
+
+            {job.errors.length > 0 ? (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => setShowErrors((v) => !v)}
+                >
+                  {showErrors ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                  {showErrors ? 'Ocultar falhas' : 'Ver falhas'}
+                </Button>
+                {showErrors ? (
+                  <div className="max-h-44 overflow-auto rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -461,45 +428,46 @@ export function OptionalImportPanel({
                     </Table>
                   </div>
                 ) : null}
-                {finished && job.mode === 'simulate' ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    Simulação concluída — nada foi gravado no banco.
-                  </p>
-                ) : null}
               </div>
             ) : null}
 
-            <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-              <Button type="button" variant="outline" onClick={onBack} disabled={Boolean(active)}>
-                Voltar
-              </Button>
-              {importReady ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={isSubmitting || !selectedFile || Boolean(active)}
-                  onClick={() => void handleImport('simulate')}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Simular
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                className="ml-auto"
-                onClick={() => void handleImport('live')}
-                disabled={isSubmitting || !selectedFile || Boolean(active)}
-              >
-                {isSubmitting || active ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                Importar {meta.shortLabel}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            {finished && job.mode === 'simulate' ? (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Simulação — nada gravado no banco.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onBack} disabled={Boolean(active)}>
+            Voltar
+          </Button>
+          {importReady ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isSubmitting || !selectedFile || Boolean(active)}
+              onClick={() => void handleImport('simulate')}
+            >
+              <Sparkles className="h-4 w-4" />
+              Simular
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            className="ml-auto"
+            onClick={() => void handleImport('live')}
+            disabled={isSubmitting || !selectedFile || Boolean(active)}
+          >
+            {isSubmitting || active ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Importar
+          </Button>
+        </div>
       </div>
     </div>
   )

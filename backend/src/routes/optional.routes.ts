@@ -2,14 +2,18 @@ import type { FastifyInstance } from 'fastify'
 import {
   barcodeTemplateHandler,
   cancelBarcodeSendHandler,
+  cancelLotSendHandler,
   cancelStockSendHandler,
   cancelSupplierSendHandler,
   cancelValiditySendHandler,
   getBarcodeSendHandler,
+  getLotSendHandler,
   getStockSendHandler,
   getSupplierSendHandler,
   getValiditySendHandler,
+  lotTemplateHandler,
   startBarcodeSendHandler,
+  startLotSendHandler,
   startStockSendHandler,
   startSupplierSendHandler,
   startValiditySendHandler,
@@ -38,4 +42,9 @@ export async function optionalRoutes(app: FastifyInstance) {
   app.post('/opcionais/stock/send/start', startStockSendHandler)
   app.get('/opcionais/stock/send/:jobId', getStockSendHandler)
   app.post('/opcionais/stock/send/:jobId/cancel', cancelStockSendHandler)
+
+  app.get('/opcionais/lots/template', lotTemplateHandler)
+  app.post('/opcionais/lots/send/start', startLotSendHandler)
+  app.get('/opcionais/lots/send/:jobId', getLotSendHandler)
+  app.post('/opcionais/lots/send/:jobId/cancel', cancelLotSendHandler)
 }

@@ -958,6 +958,41 @@ export interface ProductExistenceCatalogs {
   byMigracao: Map<string, number>
   /** id do produto → tipoclassesngpc (ex.: tcNenhuma) */
   tipoclassesngpcById: Map<number, string>
+  /** id do produto → codigo_migracao (primeiro valor visto) */
+  migracaoById: Map<number, string>
+}
+
+/**
+ * CSV often sends codigo=0 when only the barcode is known.
+ * Migracao "0" exists in TMS for unrelated products — never use 0 as a lookup key.
+ */
+export function usableMigracaoCodigo(codigo: string): string {
+  const t = codigo.trim()
+  if (!t) return ''
+  const n = Number(t)
+  if (Number.isFinite(n) && n === 0) return ''
+  return t
+}
+
+/** Resolve produto by migracao (if usable) then barcode. */
+export function resolveProdutoIdFromCsv(
+  existence: ProductExistenceCatalogs,
+  codigo: string,
+  codigobarras: string
+): number | undefined {
+  const migracao = usableMigracaoCodigo(codigo)
+  let produtoId: number | undefined
+  if (migracao) {
+    produtoId =
+      existence.byMigracao.get(migracao) ??
+      existence.byMigracao.get(String(Number(migracao)))
+  }
+  if (produtoId === undefined && codigobarras) {
+    produtoId =
+      existence.byBarcode.get(codigobarras) ??
+      existence.byBarcode.get(codigobarras.replace(/\D/g, ''))
+  }
+  return produtoId
 }
 
 function addExistenceKey(map: Map<string, number>, key: unknown, id: number) {
@@ -975,17 +1010,22 @@ export async function fetchProductExistenceCatalogs(
   const byBarcode = new Map<string, number>()
   const byMigracao = new Map<string, number>()
   const tipoclassesngpcById = new Map<number, string>()
+  const migracaoById = new Map<number, string>()
   const rows = await fetchTmsEntityRows('Produto', baseUrl)
 
   for (const row of rows) {
     const id = Number(row.id)
     if (!Number.isFinite(id)) continue
     addExistenceKey(byBarcode, row.codigoBarras ?? row.CodigoBarras, id)
-    addExistenceKey(byMigracao, row.codigo_migracao, id)
+    const migracao = row.codigo_migracao
+    addExistenceKey(byMigracao, migracao, id)
+    if (migracao !== undefined && migracao !== null && String(migracao).trim()) {
+      if (!migracaoById.has(id)) migracaoById.set(id, String(migracao).trim())
+    }
     tipoclassesngpcById.set(id, String(row.tipoclassesngpc ?? 'tcNenhuma'))
   }
 
-  return { byBarcode, byMigracao, tipoclassesngpcById }
+  return { byBarcode, byMigracao, tipoclassesngpcById, migracaoById }
 }
 
 /**
@@ -1012,8 +1052,10 @@ export async function insertValidadeSistemaAntigo(
  * Rota: POST /tms/xdata/ImportacaoProdutoService/SalvarListaEstoques
  * Body: array de DTOS.ImportacaoEstoque.TImportacaoEstoqueDTO
  *
- * Resposta: { "Importado": "chave;quantidade\\r\\n..." }
- * — chave = CodigoBarras ou IdProduto (não é contagem de sucesso/falha).
+ * Resposta típica:
+ * - { "Importado": "ean;qtd" } ou { "Importado": "0;qtd" } (migração 0 / IdProduto) — incluído
+ * - { "NaoImportadoControlado": "ean;qtd" } — controlado (ignorar)
+ * - { "NaoImportado": "ean;qtd" } — rejeitado pela regra do destino
  */
 export interface ImportacaoEstoqueDto {
   /** EAN — layout código de barras (Delphi). */
@@ -1023,44 +1065,69 @@ export interface ImportacaoEstoqueDto {
   IdFilial: number
   /** Quando não usa barras: id interno do produto. */
   IdProduto?: number
+  /** codigo_migracao do produto (inteiro no DTO XData). */
+  CodigoMigracao?: number
+  /** Lote SNGPC / controlado. */
+  Lote?: string
+  /** ISO yyyy-mm-dd */
+  Validade?: string
+  /** ISO yyyy-mm-dd */
+  Fabricacao?: string
+  RegistroMS?: string
 }
 
+export type SalvarListaEstoquesOutcome =
+  | 'imported'
+  | 'skipped_controlled'
+  | 'skipped_not_imported'
+  | 'not_imported'
+  | 'http_error'
+
 export interface SalvarListaEstoquesResult extends BatchInsertResult {
-  /** Quantidade de linhas confirmadas em Importado (chave;qtd). */
+  outcome?: SalvarListaEstoquesOutcome
+  /** Linhas confirmadas em Importado. */
   imported?: number
 }
 
-function extractImportadoRaw(message?: string): string {
-  if (!message) return ''
+function parseResponseObject(message?: string): Record<string, unknown> | null {
+  if (!message) return null
   try {
-    const json = JSON.parse(message) as { Importado?: string; importado?: string }
-    return String(json.Importado ?? json.importado ?? '').trim()
-  } catch {
-    const m = message.match(/"Importado"\s*:\s*"((?:\\.|[^"\\])*)"/i)
-    if (m) {
-      return m[1].replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\"/g, '"').trim()
+    const json = JSON.parse(message)
+    if (json && typeof json === 'object' && !Array.isArray(json)) {
+      return json as Record<string, unknown>
     }
-    return message.trim()
+  } catch {
+    /* raw text */
   }
+  return null
 }
 
-/** Linhas `chave;quantidade` confirmadas pelo servidor (chave ≠ 0 e qtd > 0). */
-function parseImportadoLines(
-  message?: string
+/**
+ * Linhas `chave;quantidade` do servidor.
+ * - Sucesso por EAN: "789...;16"
+ * - Sucesso por IdProduto / codigo_migracao 0: "0;16" (qtd > 0) — NÃO descartar
+ * - Vazio / noop: "0;0"
+ */
+function parseKeyQtyBlock(
+  raw: unknown
 ): Array<{ key: string; quantidade: number }> {
-  const raw = extractImportadoRaw(message)
-  if (!raw) return []
+  const text = String(raw ?? '')
+    .replace(/\\r/g, '\r')
+    .replace(/\\n/g, '\n')
+    .trim()
+  if (!text) return []
 
   const lines: Array<{ key: string; quantidade: number }> = []
-  for (const line of raw.split(/\r?\n/)) {
+  for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim()
     if (!trimmed) continue
     const m = trimmed.match(/^([^;]*);(-?\d+(?:[.,]\d+)?)\s*$/)
     if (!m) continue
     const key = m[1].trim()
     const quantidade = Number(String(m[2]).replace(',', '.'))
-    if (!key || key === '0') continue
     if (!Number.isFinite(quantidade) || quantidade <= 0) continue
+    // chave pode ser "0" (codigo_migracao 0); só rejeita chave vazia
+    if (key === '') continue
     lines.push({ key, quantidade })
   }
   return lines
@@ -1071,7 +1138,12 @@ export async function salvarListaEstoques(
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<SalvarListaEstoquesResult> {
   if (!items.length) {
-    return { ok: true, imported: 0, message: '{"Importado":"0;0"}' }
+    return {
+      ok: true,
+      outcome: 'imported',
+      imported: 0,
+      message: '{"Importado":"0;0"}',
+    }
   }
 
   const root = baseUrl.replace(/\/$/, '')
@@ -1083,6 +1155,13 @@ export async function salvarListaEstoques(
       IdFilial: item.IdFilial,
       ...(item.CodigoBarras !== undefined ? { CodigoBarras: item.CodigoBarras } : {}),
       ...(item.IdProduto !== undefined ? { IdProduto: item.IdProduto } : {}),
+      ...(item.CodigoMigracao !== undefined
+        ? { CodigoMigracao: Math.trunc(item.CodigoMigracao) }
+        : {}),
+      ...(item.Lote !== undefined ? { Lote: item.Lote } : {}),
+      ...(item.Validade !== undefined ? { Validade: item.Validade } : {}),
+      ...(item.Fabricacao !== undefined ? { Fabricacao: item.Fabricacao } : {}),
+      ...(item.RegistroMS !== undefined ? { RegistroMS: item.RegistroMS } : {}),
     }))
   )
 
@@ -1093,23 +1172,278 @@ export async function salvarListaEstoques(
   )
 
   if (!result.ok) {
-    return result
+    return { ...result, outcome: 'http_error' }
   }
 
-  const confirmed = parseImportadoLines(result.message)
-  if (confirmed.length > 0) {
-    return { ...result, ok: true, imported: confirmed.length }
+  const payload = parseResponseObject(result.message)
+  const importedLines = parseKeyQtyBlock(payload?.Importado ?? payload?.importado)
+  if (importedLines.length > 0) {
+    return {
+      ...result,
+      ok: true,
+      outcome: 'imported',
+      imported: importedLines.length,
+    }
   }
 
-  // HTTP ok mas Importado vazio / 0;0 → não confirmou inclusão
+  const controlledLines = parseKeyQtyBlock(
+    payload?.NaoImportadoControlado ?? payload?.naoImportadoControlado
+  )
+  if (controlledLines.length > 0) {
+    return {
+      ...result,
+      ok: true,
+      outcome: 'skipped_controlled',
+      imported: 0,
+      message: result.message,
+    }
+  }
+
+  const notImportedLines = parseKeyQtyBlock(
+    payload?.NaoImportado ?? payload?.naoImportado
+  )
+  if (notImportedLines.length > 0) {
+    return {
+      ...result,
+      ok: true,
+      outcome: 'skipped_not_imported',
+      imported: 0,
+      message: result.message,
+    }
+  }
+
   return {
     ...result,
     ok: false,
+    outcome: 'not_imported',
     imported: 0,
     message:
-      'SalvarListaEstoques não confirmou inclusão (Importado sem chave;quantidade). ' +
-      (result.message ?? ''),
+      'SalvarListaEstoques não confirmou inclusão. ' + (result.message ?? ''),
   }
+}
+
+/**
+ * Resolve id de RegistroMS pelo código (string do CSV / produto.registroMS).
+ */
+export async function findRegistroMsId(
+  registroMs: string,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<number | undefined> {
+  const code = registroMs.trim()
+  if (!code) return undefined
+  const root = baseUrl.replace(/\/$/, '')
+  const filter = encodeURIComponent(`registroMS eq '${code.replace(/'/g, "''")}'`)
+  const result = await tmsJsonRequest(
+    `${root}/tms/xdata/RegistroMS?$filter=${filter}&$top=5`,
+    { method: 'GET' },
+    baseUrl
+  )
+  if (!result.ok || !result.message) return undefined
+  try {
+    const rows = extractODataRows(JSON.parse(result.message))
+    for (const row of rows) {
+      const id = Number(row.id)
+      if (Number.isFinite(id)) return id
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined
+}
+
+/**
+ * Busca LoteMedicamento por produto + número do lote.
+ */
+export async function findLoteMedicamento(
+  produtoId: number,
+  lote: string,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<{ id: number; quantidade: number; quantidadeInicial: number } | null> {
+  const root = baseUrl.replace(/\/$/, '')
+  const safeLote = lote.replace(/'/g, "''")
+  const filter = encodeURIComponent(
+    `produto/id eq ${produtoId} and lote eq '${safeLote}'`
+  )
+  const result = await tmsJsonRequest(
+    `${root}/tms/xdata/LoteMedicamento?$filter=${filter}&$top=1`,
+    { method: 'GET' },
+    baseUrl
+  )
+  if (!result.ok || !result.message) return null
+  try {
+    const rows = extractODataRows(JSON.parse(result.message))
+    const row = rows[0]
+    if (!row) return null
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) return null
+    return {
+      id,
+      quantidade: Number(row.quantidade) || 0,
+      quantidadeInicial: Number(row.quantidadeInicial) || 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * True se já existe LoteMedicamento com o mesmo número para o produto.
+ */
+export async function loteMedicamentoExists(
+  produtoId: number,
+  lote: string,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<boolean> {
+  return (await findLoteMedicamento(produtoId, lote, baseUrl)) !== null
+}
+
+export interface InsertLoteMedicamentoInput {
+  produtoId: number
+  lote: string
+  /** Grava em quantidadeInicial (quantidade corrente é mantida pelo ERP). */
+  quantidade: number
+  /** ISO yyyy-mm-dd */
+  fabricacao: string
+  /** ISO yyyy-mm-dd */
+  validade: string
+  idFilial: number
+  /** Código MS string — resolvido para associação RegistroMS. */
+  registroMs?: string
+  /** Id já resolvido de RegistroMS (opcional). */
+  registroMsId?: number
+}
+
+/**
+ * Cria lote de medicamento controlado.
+ * Rota: POST /tms/xdata/LoteMedicamento
+ * Depois: LoteMovimento (kardex) + ExecuteSQL para gravar `quantidade`
+ * (XData ignora escrita em `quantidade`; só `quantidadeInicial` entra no POST).
+ */
+export async function insertLoteMedicamento(
+  data: InsertLoteMedicamentoInput,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<BatchInsertResult & { id?: number }> {
+  const root = baseUrl.replace(/\/$/, '')
+  const qtd = Math.trunc(data.quantidade)
+  if (!Number.isFinite(qtd) || qtd <= 0) {
+    return { ok: false, message: 'quantidade do lote deve ser inteiro > 0' }
+  }
+
+  let registroMsId = data.registroMsId
+  if (registroMsId === undefined && data.registroMs) {
+    registroMsId = await findRegistroMsId(data.registroMs, baseUrl)
+  }
+
+  const body: Record<string, unknown> = {
+    '@xdata.type': 'XData.Default.LoteMedicamento',
+    lote: data.lote.trim(),
+    quantidadeInicial: qtd,
+    fabricacao: data.fabricacao,
+    validade: data.validade,
+    isInterno: false,
+    idFilial: data.idFilial,
+    produto: { id: data.produtoId },
+  }
+  if (registroMsId !== undefined) {
+    body.registroMS = { id: registroMsId }
+  }
+
+  const result = await tmsJsonRequest(
+    `${root}/tms/xdata/LoteMedicamento`,
+    { method: 'POST', body: JSON.stringify(body) },
+    baseUrl
+  )
+  if (!result.ok) return result
+
+  let id: number | undefined
+  if (result.message) {
+    try {
+      const json = JSON.parse(result.message) as { id?: number }
+      const parsed = Number(json.id)
+      if (Number.isFinite(parsed)) id = parsed
+    } catch {
+      /* raw */
+    }
+  }
+  if (id === undefined) {
+    return {
+      ok: false,
+      statusCode: result.statusCode,
+      message: 'LoteMedicamento criado sem id na resposta',
+    }
+  }
+
+  // Kardex (mesmo origem do SalvarListaEstoques em INT000)
+  const mov = await tmsJsonRequest(
+    `${root}/tms/xdata/LoteMovimento`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        '@xdata.type': 'XData.Default.LoteMovimento',
+        data: new Date().toISOString().slice(0, 19),
+        quantidade: qtd,
+        saldoAnterior: 0,
+        saldoAtual: qtd,
+        origem: 'omlImportacaoProduto',
+        cancelamento: false,
+        idFilial: data.idFilial,
+        'lote@xdata.ref': `LoteMedicamento(${id})`,
+      }),
+    },
+    baseUrl
+  )
+  if (!mov.ok) {
+    return {
+      ok: false,
+      statusCode: mov.statusCode,
+      message:
+        `Lote id=${id} criado, mas falha no LoteMovimento: ` +
+        (mov.message || 'erro desconhecido'),
+      id,
+    }
+  }
+
+  // XData não persiste `quantidade` no POST/PATCH — atualiza via SQL do servidor.
+  const qty = await setLoteMedicamentoQuantidade(id, qtd, baseUrl)
+  if (!qty.ok) {
+    return {
+      ok: false,
+      statusCode: qty.statusCode,
+      message:
+        `Lote id=${id} e movimento ok, mas falha ao gravar quantidade: ` +
+        (qty.message || 'erro desconhecido'),
+      id,
+    }
+  }
+
+  return { ...result, ok: true, id }
+}
+
+/**
+ * Grava LoteMedicamento.quantidade (coluna ignorada pelo XData no POST/PATCH).
+ * Rota: POST /tms/xdata/ServerToolsService/ExecuteSQL
+ */
+export async function setLoteMedicamentoQuantidade(
+  loteId: number,
+  quantidade: number,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<BatchInsertResult> {
+  const id = Math.trunc(loteId)
+  const qtd = Math.trunc(quantidade)
+  if (!Number.isFinite(id) || id <= 0) {
+    return { ok: false, message: 'id de lote inválido' }
+  }
+  if (!Number.isFinite(qtd) || qtd < 0) {
+    return { ok: false, message: 'quantidade inválida' }
+  }
+  const root = baseUrl.replace(/\/$/, '')
+  // ids/qtd só numéricos — sem interpolar strings do CSV
+  const sql = `UPDATE lotemedicamento SET quantidade = ${qtd} WHERE id = ${id}`
+  return tmsJsonRequest(
+    `${root}/tms/xdata/ServerToolsService/ExecuteSQL`,
+    { method: 'POST', body: JSON.stringify({ Sql: sql }) },
+    baseUrl
+  )
 }
 
 export function getDefaultTmsBaseUrl() {

@@ -3,39 +3,43 @@ import { parse } from 'csv-parse/sync'
 import {
   fetchProductExistenceCatalogs,
   fetchServerIdentification,
+  findLoteMedicamento,
+  findRegistroMsId,
   getDefaultTmsBaseUrl,
+  insertLoteMedicamento,
   resolveProdutoIdFromCsv,
-  salvarListaEstoques,
+  setLoteMedicamentoQuantidade,
   usableMigracaoCodigo,
 } from './tmsService.js'
+import { parseValidityDate } from './optionalValidityJobService.js'
 import { parseBrazilianNumber } from '../utils/productFormats.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
 
-export type StockJobStatus =
+export type LotJobStatus =
   | 'queued'
   | 'running'
   | 'completed'
   | 'failed'
   | 'cancelled'
 
-export type StockSendMode = 'live' | 'simulate'
+export type LotSendMode = 'live' | 'simulate'
 
-export interface StockJobError {
+export interface LotJobError {
   index: number
   codigo: string
   message: string
 }
 
-export interface StockJobSkipped {
+export interface LotJobSkipped {
   index: number
   codigo: string
   message: string
 }
 
-export interface StockJobSnapshot {
+export interface LotJobSnapshot {
   id: string
-  status: StockJobStatus
-  mode: StockSendMode
+  status: LotJobStatus
+  mode: LotSendMode
   tmsBaseUrl: string
   idFilial: number
   total: number
@@ -44,19 +48,19 @@ export interface StockJobSnapshot {
   errorCount: number
   skippedCount: number
   percent: number
-  errors: StockJobError[]
+  errors: LotJobError[]
   errorsTruncated: boolean
-  skipped: StockJobSkipped[]
+  skipped: LotJobSkipped[]
   skippedTruncated: boolean
   startedAt: string | null
   finishedAt: string | null
   message?: string
 }
 
-interface StockJobInternal {
+interface LotJobInternal {
   id: string
-  status: StockJobStatus
-  mode: StockSendMode
+  status: LotJobStatus
+  mode: LotSendMode
   tmsBaseUrl: string
   idFilial: number
   rows: Record<string, string>[]
@@ -64,18 +68,17 @@ interface StockJobInternal {
   successCount: number
   errorCount: number
   skippedCount: number
-  errors: StockJobError[]
-  skipped: StockJobSkipped[]
+  errors: LotJobError[]
+  skipped: LotJobSkipped[]
   cancelRequested: boolean
   startedAt: number | null
   finishedAt: number | null
   runPromise?: Promise<void>
 }
 
-const jobs = new Map<string, StockJobInternal>()
+const jobs = new Map<string, LotJobInternal>()
 const MAX_STORED_ERRORS = 200
 const MAX_STORED_SKIPPED = 200
-/** Delphi: `not Produto.IsControlado` → tipoclassesngpc = tcNenhuma */
 const NON_CONTROLLED = 'tcNenhuma'
 
 function stripAccents(value: string): string {
@@ -95,7 +98,6 @@ function cell(row: Record<string, string>, ...keys: string[]): string {
   return ''
 }
 
-/** Estoque/quantidade: vazio ou ≤ 0 → pular; decimal inválido → 'invalid'. */
 function parseEstoque(raw: string): number | null | 'invalid' {
   const cleaned = raw.trim()
   if (!cleaned) return null
@@ -107,7 +109,7 @@ function parseEstoque(raw: string): number | null | 'invalid' {
   return asInt
 }
 
-function snapshot(job: StockJobInternal): StockJobSnapshot {
+function snapshot(job: LotJobInternal): LotJobSnapshot {
   const total = job.rows.length
   const percent = total === 0 ? 100 : Math.min(100, Math.round((job.processed / total) * 100))
   return {
@@ -131,12 +133,12 @@ function snapshot(job: StockJobInternal): StockJobSnapshot {
   }
 }
 
-export function getStockJob(jobId: string): StockJobSnapshot | null {
+export function getLotJob(jobId: string): LotJobSnapshot | null {
   const job = jobs.get(jobId)
   return job ? snapshot(job) : null
 }
 
-export function parseStockCsvText(text: string): Record<string, string>[] {
+export function parseLotCsvText(text: string): Record<string, string>[] {
   const records = parse(text, {
     columns: true,
     delimiter: TEMPLATE_DELIMITER,
@@ -154,11 +156,11 @@ export function parseStockCsvText(text: string): Record<string, string>[] {
   })
 }
 
-export async function startStockJob(input: {
+export async function startLotJob(input: {
   rows: Record<string, string>[]
   tmsBaseUrl?: string
-  mode?: StockSendMode
-}): Promise<StockJobSnapshot> {
+  mode?: LotSendMode
+}): Promise<LotJobSnapshot> {
   if (!input.rows.length) {
     throw new Error('Nenhuma linha para importar')
   }
@@ -166,7 +168,7 @@ export async function startStockJob(input: {
   const tmsBaseUrl = (input.tmsBaseUrl || getDefaultTmsBaseUrl()).replace(/\/$/, '')
   const identification = await fetchServerIdentification(tmsBaseUrl)
   const id = randomUUID()
-  const job: StockJobInternal = {
+  const job: LotJobInternal = {
     id,
     status: 'queued',
     mode: input.mode ?? 'live',
@@ -184,11 +186,11 @@ export async function startStockJob(input: {
     finishedAt: null,
   }
   jobs.set(id, job)
-  job.runPromise = runStockJob(job)
+  job.runPromise = runLotJob(job)
   return snapshot(job)
 }
 
-export function cancelStockJob(jobId: string): StockJobSnapshot | null {
+export function cancelLotJob(jobId: string): LotJobSnapshot | null {
   const job = jobs.get(jobId)
   if (!job) return null
   job.cancelRequested = true
@@ -199,12 +201,13 @@ export function cancelStockJob(jobId: string): StockJobSnapshot | null {
   return snapshot(job)
 }
 
-async function runStockJob(job: StockJobInternal): Promise<void> {
+async function runLotJob(job: LotJobInternal): Promise<void> {
   job.status = 'running'
   job.startedAt = Date.now()
 
   try {
     const existence = await fetchProductExistenceCatalogs(job.tmsBaseUrl)
+    const registroMsIdCache = new Map<string, number | undefined>()
 
     for (let index = 0; index < job.rows.length; index++) {
       if (job.cancelRequested) {
@@ -216,52 +219,93 @@ async function runStockJob(job: StockJobInternal): Promise<void> {
       const row = job.rows[index]
       const codigo = cell(row, 'codigo')
       const codigobarras = cell(row, 'codigobarras', 'codigobarra')
-      // Layout produto: estoque | layout código de barras (Delphi): quantidade / quantidadeestoque
-      const estoqueRaw = cell(
-        row,
-        'estoque',
-        'quantidade',
-        'quantidadeestoque',
-        'quantidade_estoque'
-      )
-
-      // Delphi: só importa se quantidade > 0; CSV completo sem estoque → ignora
-      const estoque = parseEstoque(estoqueRaw)
-      if (estoque === null) {
-        pushSkipped(job, {
-          index,
-          codigo: codigo || codigobarras,
-          message: estoqueRaw.trim()
-            ? 'quantidade ≤ 0 — ignorada'
-            : 'estoque/quantidade vazio — ignorado',
-        })
-        job.processed++
-        continue
-      }
+      const lote = cell(row, 'lote', 'numerolote')
+      const registroms = cell(row, 'registroms', 'registro_ms')
+      const estoqueRaw = cell(row, 'estoque', 'quantidade', 'quantidadeestoque')
+      const fabricacaoRaw = cell(row, 'fabricacao', 'datafabricacao')
+      const validadeRaw = cell(row, 'validade', 'datavalidade')
 
       if (!codigo && !codigobarras) {
         job.errorCount++
         pushError(job, {
           index,
           codigo: '',
-          message:
-            'Informe codigo (migração) ou codigobarras para localizar o produto',
+          message: 'Informe codigo (migração) ou codigobarras',
         })
         job.processed++
         continue
       }
 
+      if (!lote) {
+        job.errorCount++
+        pushError(job, {
+          index,
+          codigo: codigo || codigobarras,
+          message: 'lote obrigatório',
+        })
+        job.processed++
+        continue
+      }
+
+      if (!registroms) {
+        job.errorCount++
+        pushError(job, {
+          index,
+          codigo: codigo || codigobarras,
+          message: 'registroms obrigatório',
+        })
+        job.processed++
+        continue
+      }
+
+      const estoque = parseEstoque(estoqueRaw)
+      if (estoque === null) {
+        pushSkipped(job, {
+          index,
+          codigo: codigo || codigobarras,
+          message: estoqueRaw.trim()
+            ? 'estoque ≤ 0 — ignorado'
+            : 'estoque vazio — ignorado',
+        })
+        job.processed++
+        continue
+      }
       if (estoque === 'invalid') {
         job.errorCount++
         pushError(job, {
           index,
           codigo: codigo || codigobarras,
-          message: `estoque/quantidade inválido (use inteiro > 0): ${estoqueRaw}`,
+          message: `estoque inválido (use inteiro > 0): ${estoqueRaw}`,
         })
         job.processed++
         continue
       }
 
+      const fabricacao = parseValidityDate(fabricacaoRaw)
+      if (!fabricacao) {
+        job.errorCount++
+        pushError(job, {
+          index,
+          codigo: codigo || codigobarras,
+          message: `fabricação inválida (use dd/mm/yyyy): ${fabricacaoRaw || '(vazio)'}`,
+        })
+        job.processed++
+        continue
+      }
+
+      const validade = parseValidityDate(validadeRaw)
+      if (!validade) {
+        job.errorCount++
+        pushError(job, {
+          index,
+          codigo: codigo || codigobarras,
+          message: `validade inválida (use dd/mm/yyyy): ${validadeRaw || '(vazio)'}`,
+        })
+        job.processed++
+        continue
+      }
+
+      // codigo (≠ 0) primeiro; senão codigobarras — CSV costuma mandar codigo=0 só com EAN
       const migracao = usableMigracaoCodigo(codigo)
       const ref = migracao || codigobarras || codigo
       const produtoId = resolveProdutoIdFromCsv(existence, codigo, codigobarras)
@@ -279,14 +323,13 @@ async function runStockJob(job: StockJobInternal): Promise<void> {
         continue
       }
 
-      // Delphi: Assigned(Produto) and not Produto.IsControlado → INT000 / MovimentarLote
       const tipoclasse =
         existence.tipoclassesngpcById.get(produtoId) ?? NON_CONTROLLED
-      if (tipoclasse !== NON_CONTROLLED) {
+      if (tipoclasse === NON_CONTROLLED) {
         pushSkipped(job, {
           index,
           codigo: ref,
-          message: `produto controlado (${tipoclasse}) — use Lotes`,
+          message: 'produto não controlado (tcNenhuma) — use Estoque',
         })
         job.processed++
         continue
@@ -298,89 +341,70 @@ async function runStockJob(job: StockJobInternal): Promise<void> {
         continue
       }
 
-      // Delphi → XData: SalvarListaEstoques
-      // 1) tenta por EAN; 2) se NaoImportado, tenta IdProduto.
-      // CodigoMigracao no DTO (inteiro) — ecoado em Importado; sem ele o servidor devolve "0;qtd".
-      const useBarras = Boolean(codigobarras)
-      const migracaoRaw =
-        migracao || existence.migracaoById.get(produtoId) || ''
-      const migracaoNum = Number(migracaoRaw)
-      const codigoMigracao =
-        migracaoRaw !== '' && Number.isFinite(migracaoNum)
-          ? Math.trunc(migracaoNum)
-          : undefined
-
-      const baseDto = {
-        QuantidadeEstoque: estoque,
-        IdFilial: job.idFilial,
-        ...(codigoMigracao !== undefined ? { CodigoMigracao: codigoMigracao } : {}),
+      const existing = await findLoteMedicamento(produtoId, lote, job.tmsBaseUrl)
+      if (existing) {
+        if (existing.quantidade <= 0 && estoque > 0) {
+          const qty = await setLoteMedicamentoQuantidade(
+            existing.id,
+            estoque,
+            job.tmsBaseUrl
+          )
+          if (!qty.ok) {
+            job.errorCount++
+            pushError(job, {
+              index,
+              codigo: ref,
+              message:
+                `lote ${lote} já existia sem quantidade; falha ao gravar qtd=${estoque}: ` +
+                (qty.message || 'erro'),
+            })
+            job.processed++
+            continue
+          }
+          job.successCount++
+          job.processed++
+          continue
+        }
+        pushSkipped(job, {
+          index,
+          codigo: ref,
+          message: `lote ${lote} já cadastrado para o produto (qtd=${existing.quantidade})`,
+        })
+        job.processed++
+        continue
       }
 
-      let result = await salvarListaEstoques(
-        [
-          useBarras
-            ? {
-                ...baseDto,
-                IsCodigoBarra: true,
-                CodigoBarras: codigobarras,
-              }
-            : {
-                ...baseDto,
-                IsCodigoBarra: false,
-                IdProduto: produtoId,
-              },
-        ],
+      // Controlados: POST LoteMedicamento (SalvarListaEstoques rejeita / não grava lote nomeado)
+      let registroMsId: number | undefined
+      if (registroms) {
+        if (registroMsIdCache.has(registroms)) {
+          registroMsId = registroMsIdCache.get(registroms)
+        } else {
+          registroMsId = await findRegistroMsId(registroms, job.tmsBaseUrl)
+          registroMsIdCache.set(registroms, registroMsId)
+        }
+      }
+
+      const result = await insertLoteMedicamento(
+        {
+          produtoId,
+          lote,
+          quantidade: estoque,
+          fabricacao,
+          validade,
+          idFilial: job.idFilial,
+          registroMsId,
+          ...(registroMsId === undefined ? { registroMs: registroms } : {}),
+        },
         job.tmsBaseUrl
       )
 
-      let usedFallbackIdProduto = false
-      if (useBarras && result.outcome === 'skipped_not_imported') {
-        usedFallbackIdProduto = true
-        result = await salvarListaEstoques(
-          [
-            {
-              ...baseDto,
-              IsCodigoBarra: false,
-              IdProduto: produtoId,
-            },
-          ],
-          job.tmsBaseUrl
-        )
-      }
-
-      if (result.outcome === 'skipped_controlled') {
-        const tipoclasse =
-          existence.tipoclassesngpcById.get(produtoId) ?? NON_CONTROLLED
-        pushSkipped(job, {
-          index,
-          codigo: ref,
-          message:
-            tipoclasse === NON_CONTROLLED
-              ? 'servidor: NaoImportadoControlado (IsControlado=true), mas tipoclassesngpc=tcNenhuma — controlado por lista/outro flag; use Lotes'
-              : `servidor: NaoImportadoControlado; tipoclassesngpc=${tipoclasse} — use Lotes`,
-        })
-        job.processed++
-        continue
-      }
-
-      if (result.outcome === 'skipped_not_imported') {
-        pushSkipped(job, {
-          index,
-          codigo: ref,
-          message: usedFallbackIdProduto
-            ? `não importado por EAN nem por IdProduto=${produtoId} (NaoImportado)`
-            : 'não importado pelo servidor (NaoImportado) — produto/estoque rejeitado na regra do destino',
-        })
-        job.processed++
-        continue
-      }
-
-      if (!result.ok || result.outcome !== 'imported') {
+      if (!result.ok) {
         job.errorCount++
         pushError(job, {
           index,
           codigo: ref,
-          message: result.message || 'Falha em SalvarListaEstoques',
+          message: result.message || 'Falha ao inserir LoteMedicamento',
         })
         job.processed++
         continue
@@ -398,16 +422,16 @@ async function runStockJob(job: StockJobInternal): Promise<void> {
     pushError(job, {
       index: -1,
       codigo: '',
-      message: error instanceof Error ? error.message : 'Falha interna no job de estoque',
+      message: error instanceof Error ? error.message : 'Falha interna no job de lotes',
     })
   }
 }
 
-function pushError(job: StockJobInternal, error: StockJobError) {
+function pushError(job: LotJobInternal, error: LotJobError) {
   if (job.errors.length < MAX_STORED_ERRORS) job.errors.push(error)
 }
 
-function pushSkipped(job: StockJobInternal, skip: StockJobSkipped) {
+function pushSkipped(job: LotJobInternal, skip: LotJobSkipped) {
   job.skippedCount++
   if (job.skipped.length < MAX_STORED_SKIPPED) job.skipped.push(skip)
 }

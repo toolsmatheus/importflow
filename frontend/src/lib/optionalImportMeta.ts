@@ -4,14 +4,13 @@ export interface OptionalImportMeta {
   id: OptionalImportKind
   title: string
   shortLabel: string
+  /** Uma linha: o que esta importação faz. */
   description: string
   columns: string[]
-  /** Exemplo de 1ª linha (valores ilustrativos). */
   sampleRow: string[]
+  /** Dica curta das colunas (sem repetir o título). */
   sourceHint: string
   exampleFileName: string
-  /** Quando usar esta importação. */
-  whenToUse: string
 }
 
 export const OPTIONAL_IMPORT_KINDS: OptionalImportKind[] = [
@@ -27,62 +26,70 @@ export const OPTIONAL_IMPORT_META: Record<OptionalImportKind, OptionalImportMeta
     id: 'barcodes',
     title: 'Códigos de barras adicionais',
     shortLabel: 'Barras+',
-    description: 'EANs extras além do código de barras principal do produto.',
+    description: 'EANs extras além do código de barras principal.',
     columns: ['codigo', 'codigobarras', 'codigoadicional', 'fator'],
     sampleRow: ['', '7891234567890', '7891234567891', '1'],
     sourceHint:
-      'codigo (migração) é opcional. Localize o produto por codigobarras (EAN principal) ou por codigo; codigoadicional = EAN a cadastrar; fator = conversão.',
+      'Localize por codigobarras ou codigo; codigoadicional = EAN novo; fator = conversão.',
     exampleFileName: 'codigos-barras-adicionais.csv',
-    whenToUse: 'Depois que os produtos já estiverem no banco.',
   },
   supplierRefs: {
     id: 'supplierRefs',
     title: 'Referências de fornecedor',
     shortLabel: 'Fornecedor',
-    description: 'Códigos do fornecedor (CodigoFornecedor) ligados ao produto.',
+    description: 'Códigos do fornecedor ligados ao produto.',
     columns: ['codigo', 'codigobarras', 'codigofornecedor', 'codigooriginal', 'fator'],
     sampleRow: ['', '7891234567890', '88001', 'CAT-12345', '1'],
     sourceHint:
-      'codigo (migração do produto) é opcional — localiza por codigobarras ou codigo. codigofornecedor = codigo_migracao do favorecido/fornecedor; codigooriginal = código do produto no catálogo do fornecedor; fator = fatorCompra (inteiro).',
+      'codigofornecedor = migração do favorecido; codigooriginal = código no catálogo; fator = fatorCompra.',
     exampleFileName: 'codigos-fornecedor.csv',
-    whenToUse: 'Depois que os produtos já estiverem no banco.',
   },
   validity: {
     id: 'validity',
     title: 'Validade dos produtos',
     shortLabel: 'Validade',
-    description:
-      'Importa validade/quantidade só para produtos não controlados (tipoclassesngpc = tcNenhuma).',
+    description: 'Validade e quantidade para não controlados (dd/mm/yyyy).',
     columns: ['codigo', 'validade', 'quantidade'],
     sampleRow: ['1001', '31/12/2027', '24'],
-    sourceHint:
-      'codigo = codigo_migracao do produto; validade em dd/mm/yyyy; quantidade = inteiro. Controlados são ignorados.',
+    sourceHint: 'codigo = codigo_migracao. Controlados são ignorados (use Lotes).',
     exampleFileName: 'validade-produtos.csv',
-    whenToUse: 'Depois que os produtos já estiverem no banco. Não preenche controlados (use Lotes).',
   },
   stock: {
     id: 'stock',
     title: 'Importação de estoque',
     shortLabel: 'Estoque',
-    description:
-      'Estoque (> 0) para não controlados via ImportacaoProdutoService/SalvarListaEstoques (lote INT000).',
+    description: 'Quantidade > 0 para não controlados (lote INT000).',
     columns: ['codigo', 'codigobarras', 'estoque'],
     sampleRow: ['1001', '7891234567890', '24'],
     sourceHint:
-      'Produto.csv: codigo + estoque (resolve IdProduto). Layout barras (Delphi): codigobarras + quantidade (> 0). Controlados e qtd ≤ 0 são ignorados.',
+      'Use codigo e/ou codigobarras + estoque. Controlados e qtd ≤ 0 são ignorados.',
     exampleFileName: 'Produto.csv',
-    whenToUse:
-      'Após o cadastro dos produtos. Usa o mesmo serviço XData da importação Delphi.',
   },
   lots: {
     id: 'lots',
     title: 'Lotes de controlados',
     shortLabel: 'Lotes',
-    description: 'Lotes SNGPC: número, validade, quantidade e registro MS.',
-    columns: ['codigo', 'lote', 'validade', 'quantidade', 'registroms'],
-    sampleRow: ['1001', 'A12', '30/06/2027', '30', '1234567890123'],
-    sourceHint: 'Somente produtos controlados já cadastrados com lista de controle.',
+    description: 'Lote, registro MS, estoque, fabricação e validade (controlados).',
+    columns: [
+      'codigo',
+      'codigobarras',
+      'lote',
+      'registroms',
+      'estoque',
+      'fabricacao',
+      'validade',
+    ],
+    sampleRow: [
+      '1001',
+      '7891234567890',
+      'A12',
+      '1234567890123',
+      '30',
+      '15/01/2024',
+      '30/06/2027',
+    ],
+    sourceHint:
+      'Busca por codigo (migração), senão codigobarras. Datas dd/mm/yyyy. Não controlados → use Estoque.',
     exampleFileName: 'lotes-controlados.csv',
-    whenToUse: 'Depois dos controlados importados na aba Produtos.',
   },
 }

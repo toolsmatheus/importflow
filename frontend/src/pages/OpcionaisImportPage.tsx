@@ -111,7 +111,7 @@ export function OpcionaisImportPage() {
           />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                 <ThemeIcon className="h-5 w-5" />
               </span>
               <div>
@@ -121,7 +121,7 @@ export function OpcionaisImportPage() {
             </div>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setView({ level: 'themes' })}
             >
@@ -132,7 +132,7 @@ export function OpcionaisImportPage() {
         </div>
 
         <div className="grid gap-2">
-          {theme.kinds.map((kind, index) => {
+          {theme.kinds.map((kind) => {
             const meta = OPTIONAL_IMPORT_META[kind]
             const Icon = KIND_ICONS[kind]
             return (
@@ -143,24 +143,16 @@ export function OpcionaisImportPage() {
                   setView({ level: 'import', themeId: theme.id, kind })
                 }
                 className={cn(
-                  'group flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left shadow-sm transition-all sm:px-4',
+                  'group flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left transition-all sm:px-4',
                   'hover:border-primary/40 hover:bg-accent/20',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
                 )}
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-semibold text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-foreground">{meta.title}</span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {meta.shortLabel}
-                    </Badge>
-                  </span>
+                  <span className="font-medium text-foreground">{meta.title}</span>
                   <span className="mt-0.5 block truncate text-sm text-muted-foreground">
                     {meta.description}
                   </span>
@@ -178,8 +170,8 @@ export function OpcionaisImportPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight text-foreground">Opcionais</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Escolha o tema e depois a importação complementar. Independente das abas principais.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Importações complementares, fora do fluxo principal.
         </p>
       </div>
 

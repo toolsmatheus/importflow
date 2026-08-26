@@ -87,6 +87,7 @@ export const optionalService = {
   supplierTemplateUrl: '/api/opcionais/supplier-refs/template',
   validityTemplateUrl: '/api/opcionais/validity/template',
   stockTemplateUrl: '/api/opcionais/stock/template',
+  lotsTemplateUrl: '/api/opcionais/lots/template',
 
   async startBarcodeSend(
     file: File,
@@ -179,6 +180,29 @@ export const optionalService = {
   async cancelStockJob(jobId: string): Promise<OptionalJobSnapshot> {
     return cancelOptionalJob(
       `/api/opcionais/stock/send/${jobId}/cancel`,
+      'Erro ao cancelar job'
+    )
+  },
+
+  async startLotSend(
+    file: File,
+    options?: { tmsBaseUrl?: string; mode?: OptionalSendMode }
+  ): Promise<OptionalJobSnapshot> {
+    return startOptionalSend(
+      '/api/opcionais/lots/send/start',
+      file,
+      options,
+      'Erro ao iniciar importação de lotes'
+    )
+  },
+
+  async getLotJob(jobId: string): Promise<OptionalJobSnapshot> {
+    return getOptionalJob(`/api/opcionais/lots/send/${jobId}`, 'Erro ao consultar job')
+  },
+
+  async cancelLotJob(jobId: string): Promise<OptionalJobSnapshot> {
+    return cancelOptionalJob(
+      `/api/opcionais/lots/send/${jobId}/cancel`,
       'Erro ao cancelar job'
     )
   },

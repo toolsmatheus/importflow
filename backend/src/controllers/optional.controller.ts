@@ -7,6 +7,12 @@ import {
   startBarcodeJob,
 } from '../services/optionalBarcodeJobService.js'
 import {
+  cancelLotJob,
+  getLotJob,
+  parseLotCsvText,
+  startLotJob,
+} from '../services/optionalLotJobService.js'
+import {
   cancelStockJob,
   getStockJob,
   parseStockCsvText,
@@ -314,6 +320,54 @@ export async function stockTemplateHandler(_request: FastifyRequest, reply: Fast
   reply.header(
     'Content-Disposition',
     'attachment; filename="modelo-estoque.csv"'
+  )
+  return reply.send(csv)
+}
+
+export async function startLotSendHandler(request: FastifyRequest, reply: FastifyReply) {
+  return startOptionalSend(request, reply, {
+    parseRows: parseLotCsvText,
+    startJob: startLotJob,
+    emptyMessage:
+      'CSV sem registros. Esperado: codigo;codigobarras;lote;registroms;estoque;fabricacao;validade (datas dd/mm/yyyy).',
+    failMessage: 'Erro ao iniciar importação de lotes',
+    logLabel: 'Lot send start failed',
+  })
+}
+
+export async function getLotSendHandler(request: FastifyRequest, reply: FastifyReply) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = getLotJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function cancelLotSendHandler(request: FastifyRequest, reply: FastifyReply) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = cancelLotJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function lotTemplateHandler(_request: FastifyRequest, reply: FastifyReply) {
+  const csv =
+    'codigo;codigobarras;lote;registroms;estoque;fabricacao;validade\n' +
+    '1001;7891234567890;A12;1234567890123;30;15/01/2024;30/06/2027\n' +
+    ';7891234567891;B99;1234567890456;12;01/03/2024;31/12/2026\n'
+  reply.header('Content-Type', 'text/csv; charset=utf-8')
+  reply.header(
+    'Content-Disposition',
+    'attachment; filename="modelo-lotes-controlados.csv"'
   )
   return reply.send(csv)
 }
