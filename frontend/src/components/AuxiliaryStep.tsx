@@ -1,8 +1,23 @@
 import { useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Check, ChevronDown, Download, Loader2, Upload, X } from 'lucide-react'
+import { Check, ChevronDown, Download, Eye, Loader2, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { productService } from '@/services/productService'
 import { FolderCollectPanel } from '@/components/FolderCollectPanel'
 import { formatNumber, cn } from '@/lib/utils'
@@ -35,7 +50,17 @@ export function AuxiliaryStep({
 }: AuxiliaryStepProps) {
   const [pendingEntity, setPendingEntity] = useState<AuxiliaryEntity | null>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [previewEntity, setPreviewEntity] = useState<AuxiliaryEntity | null>(null)
   const inputRefs = useRef<Partial<Record<AuxiliaryEntity, HTMLInputElement | null>>>({})
+
+  const previewUpload = previewEntity ? auxiliaries[previewEntity] : undefined
+  const previewLabel = ENTITIES.find((e) => e.entity === previewEntity)?.label ?? previewEntity
+
+  const previewQuery = useQuery({
+    queryKey: ['auxiliary-preview', previewUpload?.fileId],
+    queryFn: () => productService.previewAuxiliary(previewUpload!.fileId, 100),
+    enabled: Boolean(previewUpload?.fileId),
+  })
 
   const uploadMutation = useMutation({
     mutationFn: ({ entity, file }: { entity: AuxiliaryEntity; file: File }) =>
@@ -160,6 +185,20 @@ export function AuxiliaryStep({
                     }}
                   />
 
+                  {uploaded && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      aria-label={`Pré-visualizar ${label}`}
+                      title="Pré-visualizar CSV"
+                      onClick={() => setPreviewEntity(entity)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
+
                   <Button
                     type="button"
                     variant="ghost"
@@ -201,6 +240,83 @@ export function AuxiliaryStep({
           Continuar
         </Button>
       </div>
+
+      <Dialog
+        open={Boolean(previewEntity)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewEntity(null)
+        }}
+      >
+        <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-3 overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Prévia — {previewLabel}</DialogTitle>
+            <DialogDescription>
+              {previewUpload
+                ? `${previewUpload.fileName} · ${formatNumber(previewUpload.recordCount)} registro(s)`
+                : 'CSV auxiliar importado'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
+            {previewQuery.isLoading && (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Carregando prévia…
+              </div>
+            )}
+
+            {previewQuery.isError && (
+              <p className="px-4 py-8 text-center text-sm text-destructive">
+                {(previewQuery.error as Error)?.message || 'Não foi possível carregar a prévia.'}
+              </p>
+            )}
+
+            {previewQuery.data && (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {previewQuery.data.columns.map((col) => (
+                        <TableHead key={col} className="whitespace-nowrap">
+                          {col}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewQuery.data.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={Math.max(previewQuery.data.columns.length, 1)}
+                          className="text-center text-muted-foreground"
+                        >
+                          Arquivo sem linhas de dados.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      previewQuery.data.rows.map((row, idx) => (
+                        <TableRow key={idx}>
+                          {previewQuery.data!.columns.map((col) => (
+                            <TableCell key={col} className="max-w-[14rem] truncate font-mono text-xs">
+                              {row[col] ?? ''}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+                {previewQuery.data.truncated && (
+                  <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+                    Mostrando {formatNumber(previewQuery.data.rows.length)} de{' '}
+                    {formatNumber(previewQuery.data.totalRecords)} linhas.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

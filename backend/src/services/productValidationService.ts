@@ -17,6 +17,9 @@ import {
   isValidMigrationCode,
   isValidNcm,
   isValidProductName,
+  computeMarkupFromCustoVenda,
+  formatBrazilianDecimal,
+  markupMatchesSale,
   parseBrazilianNumber,
 } from '../utils/productFormats.js'
 import {
@@ -32,7 +35,7 @@ import {
 } from './auxiliaryService.js'
 import { getStoredFile, type StoredCsvFile } from './csvFileService.js'
 import { createRecordStream, normalizeRecord, resolveCsvOptions } from './csvService.js'
-import { padDcbCode } from './dcbIndexService.js'
+import { padDcbCode, lookupAnvisaDcb } from './dcbIndexService.js'
 import { fetchTmsDcbCatalog, type TmsDcbRecord } from './tmsService.js'
 
 export type IssueSeverity = 'error' | 'warning'
@@ -42,6 +45,16 @@ export interface ValidationIssue {
   field: string
   value: string
   message: string
+  severity: IssueSeverity
+  /** Categoria da checagem (ex.: markup_auto, invalid_format). */
+  checkId?: string
+}
+
+/** Checagem nomeada — sempre listada, mesmo com count 0 (“nenhum”). */
+export interface ValidationCheckSummaryItem {
+  id: string
+  label: string
+  count: number
   severity: IssueSeverity
 }
 
@@ -56,13 +69,161 @@ export interface ProductValidationResult {
   presentOptionalHeaders: string[]
   canProceed: boolean
   issues: ValidationIssue[]
+  /** Resumo do que foi pesquisado/validado (inclui zeros). */
+  checkSummary: ValidationCheckSummaryItem[]
   truncated: boolean
   columns: string[]
   rows: Record<string, string>[]
 }
 
-const MAX_ISSUES = 1000
+const MAX_ISSUES_PER_CHECK = 200
 const MAX_PREVIEW_ROWS = 5000
+
+/** Ordem fixa do checklist — o que o sistema realmente pesquisa. */
+const VALIDATION_CHECK_DEFS: Array<{
+  id: string
+  label: string
+  severity: IssueSeverity
+  match: (issue: ValidationIssue) => boolean
+}> = [
+  {
+    id: 'invalid_barcode',
+    label: 'Códigos de barras inválidos (EAN)',
+    severity: 'warning',
+    match: (i) =>
+      i.field === 'codigobarras' && i.message.toLowerCase().includes('dígito verificador'),
+  },
+  {
+    id: 'duplicate_codigo',
+    label: 'Códigos duplicados no arquivo',
+    severity: 'error',
+    match: (i) => i.field === 'codigo' && i.message.toLowerCase().includes('duplicado'),
+  },
+  {
+    id: 'invalid_codigo',
+    label: 'Códigos com letras (migração)',
+    severity: 'error',
+    match: (i) => i.field === 'codigo' && i.message.toLowerCase().includes('letras'),
+  },
+  {
+    id: 'controlado_incomplete',
+    label: 'Controlados incompletos (DCB / registro MS)',
+    severity: 'error',
+    match: (i) =>
+      (i.field === 'dcb' || i.field === 'registroms') &&
+      i.message.toLowerCase().includes('controlado'),
+  },
+  {
+    id: 'dcb_invalid',
+    label: 'DCB não encontrado (auxiliar / banco / Anvisa)',
+    severity: 'error',
+    match: (i) =>
+      i.field === 'dcb' &&
+      !i.message.toLowerCase().includes('controlado') &&
+      (i.message.toLowerCase().includes('não encontrado') ||
+        i.message.toLowerCase().includes('não foi possível validar')),
+  },
+  {
+    id: 'aux_ref_invalid',
+    label: 'Referências auxiliares inválidas',
+    severity: 'error',
+    match: (i) =>
+      ['codigogrupo', 'subgrupo', 'categoria', 'laboratorio', 'grupodepreco', 'similar'].includes(
+        i.field
+      ) ||
+      (['grupo', 'subgrupo', 'categoria', 'laboratorio', 'grupodepreco', 'similar'].includes(
+        i.field
+      ) &&
+        (i.message.toLowerCase().includes('não encontrado') ||
+          i.message.toLowerCase().includes('envie o arquivo auxiliar'))),
+  },
+  {
+    id: 'missing_required_header',
+    label: 'Colunas obrigatórias ausentes',
+    severity: 'error',
+    match: (i) => i.message.includes('Coluna obrigatória ausente'),
+  },
+  {
+    id: 'missing_required_field',
+    label: 'Campos obrigatórios em branco',
+    severity: 'error',
+    match: (i) => i.message.includes('Campo obrigatório não informado'),
+  },
+  {
+    id: 'invalid_format',
+    label: 'Formatos inválidos (nome, números, CFOP, NCM, S/N…)',
+    severity: 'error',
+    match: (i) =>
+      i.message.includes('Valor numérico inválido') ||
+      i.message.includes('número inteiro') ||
+      i.message.includes('CFOP') ||
+      i.message.includes('NCM') ||
+      i.message.includes('S ou N') ||
+      i.message.includes('A (ativo)') ||
+      i.message.includes('somente números') ||
+      i.message.includes('Opções:') ||
+      i.message.includes('Obrigatório quando medfciapop'),
+  },
+  {
+    id: 'aliquota_rules',
+    label: 'Regras de alíquota / ST / isento',
+    severity: 'error',
+    match: (i) =>
+      (i.field === 'aliquota' && !i.message.includes('padrão da UF')) ||
+      i.field === 'st' ||
+      i.message.includes('st e isento'),
+  },
+  {
+    id: 'aliquota_uf',
+    label: 'Alíquota divergente da UF do cliente',
+    severity: 'warning',
+    match: (i) => i.field === 'aliquota' && i.message.includes('padrão da UF'),
+  },
+  {
+    id: 'desconto_inconsistente',
+    label: 'Desconto fixo maior que o máximo',
+    severity: 'warning',
+    match: (i) => i.field === 'descontofixo',
+  },
+  {
+    id: 'markup_auto',
+    label: 'Markup recalculado (custo × venda)',
+    severity: 'warning',
+    match: (i) => i.field === 'markup' && i.severity === 'warning',
+  },
+  {
+    id: 'unknown_headers',
+    label: 'Colunas não reconhecidas no CSV',
+    severity: 'warning',
+    match: (i) => i.message.includes('não reconhecida'),
+  },
+  {
+    id: 'other',
+    label: 'Outras inconsistências',
+    severity: 'error',
+    match: () => true,
+  },
+]
+
+function classifyIssue(issue: ValidationIssue): string {
+  for (const def of VALIDATION_CHECK_DEFS) {
+    if (def.id === 'other') continue
+    if (def.match(issue)) return def.id
+  }
+  return 'other'
+}
+
+function buildCheckSummary(
+  categoryCounts: Map<string, number>
+): ValidationCheckSummaryItem[] {
+  return VALIDATION_CHECK_DEFS.filter((def) => def.id !== 'other' || (categoryCounts.get('other') ?? 0) > 0)
+    .map((def) => ({
+      id: def.id,
+      label: def.label,
+      count: categoryCounts.get(def.id) ?? 0,
+      severity: def.severity,
+    }))
+}
 
 const SN_FIELDS = [
   'atualizaestoque',
@@ -127,15 +288,56 @@ export const validateRowsBodySchema = z.object({
 export type ValidateProductInput = z.infer<typeof validateBodySchema>
 export type ValidateRowsInput = z.infer<typeof validateRowsBodySchema>
 
+type IssueCounters = {
+  errors: number
+  warnings: number
+  total: number
+  categories: Map<string, number>
+  /** Quantos detalhes foram guardados por checagem (para lista expansível). */
+  storedPerCheck: Map<string, number>
+}
+
+function createCounters(seed: ValidationIssue[] = []): IssueCounters {
+  const counters: IssueCounters = {
+    errors: 0,
+    warnings: 0,
+    total: 0,
+    categories: new Map(),
+    storedPerCheck: new Map(),
+  }
+  for (const issue of seed) {
+    counters.total++
+    if (issue.severity === 'error') counters.errors++
+    else counters.warnings++
+    const id = issue.checkId ?? classifyIssue(issue)
+    counters.categories.set(id, (counters.categories.get(id) ?? 0) + 1)
+    counters.storedPerCheck.set(id, (counters.storedPerCheck.get(id) ?? 0) + 1)
+  }
+  return counters
+}
+
 function pushIssue(
   issues: ValidationIssue[],
-  counters: { errors: number; warnings: number; total: number },
+  counters: IssueCounters,
   issue: ValidationIssue
 ) {
   counters.total++
   if (issue.severity === 'error') counters.errors++
   else counters.warnings++
-  if (issues.length < MAX_ISSUES) issues.push(issue)
+  const checkId = classifyIssue(issue)
+  counters.categories.set(checkId, (counters.categories.get(checkId) ?? 0) + 1)
+  const storedForCheck = counters.storedPerCheck.get(checkId) ?? 0
+  if (storedForCheck < MAX_ISSUES_PER_CHECK) {
+    issues.push({ ...issue, checkId })
+    counters.storedPerCheck.set(checkId, storedForCheck + 1)
+  }
+}
+
+function isIssueListTruncated(counters: IssueCounters): boolean {
+  for (const [id, count] of counters.categories) {
+    if (count > (counters.storedPerCheck.get(id) ?? 0)) return true
+  }
+  return false
 }
 
 function cell(record: Record<string, string>, field: string): string {
@@ -184,13 +386,18 @@ async function resolveAuxiliaryCatalogs(
   return { catalogs, loadIssues }
 }
 
-/** Códigos Anvisa da base validada (controlados.txt) existem na tabela DCB do TMS, não no CSV auxiliar. */
+/** DCB no banco (tabela DCB do TMS). */
 function dcbExistsInTms(value: string, tmsDcb: Map<string, TmsDcbRecord> | null): boolean {
   if (!tmsDcb || tmsDcb.size === 0) return false
   const padded = padDcbCode(value)
   if (tmsDcb.has(padded) || tmsDcb.has(value)) return true
   const asNumber = String(Number(value))
   return asNumber !== 'NaN' && tmsDcb.has(asNumber)
+}
+
+/** Código Anvisa da base validada (CMED / controlados) — usado pela sugestão de controlados. */
+function dcbExistsInAnvisaIndex(value: string): boolean {
+  return lookupAnvisaDcb(value) !== null
 }
 
 async function loadTmsDcbForValidation(): Promise<Map<string, TmsDcbRecord> | null> {
@@ -207,7 +414,7 @@ function validateAuxiliaryRefs(
   columns: Set<string>,
   catalogs: AuxiliaryCatalogs,
   issues: ValidationIssue[],
-  counters: { errors: number; warnings: number; total: number },
+  counters: IssueCounters,
   tmsDcb: Map<string, TmsDcbRecord> | null = null
 ) {
   for (const [field, entity] of Object.entries(FIELD_TO_AUXILIARY)) {
@@ -225,26 +432,28 @@ function validateAuxiliaryRefs(
 
     const catalog = catalogs[entity]
 
-    // DCB da base validada = código Anvisa → resolve na tabela DCB do TMS.
+    // DCB: auxiliar OU tabela do banco OU código Anvisa (CMED).
+    // A sugestão de controlados preenche Anvisa — não exige dcb.csv.
     if (field === 'dcb') {
       if (catalog?.has(value) || catalog?.has(String(Number(value)))) continue
       if (dcbExistsInTms(value, tmsDcb)) continue
+      if (dcbExistsInAnvisaIndex(value)) continue
       if (catalog) {
         pushIssue(issues, counters, {
           row: rowNumber,
           field,
           value,
           message: tmsDcb
-            ? `dcb "${value}" não encontrado no arquivo auxiliar nem na tabela DCB do banco.`
-            : `dcb "${value}" não encontrado no arquivo auxiliar.`,
+            ? `dcb "${value}" não encontrado no auxiliar, na tabela DCB do banco nem na base Anvisa.`
+            : `dcb "${value}" não encontrado no arquivo auxiliar nem na base Anvisa (CMED).`,
           severity: 'error',
         })
-      } else if (!tmsDcb) {
+      } else if (tmsDcb) {
         pushIssue(issues, counters, {
           row: rowNumber,
           field,
           value,
-          message: `Arquivo auxiliar de dcb não enviado e banco indisponível — não foi possível validar o id ${value}.`,
+          message: `dcb "${value}" não encontrado na tabela DCB do banco nem na base Anvisa.`,
           severity: 'error',
         })
       } else {
@@ -252,7 +461,7 @@ function validateAuxiliaryRefs(
           row: rowNumber,
           field,
           value,
-          message: `dcb "${value}" não encontrado na tabela DCB do banco.`,
+          message: `Arquivo auxiliar de dcb não enviado e banco indisponível — não foi possível validar o id ${value}.`,
           severity: 'error',
         })
       }
@@ -290,7 +499,7 @@ function validateRow(
   columns: Set<string>,
   catalogs: AuxiliaryCatalogs,
   issues: ValidationIssue[],
-  counters: { errors: number; warnings: number; total: number },
+  counters: IssueCounters,
   tmsDcb: Map<string, TmsDcbRecord> | null = null,
   clientUf?: string
 ) {
@@ -360,15 +569,6 @@ function validateRow(
       severity: 'error',
     })
   }
-  if (!isBlank(markupRaw) && markup === null) {
-    pushIssue(issues, counters, {
-      row: rowNumber,
-      field: 'markup',
-      value: markupRaw,
-      message: 'Valor numérico inválido.',
-      severity: 'error',
-    })
-  }
   if (!isBlank(vendaRaw) && venda === null) {
     pushIssue(issues, counters, {
       row: rowNumber,
@@ -378,6 +578,44 @@ function validateRow(
       severity: 'error',
     })
   }
+
+  const computedMarkup =
+    custo !== null && venda !== null ? computeMarkupFromCustoVenda(custo, venda) : null
+  const markupBlank = isBlank(markupRaw)
+  const markupInvalid = !markupBlank && markup === null
+  const markupMismatch =
+    markup !== null &&
+    custo !== null &&
+    venda !== null &&
+    !markupMatchesSale(custo, markup, venda)
+
+  if (computedMarkup !== null && (markupBlank || markupInvalid || markupMismatch)) {
+    const formatted = formatBrazilianDecimal(computedMarkup)
+    record.markup = formatted
+    const reason = markupBlank
+      ? 'Markup vazio'
+      : markupInvalid
+        ? 'Markup inválido'
+        : 'Markup inconsistente com custo/venda'
+    pushIssue(issues, counters, {
+      row: rowNumber,
+      field: 'markup',
+      value: markupRaw,
+      message: `${reason} — recalculado para ${formatted} (venda = custo × (1 + markup/100)).`,
+      severity: 'warning',
+    })
+  } else if (markupBlank || markupInvalid) {
+    pushIssue(issues, counters, {
+      row: rowNumber,
+      field: 'markup',
+      value: markupRaw,
+      message: markupBlank
+        ? 'Markup não informado e não foi possível recalcular (informe custo e venda válidos, custo ≠ 0).'
+        : 'Valor numérico inválido e não foi possível recalcular (informe custo e venda válidos, custo ≠ 0).',
+      severity: 'error',
+    })
+  }
+
   if (!isBlank(fatorRaw) && parseBrazilianNumber(fatorRaw) === null) {
     pushIssue(issues, counters, {
       row: rowNumber,
@@ -475,7 +713,7 @@ function validateRow(
         field: 'codigobarras',
         value: ean,
         message: 'Código de barras inválido (dígito verificador EAN não confere).',
-        severity: 'error',
+        severity: 'warning',
       })
     }
   }
@@ -622,8 +860,11 @@ function validateRow(
 }
 
 function finalizeResult(
-  base: Omit<ProductValidationResult, 'errorCount' | 'warningCount' | 'canProceed' | 'truncated'> & {
-    counters: { errors: number; warnings: number; total: number }
+  base: Omit<
+    ProductValidationResult,
+    'errorCount' | 'warningCount' | 'canProceed' | 'truncated' | 'checkSummary'
+  > & {
+    counters: IssueCounters
   }
 ): ProductValidationResult {
   return {
@@ -637,7 +878,8 @@ function finalizeResult(
     presentOptionalHeaders: base.presentOptionalHeaders,
     canProceed: base.counters.errors === 0,
     issues: base.issues,
-    truncated: base.counters.total > base.issues.length,
+    checkSummary: buildCheckSummary(base.counters.categories),
+    truncated: isIssueListTruncated(base.counters),
     columns: base.columns,
     rows: base.rows,
   }
@@ -656,12 +898,11 @@ export async function validateProductCsv(
     hasHeader: true,
   })
 
-  const issues: ValidationIssue[] = [...loadIssues]
-  const counters = {
-    errors: loadIssues.filter((i) => i.severity === 'error').length,
-    warnings: loadIssues.filter((i) => i.severity === 'warning').length,
-    total: loadIssues.length,
-  }
+  const issues: ValidationIssue[] = loadIssues.map((issue) => ({
+    ...issue,
+    checkId: issue.checkId ?? classifyIssue(issue),
+  }))
+  const counters = createCounters(issues)
 
   let columns: string[] = []
   let totalRecords = 0
@@ -727,10 +968,6 @@ export async function validateProductCsv(
     totalRecords++
     const rowNumber = totalRecords + 1
 
-    if (rows.length < MAX_PREVIEW_ROWS) {
-      rows.push({ ...record })
-    }
-
     if (missingRequiredHeaders.length === 0) {
       validateRow(
         record,
@@ -742,6 +979,15 @@ export async function validateProductCsv(
         tmsDcb,
         input.clientUf
       )
+      if (record.markup !== undefined && !columnSet.has('markup')) {
+        columnSet.add('markup')
+        const custoIdx = columns.indexOf('custo')
+        columns.splice(custoIdx >= 0 ? custoIdx + 1 : columns.length, 0, 'markup')
+      }
+    }
+
+    if (rows.length < MAX_PREVIEW_ROWS) {
+      rows.push({ ...record })
     }
 
     const codigo = cell(record, 'codigo').trim()
@@ -792,12 +1038,11 @@ export async function validateProductRows(
   const { catalogs, loadIssues } = await resolveAuxiliaryCatalogs(input.auxiliary)
   const tmsDcb = await loadTmsDcbForValidation()
 
-  const issues: ValidationIssue[] = [...loadIssues]
-  const counters = {
-    errors: loadIssues.filter((i) => i.severity === 'error').length,
-    warnings: loadIssues.filter((i) => i.severity === 'warning').length,
-    total: loadIssues.length,
-  }
+  const issues: ValidationIssue[] = loadIssues.map((issue) => ({
+    ...issue,
+    checkId: issue.checkId ?? classifyIssue(issue),
+  }))
+  const counters = createCounters(issues)
 
   if (!catalogs.grupo) {
     pushIssue(issues, counters, {
@@ -809,7 +1054,7 @@ export async function validateProductRows(
     })
   }
 
-  const columns = input.rows[0] ? Object.keys(input.rows[0]) : [...REQUIRED_HEADERS]
+  let columns = input.rows[0] ? Object.keys(input.rows[0]) : [...REQUIRED_HEADERS]
   const columnSet = new Set(columns)
   const seenCodes = new Map<string, number>()
   const rows = input.rows.map((row) => ({ ...row }))
@@ -826,6 +1071,13 @@ export async function validateProductRows(
       tmsDcb,
       input.clientUf
     )
+
+    if (record.markup !== undefined && !columnSet.has('markup')) {
+      columnSet.add('markup')
+      const custoIdx = columns.indexOf('custo')
+      columns = [...columns]
+      columns.splice(custoIdx >= 0 ? custoIdx + 1 : columns.length, 0, 'markup')
+    }
 
     const codigo = cell(record, 'codigo').trim()
     if (codigo && isValidMigrationCode(codigo)) {

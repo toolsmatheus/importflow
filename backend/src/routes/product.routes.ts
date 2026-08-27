@@ -10,6 +10,7 @@ import {
   getSendJobHandler,
   identifyServerHandler,
   pauseSendJobHandler,
+  previewAuxiliaryHandler,
   resumeSendJobHandler,
   retryFailedSendJobHandler,
   startSendJobHandler,
@@ -25,6 +26,7 @@ export async function productRoutes(app: FastifyInstance) {
   app.get('/products/catalog', getProductFieldCatalogHandler)
   app.get('/products/folder-expect', getFolderExpectHandler)
   app.post('/products/collect-folder', collectFolderHandler)
+  app.get('/products/auxiliary/preview/:fileId', previewAuxiliaryHandler)
   app.post('/products/auxiliary/:entity', uploadAuxiliaryHandler)
   app.post('/products/validate', validateProductHandler)
   app.post('/products/validate-rows', validateProductRowsHandler)

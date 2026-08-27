@@ -11,7 +11,7 @@ import {
   buildTemplateCsvContent,
   type AuxiliaryEntity,
 } from '../schemas/product.schema.js'
-import { loadAuxiliaryCatalog } from '../services/auxiliaryService.js'
+import { loadAuxiliaryCatalog, previewAuxiliaryCsv } from '../services/auxiliaryService.js'
 import { getStoredFile, saveUploadedFile } from '../services/csvFileService.js'
 import {
   validateBodySchema,
@@ -88,8 +88,11 @@ export async function getProductFieldCatalogHandler(
     rules: {
       controladoSemDcb: 'bloqueia',
       controladoSemRegistroMs: 'bloqueia',
-      markupInconsistente: 'alerta',
+      markupInconsistente:
+        'alerta + recalcula markup = ((venda/custo)-1)*100 quando vazio ou inconsistente',
       aliquotaZeroStIsento: 'bloqueia (exatamente uma de st/isento = S)',
+      cfopAuto:
+        'CFOP opcional no CSV; no envio: ST→5405; não ST e alíquota>0→5102; alíquota 0 exige ST ou isento',
       aliquotaPercent: 'se não existir em AliquotaICMS, cria tipICMS/alSAIDA',
       unidadeEstoque: 'sempre UN no banco (coluna unidade do CSV ignorada)',
     },
@@ -138,6 +141,27 @@ export async function uploadAuxiliaryHandler(request: FastifyRequest, reply: Fas
   } catch (error) {
     request.log.error({ err: error, entity }, 'Auxiliary upload failed')
     return reply.status(500).send({ success: false, message: 'Erro ao processar o arquivo auxiliar.' })
+  }
+}
+
+export async function previewAuxiliaryHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { fileId } = request.params as { fileId: string }
+  const query = request.query as { limit?: string }
+  const limit = query.limit ? Number(query.limit) : 100
+
+  const file = getStoredFile(fileId)
+  if (!file) {
+    return reply
+      .status(404)
+      .send({ success: false, message: 'Arquivo não encontrado. Faça o upload novamente.' })
+  }
+
+  try {
+    const preview = await previewAuxiliaryCsv(file, Number.isFinite(limit) ? limit : 100)
+    return reply.send(preview)
+  } catch (error) {
+    request.log.error({ err: error, fileId }, 'Auxiliary preview failed')
+    return reply.status(500).send({ success: false, message: 'Erro ao pré-visualizar o arquivo auxiliar.' })
   }
 }
 

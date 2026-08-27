@@ -74,11 +74,17 @@ export function FolderCollectPanel({
           toast.error('Nenhum CSV auxiliar encontrado na pasta')
           return
         }
-        toast.success(
-          `Coletados ${auxCount} auxiliar(es)${
-            missingAux.length ? `. Faltando: ${missingAux.join(', ')}` : ''
-          }`
-        )
+        if (result.products) {
+          toast.success(
+            `${auxCount} auxiliar(es) coletado(s). produtos.csv detectado — será usado na etapa Produtos.`
+          )
+        } else {
+          toast.success(
+            `Coletados ${auxCount} auxiliar(es)${
+              missingAux.length ? `. Faltando: ${missingAux.join(', ')}` : ''
+            }`
+          )
+        }
         return
       }
 

@@ -94,3 +94,14 @@ export function markupMatchesSale(custo: number, markup: number, venda: number):
   const expected = custo * (1 + markup / 100)
   return Math.abs(expected - venda) <= 0.01
 }
+
+/** markup% a partir de custo e venda: ((venda / custo) - 1) * 100 */
+export function computeMarkupFromCustoVenda(custo: number, venda: number): number | null {
+  if (!Number.isFinite(custo) || !Number.isFinite(venda) || custo === 0) return null
+  return ((venda / custo) - 1) * 100
+}
+
+export function formatBrazilianDecimal(value: number, decimals = 2): string {
+  const rounded = Number(value.toFixed(decimals))
+  return rounded.toFixed(decimals).replace('.', ',')
+}

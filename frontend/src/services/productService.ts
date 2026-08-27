@@ -1,4 +1,5 @@
 import type {
+  AuxiliaryCsvPreview,
   AuxiliaryEntity,
   AuxiliaryUploadResult,
   ControladoSuggestResult,
@@ -33,6 +34,15 @@ export const productService = {
     const data = await response.json()
     if (!response.ok) throw new Error(data?.message ?? `Erro ao enviar ${entity}.csv`)
     return data as AuxiliaryUploadResult
+  },
+
+  async previewAuxiliary(fileId: string, limit = 100): Promise<AuxiliaryCsvPreview> {
+    const response = await fetch(
+      `/api/products/auxiliary/preview/${encodeURIComponent(fileId)}?limit=${limit}`
+    )
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Erro ao pré-visualizar o auxiliar')
+    return data as AuxiliaryCsvPreview
   },
 
   async validate(

@@ -1,4 +1,4 @@
-import { parseBrazilianNumber, isBlank } from '../utils/productFormats.js'
+import { parseBrazilianNumber, isBlank, computeMarkupFromCustoVenda, markupMatchesSale } from '../utils/productFormats.js'
 import { lookupAnvisaDcbByDescricao, padDcbCode } from './dcbIndexService.js'
 
 /** Catálogos TMS usados para montar refs `@xdata.ref` no insert de produto. */
@@ -310,10 +310,10 @@ function resolveDcbId(
 }
 
 /**
- * Regras fiscais:
- * - aliquota ≠ 0 → CFOP 5102, csticmsnormal cic00, csticms cic102
+ * Regras fiscais (CFOP não vem do CSV):
  * - ST (st=S) → CFOP 5405, csticmsnormal cic60, csticms cic500
- * - Isento (isento=S) → csticmsnormal cic40
+ * - Não ST e alíquota > 0 → CFOP 5102, csticmsnormal cic00, csticms cic102
+ * - Alíquota 0 → exige ST ou isento (validação); isento → csticmsnormal cic40
  */
 function resolveFiscalOverrides(row: Record<string, string>): {
   cfopCode?: string
@@ -324,19 +324,19 @@ function resolveFiscalOverrides(row: Record<string, string>): {
   const isSt = str(row.st)?.toUpperCase() === 'S'
   const isIsento = str(row.isento)?.toUpperCase() === 'S'
 
-  if (aliquota !== undefined && aliquota !== 0) {
-    return {
-      cfopCode: '5102',
-      csticmsnormal: 'cic00',
-      csticms: 'cic102',
-    }
-  }
-
   if (isSt) {
     return {
       cfopCode: '5405',
       csticmsnormal: 'cic60',
       csticms: 'cic500',
+    }
+  }
+
+  if (aliquota !== undefined && aliquota > 0) {
+    return {
+      cfopCode: '5102',
+      csticmsnormal: 'cic00',
+      csticms: 'cic102',
     }
   }
 
@@ -400,7 +400,7 @@ export function mapCsvRowToProductPayload(
   const dcb = resolveDcbId(row, catalogs)
 
   const fiscal = resolveFiscalOverrides(row)
-  const cfopCode = fiscal.cfopCode ?? str(row.cfop)
+  const cfopCode = fiscal.cfopCode
   let cfopId: number | undefined
   if (cfopCode) {
     cfopId = catalogs.cfopByCode.get(cfopCode)
@@ -417,8 +417,17 @@ export function mapCsvRowToProductPayload(
 
   const { cstpis, cstcofins } = mapCstPisCofins(row.cstpiscofins)
   const codigoMigracao = str(row.codigo)
-  const margemLucro = num(row.markup)
   const valorvenda = num(row.venda)
+  let margemLucro = num(row.markup)
+  if (valorvenda !== undefined) {
+    const computed = computeMarkupFromCustoVenda(valorCusto, valorvenda)
+    if (
+      computed !== null &&
+      (margemLucro === undefined || !markupMatchesSale(valorCusto, margemLucro, valorvenda))
+    ) {
+      margemLucro = Math.round(computed * 100) / 100
+    }
+  }
   const fator = num(row.fator) ?? 1
 
   const payload: Record<string, unknown> = {

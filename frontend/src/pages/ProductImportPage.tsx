@@ -12,7 +12,6 @@ import { ErrorsStep } from '@/components/ErrorsStep'
 import { PreviewStep } from '@/components/PreviewStep'
 import { SendStep } from '@/components/SendStep'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -56,6 +55,9 @@ function applyAliquotaFixToResult(
       0,
       result.warningCount - Math.max(removed.length, mismatch.mismatches.length)
     ),
+    checkSummary: result.checkSummary?.map((check) =>
+      check.id === 'aliquota_uf' ? { ...check, count: 0 } : check
+    ),
   }
 }
 
@@ -64,6 +66,8 @@ export function ProductImportPage() {
   const wizard = useImportWizard()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [inputMode, setInputMode] = useState<FileInputMode>('manual')
+  const [showChangeSource, setShowChangeSource] = useState(false)
+  const [productFromFolder, setProductFromFolder] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<UploadAnalyzeProgress | null>(null)
 
   const selectedUfEntry = getUfIcms(wizard.clientUf)
@@ -89,6 +93,8 @@ export function ProductImportPage() {
       wizard.setValidationResult(null)
       wizard.setPreviewRows([])
       wizard.setSendJob(null)
+      setProductFromFolder(false)
+      setShowChangeSource(false)
       toast.success(
         `Arquivo analisado: ${formatNumber(analysis.recordCount)} registro(s), ${analysis.columnCount} coluna(s)`
       )
@@ -142,8 +148,11 @@ export function ProductImportPage() {
     if (result.products) {
       wizard.setCsvAnalysis(result.products)
       setSelectedFile(null)
-    } else {
+      setProductFromFolder(true)
+      setShowChangeSource(false)
+    } else if (showChangeSource) {
       wizard.setCsvAnalysis(null)
+      setProductFromFolder(false)
     }
 
     wizard.replaceAuxiliaries({
@@ -153,6 +162,21 @@ export function ProductImportPage() {
     wizard.setValidationResult(null)
     wizard.setPreviewRows([])
     wizard.setSendJob(null)
+  }
+
+  const applyFolderFromAuxiliary = (result: FolderCollectResult) => {
+    wizard.replaceAuxiliaries({
+      ...wizard.auxiliaries,
+      ...result.auxiliaries,
+    })
+    if (result.products) {
+      wizard.setCsvAnalysis(result.products)
+      setProductFromFolder(true)
+      setShowChangeSource(false)
+      wizard.setValidationResult(null)
+      wizard.setPreviewRows([])
+      wizard.setSendJob(null)
+    }
   }
 
   const handleFixAliquotas = () => {
@@ -182,6 +206,8 @@ export function ProductImportPage() {
           onClick={() => {
             wizard.resetWizard()
             setSelectedFile(null)
+            setShowChangeSource(false)
+            setProductFromFolder(false)
             toast.message('Importação reiniciada')
           }}
         >
@@ -196,84 +222,93 @@ export function ProductImportPage() {
         <AuxiliaryStep
           auxiliaries={wizard.auxiliaries}
           onUploaded={wizard.setAuxiliary}
-          onFolderCollected={(result) => {
-            wizard.replaceAuxiliaries({
-              ...wizard.auxiliaries,
-              ...result.auxiliaries,
-            })
-          }}
+          onFolderCollected={applyFolderFromAuxiliary}
           onContinue={() => wizard.setCurrentStep('file')}
         />
       )}
 
       {wizard.currentStep === 'file' && (
-        <div className="space-y-5">
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            <Button
-              size="sm"
-              variant={inputMode === 'manual' ? 'secondary' : 'ghost'}
-              className="h-8"
-              onClick={() => setInputMode('manual')}
-            >
-              Manual
-            </Button>
-            <Button
-              size="sm"
-              variant={inputMode === 'folder' ? 'secondary' : 'ghost'}
-              className="h-8"
-              onClick={() => setInputMode('folder')}
-            >
-              Pasta
-            </Button>
-          </div>
-
-          {inputMode === 'manual' ? (
-            <FileDropzone
-              onFileSelect={handleFileSelect}
-              isLoading={uploadMutation.isPending}
-              progress={uploadProgress}
-              selectedFile={selectedFile}
+        <div className="space-y-4">
+          {wizard.csvAnalysis && !showChangeSource ? (
+            <FileInfo
+              analysis={wizard.csvAnalysis}
+              sourceHint={productFromFolder ? 'coletado da pasta' : undefined}
+              onChange={() => {
+                setShowChangeSource(true)
+                setInputMode(productFromFolder ? 'folder' : 'manual')
+              }}
             />
           ) : (
-            <FolderCollectPanel onCollected={handleFolderCollected} />
+            <>
+              <div className="inline-flex rounded-md border border-border p-0.5">
+                <Button
+                  size="sm"
+                  variant={inputMode === 'manual' ? 'secondary' : 'ghost'}
+                  className="h-8"
+                  onClick={() => setInputMode('manual')}
+                >
+                  Manual
+                </Button>
+                <Button
+                  size="sm"
+                  variant={inputMode === 'folder' ? 'secondary' : 'ghost'}
+                  className="h-8"
+                  onClick={() => setInputMode('folder')}
+                >
+                  Pasta
+                </Button>
+              </div>
+
+              {inputMode === 'manual' ? (
+                <FileDropzone
+                  onFileSelect={handleFileSelect}
+                  isLoading={uploadMutation.isPending}
+                  progress={uploadProgress}
+                  selectedFile={selectedFile}
+                />
+              ) : (
+                <FolderCollectPanel onCollected={handleFolderCollected} />
+              )}
+
+              {showChangeSource && wizard.csvAnalysis ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => setShowChangeSource(false)}
+                >
+                  Manter {wizard.csvAnalysis.fileName}
+                </Button>
+              ) : null}
+            </>
           )}
 
-          {wizard.csvAnalysis && <FileInfo analysis={wizard.csvAnalysis} />}
+          <div className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium">UF do cliente</p>
+              <p className="text-xs text-muted-foreground">
+                Alíquota ICMS esperada
+                {selectedUfEntry
+                  ? `: ${formatAliquotaCsv(selectedUfEntry.aliquota)}%`
+                  : ' — selecione antes de validar'}
+              </p>
+            </div>
+            <Select value={wizard.clientUf || undefined} onValueChange={wizard.setClientUf}>
+              <SelectTrigger id="client-uf" className="w-full sm:w-52">
+                <SelectValue placeholder="Selecione a UF" />
+              </SelectTrigger>
+              <SelectContent>
+                {UF_ICMS_TABLE.map((entry) => (
+                  <SelectItem key={entry.uf} value={entry.uf}>
+                    {entry.uf} — {entry.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Estado (UF) do cliente</CardTitle>
-              <CardDescription>
-                Usado na validação da coluna aliquota (quando &gt; 0). Obrigatório antes de
-                validar.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Select value={wizard.clientUf || undefined} onValueChange={wizard.setClientUf}>
-                <SelectTrigger id="client-uf" className="w-full sm:max-w-md">
-                  <SelectValue placeholder="Selecione a UF da loja / cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {UF_ICMS_TABLE.map((entry) => (
-                    <SelectItem key={entry.uf} value={entry.uf}>
-                      {entry.uf} — {entry.name} ({formatAliquotaCsv(entry.aliquota)}%)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedUfEntry ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Alíquota ICMS esperada:{' '}
-                  <span className="font-medium text-foreground">
-                    {formatAliquotaCsv(selectedUfEntry.aliquota)}%
-                  </span>
-                  {selectedUfEntry.note ? ` · ${selectedUfEntry.note}` : ''}
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-between">
+          <div className="flex justify-between pt-1">
             <Button
               variant="outline"
               onClick={() => wizard.setCurrentStep('auxiliary')}
@@ -344,10 +379,13 @@ export function ProductImportPage() {
           job={wizard.sendJob}
           onJobChange={wizard.setSendJob}
           auxiliary={wizard.auxiliaryFileIds}
+          validationResult={wizard.validationResult}
           onBack={() => wizard.setCurrentStep('preview')}
           onFinish={() => {
             wizard.resetWizard()
             setSelectedFile(null)
+            setShowChangeSource(false)
+            setProductFromFolder(false)
             navigate('/import/produtos')
             toast.success('Produtos concluídos. Opcionais ficam na aba Opcionais.')
           }}

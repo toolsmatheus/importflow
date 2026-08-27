@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -20,9 +20,18 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  buildSendCheckSummary,
+  InconsistencyChecksPanel,
+} from '@/components/InconsistencyChecksPanel'
 import { productService } from '@/services/productService'
 import { formatNumber } from '@/lib/utils'
-import type { AuxiliaryEntity, SendJobSnapshot, SendMode } from '@/types'
+import type {
+  AuxiliaryEntity,
+  ProductValidationResult,
+  SendJobSnapshot,
+  SendMode,
+} from '@/types'
 
 interface SendStepProps {
   rows: Record<string, string>[]
@@ -34,6 +43,7 @@ interface SendStepProps {
   onBack: () => void
   onFinish: () => void
   auxiliary?: Partial<Record<AuxiliaryEntity, string>>
+  validationResult?: ProductValidationResult | null
 }
 
 function formatDuration(ms: number) {
@@ -52,6 +62,7 @@ export function SendStep({
   onBack,
   onFinish,
   auxiliary,
+  validationResult,
 }: SendStepProps) {
   const [idFilialPreview, setIdFilialPreview] = useState<number | null>(null)
   const [versaoPreview, setVersaoPreview] = useState<string | null>(null)
@@ -60,6 +71,11 @@ export function SendStep({
 
   const active =
     job?.status === 'running' || job?.status === 'queued' || job?.status === 'paused'
+
+  const sendChecks = useMemo(
+    () => (job ? buildSendCheckSummary(job) : []),
+    [job]
+  )
 
   useEffect(() => {
     if (!job || !['running', 'queued', 'paused'].includes(job.status)) return
@@ -241,6 +257,16 @@ export function SendStep({
         </CardContent>
       </Card>
 
+      {(validationResult?.checkSummary?.length ?? 0) > 0 && (
+        <InconsistencyChecksPanel
+          checks={validationResult!.checkSummary!}
+          issues={validationResult?.issues}
+          title="Checagens da validação (antes do envio)"
+          description="O que foi pesquisado no CSV — ex.: códigos de barras inválidos ficam explícitos mesmo quando o resultado é nenhum."
+          truncated={validationResult?.truncated}
+        />
+      )}
+
       {job && (
         <Card>
           <CardHeader>
@@ -372,6 +398,14 @@ export function SendStep({
               </Badge>
               <Badge variant="outline">{job.percent}%</Badge>
             </div>
+
+            {job.processed > 0 && (
+              <InconsistencyChecksPanel
+                checks={sendChecks}
+                title="Checagens do envio ao banco"
+                description="O que o envio pesquisou no destino — duplicados, avisos e falhas — mesmo quando o resultado é nenhum."
+              />
+            )}
 
             {job.mode === 'simulate' && finished && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">

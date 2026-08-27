@@ -30,6 +30,14 @@ export interface ValidationIssue {
   value: string
   message: string
   severity: IssueSeverity
+  checkId?: string
+}
+
+export interface ValidationCheckSummaryItem {
+  id: string
+  label: string
+  count: number
+  severity: IssueSeverity
 }
 
 export interface ProductValidationResult {
@@ -43,6 +51,8 @@ export interface ProductValidationResult {
   presentOptionalHeaders: string[]
   canProceed: boolean
   issues: ValidationIssue[]
+  /** Resumo do que foi pesquisado (inclui zeros → “nenhum”). */
+  checkSummary?: ValidationCheckSummaryItem[]
   truncated: boolean
   columns: string[]
   rows: Record<string, string>[]
@@ -55,6 +65,15 @@ export interface AuxiliaryUploadResult {
   fileSize: number
   recordCount: number
   parseWarnings: string[]
+}
+
+export interface AuxiliaryCsvPreview {
+  fileId: string
+  fileName: string
+  columns: string[]
+  rows: Record<string, string>[]
+  totalRecords: number
+  truncated: boolean
 }
 
 export interface ProductFieldCatalog {
@@ -71,6 +90,7 @@ export interface ProductFieldCatalog {
     controladoSemRegistroMs?: string
     markupInconsistente: string
     aliquotaZeroStIsento?: string
+    cfopAuto?: string
     aliquotaPercent?: string
     unidadeEstoque?: string
   }

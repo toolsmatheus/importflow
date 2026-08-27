@@ -14,7 +14,9 @@ import type { AuxiliaryEntity, ControladoSuggestion, ControladoSuggestResult } f
 interface ControladoSuggestPanelProps {
   rows: Record<string, string>[]
   auxiliary: Partial<Record<AuxiliaryEntity, string>>
-  onApply: (nextRows: Record<string, string>[]) => void
+  /** Só consulta/visualiza — não aplica alterações nas linhas. */
+  readOnly?: boolean
+  onApply?: (nextRows: Record<string, string>[]) => void
 }
 
 const KIND_LABEL: Record<ControladoSuggestion['kind'], string> = {
@@ -23,7 +25,12 @@ const KIND_LABEL: Record<ControladoSuggestion['kind'], string> = {
   confirm: 'Confirmar',
 }
 
-export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoSuggestPanelProps) {
+export function ControladoSuggestPanel({
+  rows,
+  auxiliary,
+  readOnly = false,
+  onApply,
+}: ControladoSuggestPanelProps) {
   const [result, setResult] = useState<ControladoSuggestResult | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
 
@@ -34,10 +41,14 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
       }),
     onSuccess: (data) => {
       setResult(data)
-      const defaults = new Set(
-        data.suggestions.filter((s) => s.kind === 'empty').map((s) => s.rowIndex)
-      )
-      setSelected(defaults)
+      if (!readOnly) {
+        const defaults = new Set(
+          data.suggestions.filter((s) => s.kind === 'empty').map((s) => s.rowIndex)
+        )
+        setSelected(defaults)
+      } else {
+        setSelected(new Set())
+      }
       if (!data.available) {
         toast.warning(data.message ?? 'Sugestão indisponível')
       } else if (data.suggestions.length === 0) {
@@ -61,6 +72,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
   }, [result])
 
   const toggle = (rowIndex: number) => {
+    if (readOnly) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(rowIndex)) next.delete(rowIndex)
@@ -82,6 +94,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
   const clearSelection = () => setSelected(new Set())
 
   const applySelected = () => {
+    if (readOnly || !onApply) return
     if (!result || selected.size === 0) {
       toast.message('Selecione ao menos uma sugestão')
       return
@@ -121,8 +134,9 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
           Sugestão de controlados (CMED + Portaria 344)
         </CardTitle>
         <CardDescription>
-          Apenas sugestão: confira e aplique em todas ou só nas marcadas. Nada é gravado até você
-          aplicar. DCB da base validada usa a tabela DCB do banco; o auxiliar dcb.csv cobre o restante.
+          {readOnly
+            ? 'Somente consulta: compare o CSV com a CMED. Diferenças devem ser corrigidas na origem dos dados.'
+            : 'Apenas sugestão: confira e aplique em todas ou só nas marcadas. Nada é gravado até você aplicar. DCB da base validada usa a tabela DCB do banco; o auxiliar dcb.csv cobre o restante.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -136,7 +150,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
             {suggestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Buscar sugestões
           </Button>
-          {result?.available && result.suggestions.length > 0 && (
+          {!readOnly && result?.available && result.suggestions.length > 0 && (
             <>
               <Button variant="outline" size="sm" onClick={selectAll}>
                 Marcar todas
@@ -172,7 +186,7 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10" />
+                  {!readOnly && <TableHead className="w-10" />}
                   <TableHead>Linha</TableHead>
                   <TableHead>Produto</TableHead>
                   <TableHead>Tipo</TableHead>
@@ -184,13 +198,15 @@ export function ControladoSuggestPanel({ rows, auxiliary, onApply }: ControladoS
               <TableBody>
                 {result.suggestions.map((s) => (
                   <TableRow key={s.rowIndex}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(s.rowIndex)}
-                        onCheckedChange={() => toggle(s.rowIndex)}
-                        aria-label={`Selecionar linha ${s.row}`}
-                      />
-                    </TableCell>
+                    {!readOnly && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(s.rowIndex)}
+                          onCheckedChange={() => toggle(s.rowIndex)}
+                          aria-label={`Selecionar linha ${s.row}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-mono text-xs">{s.row}</TableCell>
                     <TableCell className="max-w-[180px] truncate text-sm" title={s.nome}>
                       <span className="font-mono text-xs text-muted-foreground">{s.codigo}</span>{' '}

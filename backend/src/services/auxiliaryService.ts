@@ -75,3 +75,45 @@ export function emptyAuxiliaryCatalogs(): AuxiliaryCatalogs {
   }
   return catalogs
 }
+
+export interface AuxiliaryCsvPreview {
+  fileId: string
+  fileName: string
+  columns: string[]
+  rows: Record<string, string>[]
+  totalRecords: number
+  truncated: boolean
+}
+
+/** Lê o CSV auxiliar armazenado para pré-visualização (somente leitura). */
+export async function previewAuxiliaryCsv(
+  file: StoredCsvFile,
+  limit = 100
+): Promise<AuxiliaryCsvPreview> {
+  const maxRows = Math.min(Math.max(1, limit), 500)
+  const options = await resolveCsvOptions(file.filePath, {
+    delimiter: TEMPLATE_DELIMITER,
+    hasHeader: true,
+  })
+
+  const rows: Record<string, string>[] = []
+  let columns: string[] = []
+  let totalRecords = 0
+
+  const stream = createRecordStream(file.filePath, { ...options, hasHeader: true })
+  for await (const raw of stream) {
+    const record = normalizeRecord(raw as Record<string, string> | string[])
+    if (columns.length === 0) columns = Object.keys(record)
+    totalRecords++
+    if (rows.length < maxRows) rows.push({ ...record })
+  }
+
+  return {
+    fileId: file.id,
+    fileName: file.fileName,
+    columns,
+    rows,
+    totalRecords,
+    truncated: totalRecords > rows.length,
+  }
+}

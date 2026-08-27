@@ -1,14 +1,11 @@
-import { useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Download, XCircle } from 'lucide-react'
+import { useMemo } from 'react'
+import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { InconsistencyChecksPanel } from '@/components/InconsistencyChecksPanel'
 import { formatAliquotaCsv, getUfIcms } from '@/lib/icmsByUf'
 import { formatNumber } from '@/lib/utils'
-import type { IssueSeverity, ProductValidationResult } from '@/types'
-
-type SeverityFilter = 'all' | IssueSeverity
+import type { ProductValidationResult } from '@/types'
 
 interface ErrorsStepProps {
   result: ProductValidationResult | null
@@ -51,20 +48,12 @@ export function ErrorsStep({
   onContinue,
   isRevalidating,
 }: ErrorsStepProps) {
-  const [filter, setFilter] = useState<SeverityFilter>('all')
-
   const aliquotaUfWarnings = useMemo(() => {
     if (!result) return []
     return result.issues.filter(isAliquotaUfWarning)
   }, [result])
 
   const ufEntry = clientUf ? getUfIcms(clientUf) : null
-
-  const filteredIssues = useMemo(() => {
-    if (!result) return []
-    if (filter === 'all') return result.issues
-    return result.issues.filter((i) => i.severity === filter)
-  }, [filter, result])
 
   if (!result) {
     return (
@@ -143,14 +132,17 @@ export function ErrorsStep({
           <CardContent className="p-4 text-sm text-emerald-800 dark:text-emerald-200">
             Sem erros bloqueantes.
             {result.warningCount > 0
-              ? ' Há alertas. Revise abaixo se quiser e continue para a prévia.'
-              : ' Pode seguir para a prévia editável.'}
+              ? ' Há alertas — expanda as checagens abaixo para revisar.'
+              : ' Pode seguir para a prévia (somente visualização).'}
           </CardContent>
         </Card>
       ) : (
         <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40">
           <CardContent className="space-y-3 p-4 text-sm text-red-700 dark:text-red-300">
-            <p>Corrija os erros antes de continuar. Você pode ajustar o CSV, os auxiliares ou revalidar.</p>
+            <p>
+              Corrija os erros antes de continuar. Expanda as checagens abaixo para ver os
+              detalhes, ou ajuste o CSV / auxiliares e revalide.
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={onFixFile}>
                 Trocar CSV
@@ -164,6 +156,15 @@ export function ErrorsStep({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {(result.checkSummary?.length ?? 0) > 0 && (
+        <InconsistencyChecksPanel
+          checks={result.checkSummary!}
+          issues={result.issues}
+          truncated={result.truncated}
+          onDownloadCsv={result.issues.length > 0 ? () => downloadIssuesCsv(result) : undefined}
+        />
       )}
 
       {result.missingRequiredHeaders.length > 0 && (
@@ -180,92 +181,6 @@ export function ErrorsStep({
           <CardContent className="p-4 text-sm text-muted-foreground">
             Colunas não reconhecidas (serão ignoradas):{' '}
             <span className="font-mono text-foreground">{result.unknownHeaders.join(', ')}</span>
-          </CardContent>
-        </Card>
-      )}
-
-      {result.issues.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-base">Problemas encontrados</CardTitle>
-                {result.truncated && (
-                  <CardDescription>
-                    Exibindo as primeiras {formatNumber(result.issues.length)} ocorrências.
-                  </CardDescription>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ['all', 'Todos'],
-                    ['error', 'Erros'],
-                    ['warning', 'Alertas'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Button
-                    key={value}
-                    size="sm"
-                    variant={filter === value ? 'default' : 'outline'}
-                    onClick={() => setFilter(value)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-                <Button size="sm" variant="ghost" onClick={() => downloadIssuesCsv(result)}>
-                  <Download className="h-4 w-4" />
-                  CSV
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="max-h-[420px] overflow-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky top-0 z-10 bg-card w-20">Linha</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card w-24">Tipo</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Campo</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Valor</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Mensagem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredIssues.map((issue, index) => (
-                    <TableRow key={`${issue.row}-${issue.field}-${index}`}>
-                      <TableCell>{issue.row || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={issue.severity === 'error' ? 'destructive' : 'warning'}>
-                          {issue.severity === 'error' ? 'Erro' : 'Alerta'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{issue.field || '-'}</TableCell>
-                      <TableCell className="max-w-[140px] truncate font-mono text-xs">
-                        {issue.value || '-'}
-                      </TableCell>
-                      <TableCell
-                        className={
-                          issue.severity === 'error'
-                            ? 'text-destructive'
-                            : 'text-amber-700 dark:text-amber-300'
-                        }
-                      >
-                        {issue.message}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredIssues.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        Nenhum item neste filtro.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
           </CardContent>
         </Card>
       )}

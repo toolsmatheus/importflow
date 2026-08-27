@@ -102,15 +102,6 @@ export function PreviewStep({
     onRowsChange(next)
   }
 
-  const updateCell = (rowIndex: number, field: string, value: string) => {
-    setLocalRows((prev) => prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row)))
-  }
-
-  const commitCell = (rowIndex: number, field: string, value: string) => {
-    const next = localRows.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row))
-    commitRows(next)
-  }
-
   const revalidateMutation = useMutation({
     mutationFn: () => productService.validateRows(localRows, auxiliary, clientUf),
     onSuccess: (result) => {
@@ -124,11 +115,11 @@ export function PreviewStep({
         toast.success(
           result.warningCount > 0
             ? `Ok com ${formatNumber(result.warningCount)} alerta(s)`
-            : 'Prévia revalidada sem problemas'
+            : 'Prévia conferida sem problemas'
         )
       }
     },
-    onError: (error: Error) => toast.error(error.message || 'Erro ao revalidar'),
+    onError: (error: Error) => toast.error(error.message || 'Erro ao conferir'),
   })
 
   const toggleColumn = (col: string) => {
@@ -143,13 +134,18 @@ export function PreviewStep({
       revalidateMutation.mutate(undefined, {
         onSuccess: (result) => {
           if (result.canProceed) onContinue()
-          else toast.error('Corrija os erros antes de continuar')
+          else
+            toast.error(
+              'Há erros no arquivo. Corrija na origem ou aplique as sugestões e confira de novo.'
+            )
         },
       })
       return
     }
     if (!lastResult.canProceed) {
-      toast.error('Corrija os erros antes de continuar')
+      toast.error(
+        'Há erros no arquivo. Corrija na origem ou aplique as sugestões e confira de novo.'
+      )
       return
     }
     onContinue()
@@ -183,10 +179,11 @@ export function PreviewStep({
 
       <Card>
         <CardHeader>
-          <CardTitle>Prévia editável</CardTitle>
+          <CardTitle>Prévia</CardTitle>
           <CardDescription>
-            Edite células e saia do campo para gravar. Revalide antes de enviar.{' '}
-            {formatNumber(localRows.length)} linha(s), {visibleColumns.length} coluna(s) visíveis
+            Células somente para visualização. Você pode aplicar sugestões de controlados acima e
+            conferir o resultado. {formatNumber(localRows.length)} linha(s),{' '}
+            {visibleColumns.length} coluna(s) visíveis
             {columns.length > visibleColumns.length
               ? ` (${columns.length - visibleColumns.length} ocultas)`
               : ''}
@@ -221,14 +218,11 @@ export function PreviewStep({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  commitRows(localRows)
-                  revalidateMutation.mutate()
-                }}
+                onClick={() => revalidateMutation.mutate()}
                 disabled={revalidateMutation.isPending || localRows.length === 0}
               >
                 {revalidateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Revalidar
+                Conferir novamente
               </Button>
             </div>
           </div>
@@ -266,7 +260,7 @@ export function PreviewStep({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 top-0 z-20 bg-card w-14">#</TableHead>
+                  <TableHead className="sticky left-0 top-0 z-20 w-14 bg-card">#</TableHead>
                   {visibleColumns.map((col) => (
                     <TableHead
                       key={col}
@@ -297,13 +291,12 @@ export function PreviewStep({
                         {csvRowNumber}
                       </TableCell>
                       {visibleColumns.map((col) => (
-                        <TableCell key={col} className="p-1 align-top">
-                          <Input
-                            value={row[col] ?? ''}
-                            onChange={(e) => updateCell(rowIndex, col, e.target.value)}
-                            onBlur={(e) => commitCell(rowIndex, col, e.target.value)}
-                            className="h-8 min-w-[110px] font-mono text-xs"
-                          />
+                        <TableCell
+                          key={col}
+                          className="max-w-[240px] truncate p-2 align-top font-mono text-xs"
+                          title={row[col] ?? ''}
+                        >
+                          {row[col] ?? ''}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -354,7 +347,7 @@ export function PreviewStep({
 
           {issues.length > 0 && (
             <div className="space-y-1 text-sm">
-              <p className="font-medium">Problemas da última revalidação</p>
+              <p className="font-medium">Problemas da última conferência</p>
               <ul className="max-h-40 space-y-1 overflow-auto text-muted-foreground">
                 {issues.slice(0, 30).map((issue, index) => (
                   <li key={`${issue.row}-${issue.field}-${index}`}>
