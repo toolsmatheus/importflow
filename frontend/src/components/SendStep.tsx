@@ -66,8 +66,8 @@ export function SendStep({
 }: SendStepProps) {
   const [idFilialPreview, setIdFilialPreview] = useState<number | null>(null)
   const [versaoPreview, setVersaoPreview] = useState<string | null>(null)
-  const [batchSize, setBatchSize] = useState(100)
-  const [concurrency, setConcurrency] = useState(2)
+  const [batchSize, setBatchSize] = useState(500)
+  const [concurrency, setConcurrency] = useState(1)
 
   const active =
     job?.status === 'running' || job?.status === 'queued' || job?.status === 'paused'
@@ -175,15 +175,15 @@ export function SendStep({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="batch-size" className="mb-1.5 block text-sm text-muted-foreground">
-                Tamanho do lote
+                Produtos por lote (ImportarListaProdutos)
               </label>
               <Input
                 id="batch-size"
                 type="number"
                 min={10}
-                max={500}
+                max={1000}
                 value={batchSize}
-                onChange={(e) => setBatchSize(Number(e.target.value) || 100)}
+                onChange={(e) => setBatchSize(Number(e.target.value) || 500)}
                 disabled={Boolean(active)}
               />
             </div>

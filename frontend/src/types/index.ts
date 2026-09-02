@@ -216,11 +216,3 @@ export interface ControladoSuggestResult {
   controlledCandidates: number
   suggestions: ControladoSuggestion[]
 }
-
-/** @deprecated Prefer SendJobSnapshot */
-export type TmsSendResult = Pick<
-  SendJobSnapshot,
-  'idFilial' | 'total' | 'successCount' | 'errorCount'
-> & {
-  errors: { index: number; codigo: string; message: string }[]
-}

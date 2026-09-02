@@ -8,8 +8,8 @@ import {
   fetchServerIdentification,
   fetchTmsDcbCatalog,
   getDefaultTmsBaseUrl,
+  importarListaProdutos,
   insertAuxiliaryEntity,
-  insertProduct,
   mapCsvRowToProductPayload,
   markAuxiliaryMigracaoExists,
   type AuxiliaryMigracaoEntity,
@@ -137,8 +137,16 @@ const MAX_SNAPSHOT_SKIPPED = 200
 const JOB_TTL_MS = 6 * 60 * 60 * 1000
 const jobs = new Map<string, SendJobInternal>()
 
-const DEFAULT_BATCH_SIZE = Number(process.env.SEND_BATCH_SIZE) || 100
-const DEFAULT_CONCURRENCY = Number(process.env.SEND_CONCURRENCY) || 2
+const DEFAULT_BATCH_SIZE = Number(process.env.SEND_BATCH_SIZE) || 500
+const DEFAULT_CONCURRENCY = Number(process.env.SEND_CONCURRENCY) || 1
+
+interface PreparedProductSend {
+  index: number
+  codigo: string
+  barcode: string
+  payload: Record<string, unknown>
+  warnings: string[]
+}
 
 function cleanupJobs() {
   const now = Date.now()
@@ -426,6 +434,8 @@ async function processOneBatch(
     return
   }
 
+  const prepared: PreparedProductSend[] = []
+
   for (let i = 0; i < indexes.length; i++) {
     if (job.cancelRequested) break
     while (job.pauseRequested && !job.cancelRequested) {
@@ -480,7 +490,6 @@ async function processOneBatch(
       }
     }
 
-    // Reserva chaves antes do insert (evita corrida entre lotes paralelos).
     if (codigo && !claimExistenceKey(existence.byMigracao, codigo)) {
       const id = lookupExistenceId(existence.byMigracao, codigo)
       job.skipped.push({
@@ -557,35 +566,64 @@ async function processOneBatch(
       continue
     }
 
-    const itemResult = await insertProduct(mapped.payload, job.tmsBaseUrl)
+    prepared.push({
+      index,
+      codigo,
+      barcode,
+      payload: mapped.payload,
+      warnings: mapped.warnings ?? [],
+    })
+  }
 
-    if (itemResult.ok) {
+  if (prepared.length === 0 || job.cancelRequested) return
+
+  const listaResult = await importarListaProdutos(
+    prepared.map((item) => item.payload),
+    job.tmsBaseUrl,
+    false
+  )
+
+  const errorsByMigracao = new Map<string, string>()
+  for (const err of listaResult.itemErrors ?? []) {
+    errorsByMigracao.set(err.codigoMigracao, err.message)
+  }
+
+  const batchFailed =
+    !listaResult.ok && (listaResult.itemErrors?.length ?? 0) === 0 && prepared.length > 0
+
+  for (const item of prepared) {
+    const migracaoKey = String(item.payload.codigo_migracao ?? item.codigo).trim()
+    const itemError = errorsByMigracao.get(migracaoKey)
+
+    if (batchFailed || itemError) {
+      if (item.codigo) releaseExistenceKey(existence.byMigracao, item.codigo)
+      if (item.barcode) releaseExistenceKey(existence.byBarcode, item.barcode)
+      job.errorCount++
+      job.failedIndexes.push(item.index)
+      if (job.errors.length < MAX_STORED_ERRORS) {
+        job.errors.push({
+          index: item.index,
+          codigo: item.codigo,
+          message:
+            itemError ||
+            listaResult.message ||
+            'Falha na importação em lote (ImportarListaProdutos)',
+          batch: batchNumber,
+        })
+      }
+    } else {
       job.successCount++
-      // Mantém a reserva (-1) como ocupado neste envio; id real virá no próximo catálogo.
-      if (codigo) confirmExistenceKey(existence.byMigracao, codigo, -1)
-      if (barcode) confirmExistenceKey(existence.byBarcode, barcode, -1)
-      for (const warning of mapped.warnings ?? []) {
+      if (item.codigo) confirmExistenceKey(existence.byMigracao, item.codigo, -1)
+      if (item.barcode) confirmExistenceKey(existence.byBarcode, item.barcode, -1)
+      for (const warning of item.warnings) {
         if (job.errors.length < MAX_STORED_ERRORS) {
           job.errors.push({
-            index,
-            codigo,
+            index: item.index,
+            codigo: item.codigo,
             message: `Aviso: ${warning}`,
             batch: batchNumber,
           })
         }
-      }
-    } else {
-      if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
-      if (barcode) releaseExistenceKey(existence.byBarcode, barcode)
-      job.errorCount++
-      job.failedIndexes.push(index)
-      if (job.errors.length < MAX_STORED_ERRORS) {
-        job.errors.push({
-          index,
-          codigo,
-          message: itemResult.message || 'Falha no insert/save',
-          batch: batchNumber,
-        })
       }
     }
     job.processed++
@@ -679,7 +717,7 @@ export async function createSendJob(input: {
 
   const mode = input.mode ?? 'simulate'
   const tmsBaseUrl = input.tmsBaseUrl ?? getDefaultTmsBaseUrl()
-  const batchSize = Math.min(500, Math.max(10, input.batchSize ?? DEFAULT_BATCH_SIZE))
+  const batchSize = Math.min(1000, Math.max(10, input.batchSize ?? DEFAULT_BATCH_SIZE))
   const concurrency = Math.min(8, Math.max(1, input.concurrency ?? DEFAULT_CONCURRENCY))
   const auxiliaries = (input.auxiliaries ?? [])
     .map((item) => ({

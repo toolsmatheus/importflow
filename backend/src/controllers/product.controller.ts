@@ -228,7 +228,7 @@ const startSendBodySchema = z.object({
   rows: z.array(z.record(z.string())).min(1).max(50000),
   tmsBaseUrl: z.string().url().optional(),
   mode: z.enum(['live', 'simulate']).optional(),
-  batchSize: z.number().int().min(10).max(500).optional(),
+  batchSize: z.number().int().min(10).max(1000).optional(),
   concurrency: z.number().int().min(1).max(8).optional(),
   auxiliary: z
     .object({

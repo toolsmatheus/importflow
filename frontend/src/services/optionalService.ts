@@ -41,11 +41,6 @@ export interface OptionalJobSnapshot {
   message?: string
 }
 
-/** @deprecated Use OptionalJobSnapshot */
-export type BarcodeJobSnapshot = OptionalJobSnapshot
-export type BarcodeSendMode = OptionalSendMode
-export type BarcodeJobError = OptionalJobError
-
 async function startOptionalSend(
   url: string,
   file: File,
