@@ -18,24 +18,38 @@ Importação de produtos via CSV para o banco de dados (ToolsPharma), com valida
 
 ## Uso no cliente
 
-Com Node.js 20+ instalado, dê **duplo clique** em:
+Requisito: **apenas Node.js 20 LTS** (inclui `npm`). Não é necessário instalar nada manualmente além disso.
+
+Dê **duplo clique** em:
 
 ```bat
 start.bat
 ```
 
-Na primeira execução ele:
-1. Instala dependências (se faltar `node_modules`)
-2. Gera o build (se faltar `frontend/dist` ou `backend/dist`)
-3. Sobe API + interface em `http://localhost:3001` e abre o navegador
+Na **primeira execução** o script:
+1. Verifica Node.js e npm no PATH (versão mínima 20)
+2. Instala dependências em `backend/` e `frontend/` (se faltar `node_modules`)
+3. Gera o build de produção (se faltar `dist/`)
+4. Sobe API + interface em `http://localhost:3001`
+5. Abre o navegador **quando o servidor responder** (`/api/health`), não após timeout fixo
 
 Nas próximas vezes, se o build já existir, só sobe o servidor (mais rápido).
 
-Para forçar rebuild:
+Forçar reinstall/build:
 
 ```bat
 start.bat /rebuild
 ```
+
+### Problemas comuns (cliente)
+
+| Sintoma | Solução |
+|---------|---------|
+| `Node.js nao encontrado` | Instalar [Node 20 LTS](https://nodejs.org/) e marcar **Add to PATH**; reiniciar o PC se necessário |
+| `Node.js 20 ou superior e necessario` | Atualizar Node para versão 20+ |
+| Porta 3001 em uso | Fechar outra janela do ImportFlow ou responder **N** e liberar a porta |
+| Navegador não abriu | Abrir manualmente `http://localhost:3001` |
+| Falha ao instalar | Verificar internet; executar como usuário com permissão de escrita na pasta |
 
 ## Desenvolvimento local
 
