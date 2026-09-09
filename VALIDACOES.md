@@ -1,6 +1,6 @@
 # Validações do ImportFlow
 
-Documento resumido das checagens feitas ao processar **auxiliares** e **produtos**.
+Documento resumido das checagens feitas ao processar **auxiliares** e **produtos**, com **exemplo de caso** em cada situação.
 
 ## Severidade
 
@@ -16,12 +16,23 @@ Documento resumido das checagens feitas ao processar **auxiliares** e **produtos
 Arquivos: `grupo`, `subgrupo`, `categoria`, `laboratorio`, `grupodepreco`, `similar`, `dcb`  
 Modelo: `id;nome` (também aceita `codigo` no lugar de `id`)
 
-- [ ] **id vazio** — linha ignorada no catálogo · **warning**
-- [ ] **id duplicado** no mesmo arquivo — mantém a primeira · **warning**
-- [ ] **arquivo sumiu do storage** (reenvio necessário) · **error**
-- [ ] **grupo obrigatório** na validação de produtos (`grupo.csv`) · **error**
-- [ ] **id citado no produto existe no catálogo** · **error**
-- [ ] **auxiliar ausente com coluna preenchida** no produto (ex.: `laboratorio` preenchido sem `laboratorio.csv`) · **error**
+- [ ] **id vazio** — linha ignorada no catálogo · **warning**  
+  *Ex.:* `grupo.csv` com linha `;Medicamentos` (sem id) → aviso e linha fora do catálogo.
+
+- [ ] **id duplicado** no mesmo arquivo — mantém a primeira · **warning**  
+  *Ex.:* duas linhas `1;Medicamentos` e `1;Perfumaria` → aviso; fica só “Medicamentos”.
+
+- [ ] **arquivo sumiu do storage** (reenvio necessário) · **error**  
+  *Ex.:* validar produtos citando um `fileId` de auxiliar que já expirou/foi apagado.
+
+- [ ] **grupo obrigatório** na validação de produtos (`grupo.csv`) · **error**  
+  *Ex.:* validar `produtos.csv` sem ter enviado `grupo.csv`.
+
+- [ ] **id citado no produto existe no catálogo** · **error**  
+  *Ex.:* produto com `codigogrupo=99`, mas `grupo.csv` só tem ids `1` e `2`.
+
+- [ ] **auxiliar ausente com coluna preenchida** · **error**  
+  *Ex.:* produto com `laboratorio=5` e nenhum `laboratorio.csv` enviado.
 
 Mapeamento produto → auxiliar:
 
@@ -42,10 +53,17 @@ Mapeamento produto → auxiliar:
 Cabeçalhos obrigatórios:  
 `codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `fator`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`
 
-- [ ] **cabeçalhos obrigatórios** presentes · **error**
-- [ ] **colunas desconhecidas** (fora do modelo) · **warning**
-- [ ] **arquivo vazio** (sem registros) · **error**
-- [ ] **`codigo` duplicado** no arquivo · **error**
+- [ ] **cabeçalhos obrigatórios** presentes · **error**  
+  *Ex.:* CSV sem a coluna `ncm` no cabeçalho.
+
+- [ ] **colunas desconhecidas** (fora do modelo) · **warning**  
+  *Ex.:* coluna `cor` ou `fornecedor_xyz` que não existe no template.
+
+- [ ] **arquivo vazio** (sem registros) · **error**  
+  *Ex.:* só a linha de cabeçalho, nenhuma linha de produto.
+
+- [ ] **`codigo` duplicado** no arquivo · **error**  
+  *Ex.:* duas linhas com `codigo=10001`.
 
 ---
 
@@ -53,48 +71,90 @@ Cabeçalhos obrigatórios:
 
 ### Preenchimento e identificação
 
-- [ ] **campos obrigatórios preenchidos** (não em branco) · **error**
-- [ ] **`codigo` só dígitos** (sem letras) · **error**
-- [ ] **`nome` válido** (não vazio, não só números) · **error**
-- [ ] **`codigogrupo` inteiro** se preenchido · **error**
+- [ ] **campos obrigatórios preenchidos** (não em branco) · **error**  
+  *Ex.:* `nome` vazio (`10001;;1;10,00;…`).
+
+- [ ] **`codigo` só dígitos** (sem letras) · **error**  
+  *Ex.:* `codigo=ABC123` ou `codigo=10A`.
+
+- [ ] **`nome` válido** (não vazio, não só números) · **error**  
+  *Ex.:* `nome=12345` (somente números).
+
+- [ ] **`codigogrupo` inteiro** se preenchido · **error**  
+  *Ex.:* `codigogrupo=1A` ou `codigogrupo=grupo1`.
 
 ### Números e markup
 
-- [ ] **números no formato BR** válidos (`custo`, `venda`, `fator`, `aliquota` e decimais opcionais) · **error**
-- [ ] **markup vazio / inválido / inconsistente** com custo e venda → **recalcula automaticamente** · **warning**
-- [ ] **markup não recalculável** (falta custo/venda válidos ou custo = 0) · **error**
+- [ ] **números no formato BR** válidos · **error**  
+  *Ex.:* `custo=dez reais` ou `venda=10.abc` → “Valor numérico inválido”.  
+  *Ok:* `10,50` / `1.234,56`.
+
+- [ ] **markup vazio / inválido / inconsistente** → **recalcula** · **warning**  
+  *Ex.:* `custo=10,00`, `venda=15,00`, `markup=` (vazio) → grava `50,00` e avisa.  
+  *Ex.:* `custo=10`, `venda=15`, `markup=10` (deveria ser 50) → recalcula para `50,00`.
+
+- [ ] **markup não recalculável** · **error**  
+  *Ex.:* `markup` vazio e `custo=0` (ou custo/venda inválidos) → não dá para calcular.
 
 Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, `demanda`, `descontomax`, `qtdfciapop`, `valorfciapop`
 
 ### Fiscal (alíquota, ST, isento, PIS/COFINS, NCM, CFOP)
 
-- [ ] **`aliquota = 0`** → exatamente uma de `st` ou `isento` = `S` (não ambas, não nenhuma) · **error**
-- [ ] **`st` e `isento` ambos `S`** · **error**
-- [ ] **`aliquota` diferente da padrão da UF do cliente** · **warning**
-- [ ] **`listapiscofins`** ∈ `NEUTRA` \| `POSITIVA` \| `NEGATIVA` · **error**
-- [ ] **`cfop`** com 4 dígitos (se preenchido) · **error**
-- [ ] **`ncm`** com 8 dígitos · **error**
+- [ ] **`aliquota = 0`** → exatamente uma de `st` ou `isento` = `S` · **error**  
+  *Ex. erro:* `aliquota=0`, `st=N`, `isento=N` (nenhuma).  
+  *Ex. erro:* `aliquota=0`, `st=S`, `isento=S` (ambas).  
+  *Ex. ok:* `aliquota=0`, `st=S`, `isento=N` **ou** `st=N`, `isento=S`.
+
+- [ ] **`st` e `isento` ambos `S`** · **error**  
+  *Ex.:* `st=S` e `isento=S` (mesmo com alíquota > 0).
+
+- [ ] **`aliquota` diferente da padrão da UF** · **warning**  
+  *Ex.:* cliente UF=`SP` (padrão 18%) e produto com `aliquota=17`.
+
+- [ ] **`listapiscofins`** ∈ `NEUTRA` \| `POSITIVA` \| `NEGATIVA` · **error**  
+  *Ex.:* `listapiscofins=ISENTA` ou `listapiscofins=positiva` (valor fora da lista).
+
+- [ ] **`cfop`** com 4 dígitos (se preenchido) · **error**  
+  *Ex.:* `cfop=510` ou `cfop=5102A`.
+
+- [ ] **`ncm`** com 8 dígitos · **error**  
+  *Ex.:* `ncm=3004` (curto) ou `ncm=3004909A`.
 
 ### Código de barras
 
-- [ ] **EAN inválido** (tamanho ou dígito verificador) · **warning** *(não bloqueia)*
+- [ ] **EAN inválido** (tamanho ou dígito verificador) · **warning**  
+  *Ex.:* `codigobarras=123` (tamanho inválido) ou EAN-13 com dígito final errado.  
+  *Não bloqueia o envio.*
 
 ### IDs, flags e status
 
-- [ ] **IDs auxiliares inteiros** se preenchidos (`subgrupo`, `categoria`, `laboratorio`, `grupodepreco`, `similar`, `dcb`) · **error**
-- [ ] **flags `S` ou `N`**: `atualizaestoque`, `st`, `isento`, `semincidencia`, `permitedesconto`, `usocontinuo`, `medfciapop` · **error**
-- [ ] **`ativo`** = `A` ou `I` (se preenchido) · **error**
+- [ ] **IDs auxiliares inteiros** se preenchidos · **error**  
+  *Ex.:* `laboratorio=LAB01` ou `subgrupo=1.5`.
+
+- [ ] **flags `S` ou `N`** · **error**  
+  *Ex.:* `st=SIM`, `usocontinuo=1`, `medfciapop=X`.
+
+- [ ] **`ativo`** = `A` ou `I` · **error**  
+  *Ex.:* `ativo=S` ou `ativo=1`.
 
 ### Descontos e Farmácia Popular
 
-- [ ] **`descontofixo` ≤ `descontomax`** · **warning**
-- [ ] **`medfciapop = S`** → `qtdfciapop` e `valorfciapop` obrigatórios · **error**
+- [ ] **`descontofixo` ≤ `descontomax`** · **warning**  
+  *Ex.:* `descontofixo=15` e `descontomax=10`.
+
+- [ ] **`medfciapop = S`** → `qtdfciapop` e `valorfciapop` obrigatórios · **error**  
+  *Ex.:* `medfciapop=S` com `qtdfciapop` e/ou `valorfciapop` vazios.
 
 ### Controlados
 
-- [ ] **DCB resolvível** (auxiliar **ou** tabela DCB do banco **ou** base Anvisa) · se não achar → **anula controlado** (limpa lista/DCB/MS e afins) · **warning**
-- [ ] **`registroms` obrigatório** quando o controlado é mantido (`listacontrole` + DCB ok) · **error**
-- [ ] **refs auxiliares existentes** (ids do produto batem com o catálogo) · **error**
+- [ ] **DCB resolvível** (auxiliar **ou** banco TMS **ou** Anvisa); senão **anula controlado** · **warning**  
+  *Ex.:* `listacontrole=A1`, `dcb=10021`, `registroms=…` e o `10021` não existe em nenhuma fonte → limpa lista/DCB/MS e avisa “controlado anulado”.
+
+- [ ] **`registroms` obrigatório** quando o controlado é mantido · **error**  
+  *Ex.:* `listacontrole=B1`, `dcb=4` (DCB ok), `registroms` vazio.
+
+- [ ] **refs auxiliares existentes** · **error**  
+  *Ex.:* `categoria=50` e `categoria.csv` não tem id `50`.
 
 ---
 
@@ -102,34 +162,8 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
 
 Além de reportar problemas, a validação pode **alterar a linha**:
 
-1. **Recalcula `markup`** a partir de custo e venda (com aviso)
-2. **Anula controlado** quando o DCB não é encontrado (com aviso)
-3. Pode **criar a coluna `markup`** se ela não existia e foi calculada
-
----
-
-## O que ainda não é validado
-
-Para planejamento de novas checagens:
-
-- Domínio de `listacontrole` (A1, B1, T…)
-- Formato de `cstpiscofins`, `cest`, `csosn`, `csticms`
-- EAN duplicado no arquivo ou no banco
-- Existência do produto no TMS (só no envio)
-- Qualidade do `nome` no auxiliar
-- Sugestão de controlados (CMED) — fluxo separado, não é validação bloqueante
-
----
-
-## Onde alterar no código
-
-| O quê | Onde |
-|-------|------|
-| Regras de linha / severidade | `backend/src/services/productValidationService.ts` |
-| Carga dos auxiliares | `backend/src/services/auxiliaryService.ts` |
-| Cabeçalhos e enums | `backend/src/schemas/product.schema.ts` |
-| Formatos (EAN, NCM, markup…) | `backend/src/utils/productFormats.ts` |
-| Alíquota por UF | `backend/src/utils/icmsByUf.ts` |
-| Checklist na tela (Erros) | `VALIDATION_CHECK_DEFS` no mesmo service de validação |
-
-Após mudar o backend em produção: rebuild (`start.bat /rebuild` ou rebuild automático se o source estiver mais novo que o `dist`).
+| Ajuste | Exemplo |
+|--------|---------|
+| Recalcula `markup` | `custo=10`, `venda=15`, markup vazio → `markup=50,00` + warning |
+| Anula controlado | DCB `10021` não encontrado → limpa `listacontrole` / `dcb` / `registroms` + warning |
+| Cria coluna `markup` | CSV sem coluna markup, mas custo/venda permitem cálculo → coluna passa a existir nas linhas validadas |
