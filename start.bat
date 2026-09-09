@@ -7,7 +7,8 @@ echo   ImportFlow
 echo ========================================
 echo.
 
-call :CheckEnvironment
+REM --- Node.js: usa o do sistema se >= 20; senao baixa runtime portatil ---
+call :EnsureNode
 if errorlevel 1 exit /b 1
 
 set "PORT=3001"
@@ -23,7 +24,7 @@ if not exist "backend\node_modules\" set "NEED_INSTALL=1"
 if not exist "frontend\node_modules\" set "NEED_INSTALL=1"
 
 if "%NEED_INSTALL%"=="1" (
-  echo Instalando dependencias ^(primeira execucao pode demorar^)...
+  echo Instalando dependencias ^(pode demorar na primeira vez^)...
   call npm install --prefix backend
   if errorlevel 1 goto :FailInstall
   call npm install --prefix frontend
@@ -39,7 +40,7 @@ if not exist "frontend\dist\index.html" set "NEED_BUILD=1"
 
 REM Rebuild se o source estiver mais novo que o dist (evita servir codigo antigo)
 if "%NEED_BUILD%"=="0" (
-  powershell -NoProfile -Command ^
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$be=(Get-ChildItem 'backend\src' -Recurse -Filter '*.ts' -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1); " ^
     "$bd=Get-Item 'backend\dist\server.js' -EA SilentlyContinue; " ^
     "$fe=(Get-ChildItem 'frontend\src' -Recurse -Include '*.ts','*.tsx','*.css' -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1); " ^
@@ -91,33 +92,42 @@ if not "%EXITCODE%"=="0" (
 pause
 exit /b %EXITCODE%
 
-:CheckEnvironment
+:EnsureNode
+REM Garante Node >= 20: PATH ok, ou baixa .runtime\node (portatil, sem admin)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\ensure-node.ps1" -MinMajor 20
+if errorlevel 1 (
+  echo.
+  echo [ERRO] Nao foi possivel preparar o Node.js automaticamente.
+  echo Opcoes:
+  echo   1^) Instale Node 20 LTS em https://nodejs.org/ ^(marque Add to PATH^)
+  echo   2^) Verifique a internet e execute start.bat de novo
+  echo.
+  pause
+  exit /b 1
+)
+
+if exist "%~dp0.runtime\use-node.cmd" (
+  call "%~dp0.runtime\use-node.cmd"
+)
+
 where node >nul 2>&1
 if errorlevel 1 (
-  echo [ERRO] Node.js nao encontrado no PATH.
-  echo.
-  echo Instale Node.js 20 LTS: https://nodejs.org/
-  echo No instalador, marque "Add to PATH".
-  echo.
+  echo [ERRO] Node.js ainda nao esta disponivel no PATH desta sessao.
   pause
   exit /b 1
 )
 
 where npm >nul 2>&1
 if errorlevel 1 (
-  echo [ERRO] npm nao encontrado no PATH.
-  echo Reinstale o Node.js ^(npm vem junto^): https://nodejs.org/
-  echo.
+  echo [ERRO] npm nao encontrado ^(deveria vir com o Node^).
   pause
   exit /b 1
 )
 
 node -e "const m=+process.versions.node.split('.')[0]; if(m<20){process.exit(1)}" >nul 2>&1
 if errorlevel 1 (
-  echo [ERRO] Node.js 20 ou superior e necessario.
+  echo [ERRO] Node.js ainda abaixo da versao 20 apos a preparacao.
   for /f "delims=" %%v in ('node -v 2^>nul') do echo Versao atual: %%v
-  echo Baixe em: https://nodejs.org/
-  echo.
   pause
   exit /b 1
 )
