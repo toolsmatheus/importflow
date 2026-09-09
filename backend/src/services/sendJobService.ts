@@ -31,6 +31,9 @@ export type SendJobStatus =
 
 export type SendMode = 'live' | 'simulate'
 
+/** Fase atual do job — usada na UI de progresso. */
+export type SendJobPhase = 'auxiliaries' | 'catalogs' | 'products' | 'done'
+
 export type ProductSkipReason = 'codigo_barras' | 'codigo_migracao'
 
 export interface SendJobError {
@@ -54,6 +57,7 @@ export interface SendJobSnapshot {
   id: string
   status: SendJobStatus
   mode: SendMode
+  phase: SendJobPhase
   tmsBaseUrl: string
   idFilial: number
   batchSize: number
@@ -104,6 +108,7 @@ interface SendJobInternal {
   id: string
   status: SendJobStatus
   mode: SendMode
+  phase: SendJobPhase
   tmsBaseUrl: string
   idFilial: number
   batchSize: number
@@ -203,10 +208,29 @@ export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
   const productsPerSecond =
     elapsedMs > 0 ? Number(((job.processed * 1000) / elapsedMs).toFixed(1)) : 0
 
+  const auxHandled = job.auxInserted + job.auxFailed + job.auxSkipped
+  const auxTotal = job.auxiliaries.length
+  const productTotal = job.rows.length
+
+  let percent = 100
+  if (job.phase === 'auxiliaries' && auxTotal > 0) {
+    // Auxiliares ocupam até 8% do progresso geral (fase longa de catálogo/insert).
+    percent = Math.min(8, Math.round((auxHandled / auxTotal) * 8))
+  } else if (job.phase === 'catalogs') {
+    percent = 10
+  } else if (productTotal === 0) {
+    percent = 100
+  } else {
+    // Produtos: 10% → 100%
+    percent = 10 + Math.round((job.processed / productTotal) * 90)
+  }
+  if (job.status === 'completed') percent = 100
+
   return {
     id: job.id,
     status: job.status,
     mode: job.mode,
+    phase: job.phase,
     tmsBaseUrl: job.tmsBaseUrl,
     idFilial: job.idFilial,
     batchSize: job.batchSize,
@@ -226,7 +250,7 @@ export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
     finishedAt: job.finishedAt ? new Date(job.finishedAt).toISOString() : null,
     elapsedMs,
     productsPerSecond,
-    percent: job.rows.length === 0 ? 100 : Math.round((job.processed / job.rows.length) * 100),
+    percent: Math.min(100, Math.max(0, percent)),
     remaining: Math.max(0, job.rows.length - job.processed),
     gruposTotal: job.auxiliaries.filter((a) => a.entity === 'grupo').length,
     gruposInserted: job.auxInserted,
@@ -636,14 +660,20 @@ async function runJob(job: SendJobInternal): Promise<void> {
   job.finishedAt = null
 
   try {
+    if (job.mode === 'live' && job.auxiliaries.length > 0 && !job.auxDone) {
+      job.phase = 'auxiliaries'
+    }
+
     await insertAuxiliaries(job)
     if (job.cancelRequested) {
       job.status = 'cancelled'
+      job.phase = 'done'
       job.finishedAt = Date.now()
       return
     }
 
     if (job.mode === 'live') {
+      job.phase = 'catalogs'
       const similarAux = job.auxiliaries
         .filter((a) => a.entity === 'similar')
         .map((a) => ({ codigo: a.codigo, descricao: a.descricao }))
@@ -658,9 +688,12 @@ async function runJob(job: SendJobInternal): Promise<void> {
       job.productExistence = existence
     }
 
+    job.phase = 'products'
+
     while (job.pendingIndexes.length > 0) {
       if (job.cancelRequested) {
         job.status = 'cancelled'
+        job.phase = 'done'
         job.finishedAt = Date.now()
         return
       }
@@ -684,9 +717,11 @@ async function runJob(job: SendJobInternal): Promise<void> {
     }
 
     job.status = 'completed'
+    job.phase = 'done'
     job.finishedAt = Date.now()
   } catch (error) {
     job.status = 'failed'
+    job.phase = 'done'
     job.finishedAt = Date.now()
     if (job.errors.length < MAX_STORED_ERRORS) {
       job.errors.push({
@@ -740,6 +775,8 @@ export async function createSendJob(input: {
     id: randomUUID(),
     status: 'queued',
     mode,
+    phase:
+      mode === 'live' && auxiliaries.length > 0 ? 'auxiliaries' : 'products',
     tmsBaseUrl,
     idFilial,
     batchSize,

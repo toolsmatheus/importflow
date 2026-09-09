@@ -16,7 +16,9 @@ interface ControladoSuggestPanelProps {
   auxiliary: Partial<Record<AuxiliaryEntity, string>>
   /** Só consulta/visualiza — não aplica alterações nas linhas. */
   readOnly?: boolean
-  onApply?: (nextRows: Record<string, string>[]) => void
+  /** Indica que a revalidação após aplicar está em andamento. */
+  isApplying?: boolean
+  onApply?: (nextRows: Record<string, string>[]) => void | Promise<void>
 }
 
 const KIND_LABEL: Record<ControladoSuggestion['kind'], string> = {
@@ -29,10 +31,12 @@ export function ControladoSuggestPanel({
   rows,
   auxiliary,
   readOnly = false,
+  isApplying = false,
   onApply,
 }: ControladoSuggestPanelProps) {
   const [result, setResult] = useState<ControladoSuggestResult | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [applying, setApplying] = useState(false)
 
   const suggestMutation = useMutation({
     mutationFn: () =>
@@ -60,6 +64,8 @@ export function ControladoSuggestPanel({
     onError: (error: Error) => toast.error(error.message || 'Erro ao sugerir controlados'),
   })
 
+  const busy = suggestMutation.isPending || isApplying || applying
+
   useEffect(() => {
     setResult(null)
     setSelected(new Set())
@@ -72,7 +78,7 @@ export function ControladoSuggestPanel({
   }, [result])
 
   const toggle = (rowIndex: number) => {
-    if (readOnly) return
+    if (readOnly || busy) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(rowIndex)) next.delete(rowIndex)
@@ -93,8 +99,8 @@ export function ControladoSuggestPanel({
 
   const clearSelection = () => setSelected(new Set())
 
-  const applySelected = () => {
-    if (readOnly || !onApply) return
+  const applySelected = async () => {
+    if (readOnly || !onApply || busy) return
     if (!result || selected.size === 0) {
       toast.message('Selecione ao menos uma sugestão')
       return
@@ -120,10 +126,16 @@ export function ControladoSuggestPanel({
       return updated
     })
 
-    onApply(next)
-    toast.success(`Aplicado em ${formatNumber(selected.size)} linha(s). Revise na prévia.`)
-    setResult(null)
-    setSelected(new Set())
+    setApplying(true)
+    try {
+      await onApply(next)
+      setResult(null)
+      setSelected(new Set())
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao aplicar sugestões')
+    } finally {
+      setApplying(false)
+    }
   }
 
   return (
@@ -136,7 +148,7 @@ export function ControladoSuggestPanel({
         <CardDescription>
           {readOnly
             ? 'Somente consulta: compare o CSV com a CMED. Diferenças devem ser corrigidas na origem dos dados.'
-            : 'Apenas sugestão: confira e aplique em todas ou só nas marcadas. Nada é gravado até você aplicar. DCB da base validada usa a tabela DCB do banco; o auxiliar dcb.csv cobre o restante.'}
+            : 'Confira as sugestões e aplique. Após aplicar, a validação roda de novo e atualiza erros/alertas.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -145,23 +157,26 @@ export function ControladoSuggestPanel({
             variant="outline"
             size="sm"
             onClick={() => suggestMutation.mutate()}
-            disabled={suggestMutation.isPending || rows.length === 0}
+            disabled={busy || rows.length === 0}
           >
-            {suggestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Buscar sugestões
+            {(suggestMutation.isPending || isApplying || applying) && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
+            {isApplying || applying ? 'Revalidando…' : 'Buscar sugestões'}
           </Button>
           {!readOnly && result?.available && result.suggestions.length > 0 && (
             <>
-              <Button variant="outline" size="sm" onClick={selectAll}>
+              <Button variant="outline" size="sm" onClick={selectAll} disabled={busy}>
                 Marcar todas
               </Button>
-              <Button variant="outline" size="sm" onClick={selectEmptyOnly}>
+              <Button variant="outline" size="sm" onClick={selectEmptyOnly} disabled={busy}>
                 Só vazias
               </Button>
-              <Button variant="outline" size="sm" onClick={clearSelection}>
+              <Button variant="outline" size="sm" onClick={clearSelection} disabled={busy}>
                 Limpar seleção
               </Button>
-              <Button size="sm" onClick={applySelected} disabled={selected.size === 0}>
+              <Button size="sm" onClick={() => void applySelected()} disabled={selected.size === 0 || busy}>
+                {(isApplying || applying) && <Loader2 className="h-4 w-4 animate-spin" />}
                 Aplicar selecionadas ({formatNumber(selected.size)})
               </Button>
             </>

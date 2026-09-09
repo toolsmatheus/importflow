@@ -77,7 +77,8 @@ export interface ProductValidationResult {
 }
 
 const MAX_ISSUES_PER_CHECK = 200
-const MAX_PREVIEW_ROWS = 5000
+/** Limite alinhado ao body do envio (`max(50000)`). Antes era 5k e truncava o arquivo no envio. */
+const MAX_PREVIEW_ROWS = 50_000
 
 /** Ordem fixa do checklist — o que o sistema realmente pesquisa. */
 const VALIDATION_CHECK_DEFS: Array<{
@@ -111,12 +112,19 @@ const VALIDATION_CHECK_DEFS: Array<{
     severity: 'error',
     match: (i) =>
       (i.field === 'dcb' || i.field === 'registroms') &&
-      i.message.toLowerCase().includes('controlado'),
+      i.message.toLowerCase().includes('controlado') &&
+      !i.message.toLowerCase().includes('anulado'),
+  },
+  {
+    id: 'controlado_cleared',
+    label: 'Controlado anulado (DCB não encontrado)',
+    severity: 'warning',
+    match: (i) => i.message.toLowerCase().includes('controlado anulado'),
   },
   {
     id: 'dcb_invalid',
     label: 'DCB não encontrado (auxiliar / banco / Anvisa)',
-    severity: 'error',
+    severity: 'warning',
     match: (i) =>
       i.field === 'dcb' &&
       !i.message.toLowerCase().includes('controlado') &&
@@ -198,31 +206,41 @@ const VALIDATION_CHECK_DEFS: Array<{
     match: (i) => i.message.includes('não reconhecida'),
   },
   {
-    id: 'other',
-    label: 'Outras inconsistências',
+    id: 'other_error',
+    label: 'Outras inconsistências (erros)',
     severity: 'error',
-    match: () => true,
+    match: (i) => i.severity === 'error',
+  },
+  {
+    id: 'other_warning',
+    label: 'Outras inconsistências (alertas)',
+    severity: 'warning',
+    match: (i) => i.severity === 'warning',
   },
 ]
 
 function classifyIssue(issue: ValidationIssue): string {
   for (const def of VALIDATION_CHECK_DEFS) {
-    if (def.id === 'other') continue
+    if (def.id === 'other_error' || def.id === 'other_warning') continue
     if (def.match(issue)) return def.id
   }
-  return 'other'
+  return issue.severity === 'warning' ? 'other_warning' : 'other_error'
 }
 
 function buildCheckSummary(
   categoryCounts: Map<string, number>
 ): ValidationCheckSummaryItem[] {
-  return VALIDATION_CHECK_DEFS.filter((def) => def.id !== 'other' || (categoryCounts.get('other') ?? 0) > 0)
-    .map((def) => ({
-      id: def.id,
-      label: def.label,
-      count: categoryCounts.get(def.id) ?? 0,
-      severity: def.severity,
-    }))
+  return VALIDATION_CHECK_DEFS.filter((def) => {
+    if (def.id === 'other_error' || def.id === 'other_warning') {
+      return (categoryCounts.get(def.id) ?? 0) > 0
+    }
+    return true
+  }).map((def) => ({
+    id: def.id,
+    label: def.label,
+    count: categoryCounts.get(def.id) ?? 0,
+    severity: def.severity,
+  }))
 }
 
 const SN_FIELDS = [
@@ -395,9 +413,91 @@ function dcbExistsInTms(value: string, tmsDcb: Map<string, TmsDcbRecord> | null)
   return asNumber !== 'NaN' && tmsDcb.has(asNumber)
 }
 
-/** Código Anvisa da base validada (CMED / controlados) — usado pela sugestão de controlados. */
+/** Código Anvisa da base validada (CMED / controlados). */
 function dcbExistsInAnvisaIndex(value: string): boolean {
   return lookupAnvisaDcb(value) !== null
+}
+
+/** DCB no auxiliar, tabela TMS ou índice Anvisa. */
+function isDcbResolvable(
+  value: string,
+  catalog: AuxiliaryCatalogs['dcb'] | undefined,
+  tmsDcb: Map<string, TmsDcbRecord> | null
+): boolean {
+  const raw = value.trim()
+  if (!raw) return false
+  if (catalog?.has(raw) || catalog?.has(String(Number(raw)))) return true
+  if (dcbExistsInTms(raw, tmsDcb)) return true
+  if (dcbExistsInAnvisaIndex(raw)) return true
+  return false
+}
+
+const CONTROLADO_CLEAR_FIELDS = [
+  'listacontrole',
+  'dcb',
+  'registroms',
+  'unidadesngpc',
+  'unidemb',
+  'unidadesporembalagem',
+] as const
+
+/** Remove marcação de controlado da linha (DCB irresolvível). */
+function clearControladoFields(record: Record<string, string>): string[] {
+  const cleared: string[] = []
+  for (const field of CONTROLADO_CLEAR_FIELDS) {
+    if (!(field in record)) continue
+    if (isBlank(record[field])) continue
+    record[field] = ''
+    cleared.push(field)
+  }
+  return cleared
+}
+
+/**
+ * Se há DCB/lista de controle mas o DCB não resolve → anula controlado (aviso).
+ * Retorna true se o controlado foi anulado.
+ */
+function resolveOrClearControlado(
+  record: Record<string, string>,
+  rowNumber: number,
+  columns: Set<string>,
+  catalogs: AuxiliaryCatalogs,
+  issues: ValidationIssue[],
+  counters: IssueCounters,
+  tmsDcb: Map<string, TmsDcbRecord> | null
+): boolean {
+  const hasListaCol = hasColumn(columns, 'listacontrole')
+  const hasDcbCol = hasColumn(columns, 'dcb')
+  if (!hasListaCol && !hasDcbCol) return false
+
+  const lista = hasListaCol ? cell(record, 'listacontrole').trim() : ''
+  const dcb = hasDcbCol ? cell(record, 'dcb').trim() : ''
+
+  if (isBlank(lista) && isBlank(dcb)) return false
+
+  const dcbOk =
+    !isBlank(dcb) && isValidIntegerId(dcb) && isDcbResolvable(dcb, catalogs.dcb, tmsDcb)
+
+  if (dcbOk) return false
+
+  const previousDcb = dcb
+  clearControladoFields(record)
+
+  const reason = isBlank(previousDcb)
+    ? 'DCB vazio'
+    : !isValidIntegerId(previousDcb)
+      ? `DCB "${previousDcb}" inválido`
+      : `DCB "${previousDcb}" não encontrado no auxiliar, na tabela DCB do banco nem na base Anvisa`
+
+  pushIssue(issues, counters, {
+    row: rowNumber,
+    field: 'dcb',
+    value: previousDcb,
+    message: `${reason} — controlado anulado (lista/DCB/MS limpos). Produto segue como não controlado.`,
+    severity: 'warning',
+  })
+
+  return true
 }
 
 async function loadTmsDcbForValidation(): Promise<Map<string, TmsDcbRecord> | null> {
@@ -420,6 +520,22 @@ function validateAuxiliaryRefs(
   for (const [field, entity] of Object.entries(FIELD_TO_AUXILIARY)) {
     if (!hasColumn(columns, field) && field !== 'codigogrupo') continue
 
+    // DCB: se ainda houver valor após resolveOrClearControlado, deve estar resolvido.
+    if (field === 'dcb') {
+      const value = cell(record, 'dcb').trim()
+      if (isBlank(value)) continue
+      if (isDcbResolvable(value, catalogs.dcb, tmsDcb)) continue
+      clearControladoFields(record)
+      pushIssue(issues, counters, {
+        row: rowNumber,
+        field,
+        value,
+        message: `dcb "${value}" não encontrado — controlado anulado (lista/DCB/MS limpos).`,
+        severity: 'warning',
+      })
+      continue
+    }
+
     const value = cell(record, field).trim()
     if (isBlank(value)) {
       if (field === 'codigogrupo') {
@@ -431,42 +547,6 @@ function validateAuxiliaryRefs(
     if (!isValidIntegerId(value)) continue
 
     const catalog = catalogs[entity]
-
-    // DCB: auxiliar OU tabela do banco OU código Anvisa (CMED).
-    // A sugestão de controlados preenche Anvisa — não exige dcb.csv.
-    if (field === 'dcb') {
-      if (catalog?.has(value) || catalog?.has(String(Number(value)))) continue
-      if (dcbExistsInTms(value, tmsDcb)) continue
-      if (dcbExistsInAnvisaIndex(value)) continue
-      if (catalog) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field,
-          value,
-          message: tmsDcb
-            ? `dcb "${value}" não encontrado no auxiliar, na tabela DCB do banco nem na base Anvisa.`
-            : `dcb "${value}" não encontrado no arquivo auxiliar nem na base Anvisa (CMED).`,
-          severity: 'error',
-        })
-      } else if (tmsDcb) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field,
-          value,
-          message: `dcb "${value}" não encontrado na tabela DCB do banco nem na base Anvisa.`,
-          severity: 'error',
-        })
-      } else {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field,
-          value,
-          message: `Arquivo auxiliar de dcb não enviado e banco indisponível — não foi possível validar o id ${value}.`,
-          severity: 'error',
-        })
-      }
-      continue
-    }
 
     if (!catalog) {
       if (field === 'codigogrupo' || !isBlank(value)) {
@@ -818,32 +898,25 @@ function validateRow(
     }
   }
 
-  if (hasColumn(columns, 'listacontrole')) {
+  // DCB irresolvível ou lista sem DCB válido → anula controlado (aviso), não bloqueia.
+  const controladoCleared = resolveOrClearControlado(
+    record,
+    rowNumber,
+    columns,
+    catalogs,
+    issues,
+    counters,
+    tmsDcb
+  )
+
+  if (!controladoCleared && hasColumn(columns, 'listacontrole')) {
     const listaControle = cell(record, 'listacontrole').trim()
     if (!isBlank(listaControle)) {
       const dcb = cell(record, 'dcb').trim()
-      if (isBlank(dcb)) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field: 'dcb',
-          value: '',
-          message: 'DCB é obrigatório quando o produto é controlado (listacontrole preenchida).',
-          severity: 'error',
-        })
-      } else if (!isValidIntegerId(dcb)) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field: 'dcb',
-          value: dcb,
-          message: 'DCB deve ser um número inteiro (código Anvisa ou id do auxiliar).',
-          severity: 'error',
-        })
-      }
-
       const registroms = hasColumn(columns, 'registroms')
         ? cell(record, 'registroms').trim()
         : ''
-      if (isBlank(registroms)) {
+      if (isBlank(registroms) && !isBlank(dcb) && isValidIntegerId(dcb)) {
         pushIssue(issues, counters, {
           row: rowNumber,
           field: 'registroms',

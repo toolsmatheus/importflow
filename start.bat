@@ -37,6 +37,20 @@ set "NEED_BUILD=%FORCE_BUILD%"
 if not exist "backend\dist\server.js" set "NEED_BUILD=1"
 if not exist "frontend\dist\index.html" set "NEED_BUILD=1"
 
+REM Rebuild se o source estiver mais novo que o dist (evita servir codigo antigo)
+if "%NEED_BUILD%"=="0" (
+  powershell -NoProfile -Command ^
+    "$be=(Get-ChildItem 'backend\src' -Recurse -Filter '*.ts' -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1); " ^
+    "$bd=Get-Item 'backend\dist\server.js' -EA SilentlyContinue; " ^
+    "$fe=(Get-ChildItem 'frontend\src' -Recurse -Include '*.ts','*.tsx','*.css' -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1); " ^
+    "$fd=Get-Item 'frontend\dist\index.html' -EA SilentlyContinue; " ^
+    "if (($be -and $bd -and $be.LastWriteTime -gt $bd.LastWriteTime) -or ($fe -and $fd -and $fe.LastWriteTime -gt $fd.LastWriteTime)) { exit 1 }; exit 0" >nul 2>&1
+  if errorlevel 1 (
+    echo Source mais novo que o dist — rebuild automatico.
+    set "NEED_BUILD=1"
+  )
+)
+
 if "%NEED_BUILD%"=="1" (
   echo Gerando build de producao...
   call npm run build --prefix frontend

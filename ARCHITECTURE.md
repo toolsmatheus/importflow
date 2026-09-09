@@ -110,15 +110,14 @@ Módulos extraídos de `tmsService.ts` (barrel de compatibilidade: `tmsService.t
 Estado centralizado em `useImportWizard.tsx` (React Context + localStorage para TMS URL e UF).
 
 ```
-auxiliary → file → errors → preview → send
+auxiliary → file → errors → send
 ```
 
 | Step | Componente | Ação |
 |------|------------|------|
 | Auxiliares | `AuxiliaryStep.tsx` | Upload/preview de `grupo.csv` (obrig.) e demais |
 | Produtos | `FileDropzone`, `FolderCollectPanel` | Upload manual ou coleta de pasta |
-| Erros | `ErrorsStep`, `InconsistencyChecksPanel` | Checagens por categoria, export CSV |
-| Prévia | `PreviewStep.tsx` | Grid editável + revalidação |
+| Erros | `ErrorsStep`, `ControladoSuggestPanel` | Validação, ver erros, sugestão CMED/DCB |
 | Envio | `SendStep.tsx` | Job live/simulate, pause/resume/retry |
 
 ### Services frontend
@@ -150,8 +149,8 @@ auxiliary → file → errors → preview → send
                               └──────────────┬───────────────┘
                                              │ rows + issues
                                              ▼
-                              Preview (edit) → validate-rows
-                                             │
+                              ErrorsStep (controlados + Ver erros)
+                                             │ sem erros bloqueantes
                                              ▼
                               POST /products/send/start
                               ┌──────────────────────────────┐

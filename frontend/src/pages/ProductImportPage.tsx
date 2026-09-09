@@ -9,7 +9,6 @@ import { FileInfo } from '@/components/FileInfo'
 import { FolderCollectPanel } from '@/components/FolderCollectPanel'
 import { AuxiliaryStep } from '@/components/AuxiliaryStep'
 import { ErrorsStep } from '@/components/ErrorsStep'
-import { PreviewStep } from '@/components/PreviewStep'
 import { SendStep } from '@/components/SendStep'
 import { Button } from '@/components/ui/button'
 import {
@@ -138,6 +137,40 @@ export function ProductImportPage() {
       toast.error(error.message || 'Erro ao validar o arquivo')
     },
   })
+
+  const revalidateRowsMutation = useMutation({
+    mutationFn: async (rows: Record<string, string>[]) => {
+      return productService.validateRows(
+        rows,
+        wizard.auxiliaryFileIds,
+        wizard.clientUf || undefined
+      )
+    },
+    onSuccess: (result) => {
+      wizard.setValidationResult(result)
+      wizard.setPreviewRows(result.rows)
+      if (result.columns.length) {
+        wizard.setPreviewColumns(result.columns)
+      }
+
+      if (result.errorCount > 0) {
+        toast.warning(
+          `Revalidação: ${formatNumber(result.errorCount)} erro(s) e ${formatNumber(result.warningCount)} alerta(s) restantes`
+        )
+      } else if (result.warningCount > 0) {
+        toast.success(
+          `Revalidação ok — sem erros bloqueantes (${formatNumber(result.warningCount)} alerta(s))`
+        )
+      } else {
+        toast.success('Revalidação ok — sem inconsistências')
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao revalidar após controlados')
+    },
+  })
+
+  const isRevalidating = validateMutation.isPending || revalidateRowsMutation.isPending
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)
@@ -342,32 +375,24 @@ export function ProductImportPage() {
         <ErrorsStep
           result={wizard.validationResult}
           clientUf={wizard.clientUf}
+          auxiliary={wizard.auxiliaryFileIds}
+          onApplyControlados={async (nextRows) => {
+            wizard.setPreviewRows(nextRows)
+            await revalidateRowsMutation.mutateAsync(nextRows)
+          }}
           onBack={() => wizard.setCurrentStep('file')}
           onFixFile={() => wizard.setCurrentStep('file')}
           onFixAuxiliary={() => wizard.setCurrentStep('auxiliary')}
           onRevalidate={() => validateMutation.mutate()}
-          isRevalidating={validateMutation.isPending}
+          isRevalidating={isRevalidating}
           onFixAliquotas={handleFixAliquotas}
           onContinue={() => {
             if (wizard.validationResult?.rows?.length) {
               wizard.setPreviewRows(wizard.validationResult.rows)
               wizard.setPreviewColumns(wizard.validationResult.columns)
             }
-            wizard.setCurrentStep('preview')
+            wizard.setCurrentStep('send')
           }}
-        />
-      )}
-
-      {wizard.currentStep === 'preview' && (
-        <PreviewStep
-          columns={wizard.previewColumns}
-          rows={wizard.previewRows}
-          onRowsChange={wizard.setPreviewRows}
-          onColumnsChange={wizard.setPreviewColumns}
-          auxiliary={wizard.auxiliaryFileIds}
-          clientUf={wizard.clientUf}
-          onBack={() => wizard.setCurrentStep('errors')}
-          onContinue={() => wizard.setCurrentStep('send')}
         />
       )}
 
@@ -380,7 +405,7 @@ export function ProductImportPage() {
           onJobChange={wizard.setSendJob}
           auxiliary={wizard.auxiliaryFileIds}
           validationResult={wizard.validationResult}
-          onBack={() => wizard.setCurrentStep('preview')}
+          onBack={() => wizard.setCurrentStep('errors')}
           onFinish={() => {
             wizard.resetWizard()
             setSelectedFile(null)

@@ -4,6 +4,7 @@ import {
   lookupControladoByEan,
   getControladosEanIndex,
 } from './controladosEanIndexService.js'
+import { lookupAnvisaDcbBySubstance } from './dcbIndexService.js'
 import { matchSubstanceToLista, normalizeSubstanceName } from './portaria344Service.js'
 
 export type ControladoSuggestKind = 'empty' | 'conflict' | 'confirm'
@@ -48,7 +49,7 @@ type DcbNameIndex = {
   entries: Array<{ id: string; nome: string; norm: string }>
 }
 
-/** Normaliza nomes do catálogo DCB uma vez por chamada de sugestão. */
+/** Normaliza nomes do catálogo DCB auxiliar uma vez por chamada de sugestão. */
 function buildDcbNameIndex(dcbCatalog: AuxiliaryCatalog): DcbNameIndex {
   const exact = new Map<string, { id: string; nome: string }>()
   const entries: Array<{ id: string; nome: string; norm: string }> = []
@@ -127,6 +128,8 @@ function isTarjaSemControle(tarja: string): boolean {
 /**
  * Gera sugestões de listacontrole/DCB/registroms.
  * Ordem: EAN na base validada (controlados.txt) → senão CMED + Portaria/antimicrobianos.
+ * DCB: base validada → auxiliar dcb.csv → índice Anvisa (princípio ativo CMED).
+ * Sem DCB resolvido: não sugere lista/MS (produto permanece não controlado).
  * Nunca altera linhas; apenas sugere.
  */
 export function suggestControlados(
@@ -198,12 +201,39 @@ export function suggestControlados(
       ]
     }
 
-    const dcbFromName = findDcbId(substance || matchedName, matchedName, dcbIndex)
-    const suggestedDcb = (validated?.dcb || dcbFromName.id || '').trim()
-    const suggestedDcbNome =
-      validated?.dcb && dcbCatalog?.get(validated.dcb)
-        ? dcbCatalog.get(validated.dcb)!
-        : dcbFromName.nome
+    const dcbFromAux = findDcbId(substance || matchedName, matchedName, dcbIndex)
+    // Sempre tenta Anvisa pelo princípio ativo CMED quando ainda não há DCB.
+    // (validado com dcb próprio já cobre o caso; auxiliar tem prioridade sobre Anvisa)
+    const dcbFromAnvisa =
+      !validated?.dcb && !dcbFromAux.id
+        ? lookupAnvisaDcbBySubstance(substance || matchedName, matchedName)
+        : null
+
+    // Prioridade: base validada → auxiliar → índice Anvisa (princípio ativo CMED)
+    let suggestedDcb = ''
+    let suggestedDcbNome = ''
+    let dcbSource: 'validated' | 'aux' | 'anvisa' | null = null
+
+    if (validated?.dcb) {
+      suggestedDcb = validated.dcb.trim()
+      suggestedDcbNome =
+        dcbCatalog?.get(validated.dcb) ??
+        lookupAnvisaDcbBySubstance(substance, matchedName)?.descricao ??
+        ''
+      dcbSource = 'validated'
+    } else if (dcbFromAux.id) {
+      suggestedDcb = dcbFromAux.id
+      suggestedDcbNome = dcbFromAux.nome
+      dcbSource = 'aux'
+    } else if (dcbFromAnvisa) {
+      suggestedDcb = dcbFromAnvisa.dcb
+      suggestedDcbNome = dcbFromAnvisa.descricao
+      dcbSource = 'anvisa'
+    }
+
+    // Sem DCB resolvido: não sugerir como controlado (lista/MS ficariam incompletos).
+    if (!suggestedDcb) return
+
     const currentLista = (row.listacontrole ?? '').trim()
     const currentDcb = (row.dcb ?? '').trim()
     const currentRegistro = (row.registroms ?? '').trim()
@@ -219,13 +249,12 @@ export function suggestControlados(
     if (kind === 'confirm') return
 
     if (registro) reasonParts.push(`Registro MS: ${registro}`)
-    if (validated?.dcb) reasonParts.push(`DCB Anvisa (base): ${validated.dcb}`)
-    if (dcbFromName.id && dcbFromName.id !== validated?.dcb) {
-      reasonParts.push(`DCB auxiliar: ${dcbFromName.id} (${dcbFromName.nome})`)
-    } else if (!suggestedDcb && dcbCatalog) {
-      reasonParts.push('DCB não encontrado no auxiliar')
-    } else if (!suggestedDcb) {
-      reasonParts.push('Envie dcb.csv para sugerir o id DCB')
+    if (dcbSource === 'validated') {
+      reasonParts.push(`DCB Anvisa (base): ${suggestedDcb}`)
+    } else if (dcbSource === 'aux') {
+      reasonParts.push(`DCB auxiliar: ${suggestedDcb} (${suggestedDcbNome})`)
+    } else if (dcbSource === 'anvisa') {
+      reasonParts.push(`DCB Anvisa (princípio ativo): ${suggestedDcb} (${suggestedDcbNome})`)
     }
 
     suggestions.push({

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { extractBaseNames, normalizeSubstanceName } from './portaria344Service.js'
 
 interface DcbIndexFile {
   source: string
@@ -11,7 +12,7 @@ interface DcbIndexFile {
 type AnvisaDcbHit = { dcb: string; descricao: string }
 
 let cached: DcbIndexFile | null | undefined
-/** Nome uppercased → código Anvisa (montado uma vez). */
+/** Nome uppercased / normalizado → código Anvisa (montado uma vez). */
 let byNameCache: Map<string, AnvisaDcbHit> | null | undefined
 
 export function padDcbCode(value: string): string {
@@ -52,10 +53,11 @@ function getAnvisaDcbByNameMap(): Map<string, AnvisaDcbHit> | null {
   }
   const map = new Map<string, AnvisaDcbHit>()
   for (const [code, name] of Object.entries(index.byCode)) {
-    const key = name.toLocaleUpperCase('pt-BR')
-    if (!map.has(key)) {
-      map.set(key, { dcb: code, descricao: name })
-    }
+    const hit: AnvisaDcbHit = { dcb: code, descricao: name }
+    const upper = name.toLocaleUpperCase('pt-BR')
+    if (!map.has(upper)) map.set(upper, hit)
+    const norm = normalizeSubstanceName(name)
+    if (norm && !map.has(norm)) map.set(norm, hit)
   }
   byNameCache = map
   return map
@@ -70,13 +72,52 @@ export function lookupAnvisaDcb(code: string): AnvisaDcbHit | null {
   return { dcb: padded, descricao }
 }
 
-/** Busca código Anvisa pelo nome da substância (match exato, case-insensitive). */
+/** Busca código Anvisa pelo nome da substância (exato e normalizado). */
 export function lookupAnvisaDcbByDescricao(descricao: string): AnvisaDcbHit | null {
-  const key = String(descricao ?? '')
-    .trim()
-    .toLocaleUpperCase('pt-BR')
-  if (!key) return null
+  const raw = String(descricao ?? '').trim()
+  if (!raw) return null
   const map = getAnvisaDcbByNameMap()
   if (!map) return null
-  return map.get(key) ?? null
+
+  const upper = raw.toLocaleUpperCase('pt-BR')
+  const direct = map.get(upper)
+  if (direct) return direct
+
+  const norm = normalizeSubstanceName(raw)
+  if (norm) {
+    const byNorm = map.get(norm)
+    if (byNorm) return byNorm
+  }
+  return null
+}
+
+/**
+ * Resolve DCB Anvisa a partir do princípio ativo CMED (e variantes).
+ * Tenta o nome completo, partes separadas por `;` e nomes-base (sem sal).
+ */
+export function lookupAnvisaDcbBySubstance(
+  substance: string,
+  matchedName = ''
+): AnvisaDcbHit | null {
+  const candidates = [
+    substance,
+    matchedName,
+    ...String(substance ?? '')
+      .split(';')
+      .map((s) => s.trim()),
+    ...extractBaseNames(substance || matchedName),
+  ]
+    .map((s) => String(s ?? '').trim())
+    .filter(Boolean)
+
+  // Preferir match do nome mais específico primeiro (ex.: CLORIDRATO DE X antes de X).
+  const seen = new Set<string>()
+  for (const candidate of candidates) {
+    const key = candidate.toLocaleUpperCase('pt-BR')
+    if (seen.has(key)) continue
+    seen.add(key)
+    const hit = lookupAnvisaDcbByDescricao(candidate)
+    if (hit) return hit
+  }
+  return null
 }

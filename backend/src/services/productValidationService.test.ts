@@ -65,3 +65,35 @@ describe('validateProductRows — EAN', () => {
     expect(eanWarnings.length).toBeGreaterThan(0)
   })
 })
+
+describe('validateProductRows — controlado anulado', () => {
+  it('limpa lista/DCB/MS com aviso quando DCB não existe', async () => {
+    const result = await validateProductRows({
+      rows: [
+        baseRow({
+          listacontrole: 'A1',
+          dcb: '10021',
+          registroms: '1234567890',
+        }),
+      ],
+    })
+
+    const row = result.rows[0]
+    expect(row.listacontrole).toBe('')
+    expect(row.dcb).toBe('')
+    expect(row.registroms).toBe('')
+
+    const cleared = result.issues.filter(
+      (i) => i.severity === 'warning' && i.message.toLowerCase().includes('controlado anulado')
+    )
+    expect(cleared.length).toBeGreaterThan(0)
+
+    const blockingDcb = result.issues.filter(
+      (i) =>
+        i.field === 'dcb' &&
+        i.severity === 'error' &&
+        i.message.toLowerCase().includes('não encontrado')
+    )
+    expect(blockingDcb).toHaveLength(0)
+  })
+})

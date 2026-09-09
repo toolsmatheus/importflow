@@ -2,7 +2,6 @@ export type WizardStep =
   | 'file'
   | 'auxiliary'
   | 'errors'
-  | 'preview'
   | 'send'
 
 /** Importações complementares (aba Opcionais), independentes do wizard de produtos. */
@@ -141,6 +140,8 @@ export interface SendJobSnapshot {
   id: string
   status: SendJobStatus
   mode: SendMode
+  /** Fase atual: auxiliares → catálogos → produtos */
+  phase?: 'auxiliaries' | 'catalogs' | 'products' | 'done'
   tmsBaseUrl: string
   idFilial: number
   batchSize: number

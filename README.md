@@ -6,9 +6,8 @@ Importação de produtos via CSV para o banco de dados (ToolsPharma), com valida
 
 1. **Auxiliares** — upload de `grupo.csv` (obrigatório) e demais auxiliares (`id;nome`); prévia read-only por arquivo; download de modelos
 2. **Produtos** — upload manual **ou** coleta automática de pasta (`produtos.csv`, `grupo.csv`, …); identificação da filial e UF
-3. **Erros** — validação com checagens expansíveis por categoria; export CSV de inconsistências
-4. **Prévia** — grid editável e revalidação
-5. **Envio** — lotes via `ImportarListaProdutos`, com progresso, pausa, retomar e reenvio de falhas (ou simulação sem gravar)
+3. **Erros** — validação com checagens; sugestão de controlados (CMED/DCB); botão para ver erros; só segue sem erros bloqueantes
+4. **Envio** — lotes via `ImportarListaProdutos`, com progresso, pausa, retomar e reenvio de falhas (ou simulação sem gravar)
 
 ### Regras automáticas (validação)
 

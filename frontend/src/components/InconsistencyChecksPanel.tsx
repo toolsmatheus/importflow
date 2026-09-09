@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Download, Search } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,15 +14,23 @@ interface InconsistencyChecksPanelProps {
   description?: string
   truncated?: boolean
   onDownloadCsv?: () => void
+  /** Abre automaticamente checagens que têm ocorrências. */
+  defaultExpandWithIssues?: boolean
 }
 
 function groupIssuesByCheck(issues: ValidationIssue[]): Map<string, ValidationIssue[]> {
   const map = new Map<string, ValidationIssue[]>()
   for (const issue of issues) {
-    const id = issue.checkId ?? 'other'
+    const id = issue.checkId ?? (issue.severity === 'warning' ? 'other_warning' : 'other_error')
     const list = map.get(id) ?? []
     list.push(issue)
     map.set(id, list)
+    // Compatível com validações antigas que ainda usam checkId "other"
+    if (id === 'other_error' || id === 'other_warning') {
+      const legacy = map.get('other') ?? []
+      legacy.push(issue)
+      map.set('other', legacy)
+    }
   }
   return map
 }
@@ -34,10 +42,19 @@ export function InconsistencyChecksPanel({
   description = 'O que o sistema pesquisou e validou — inclusive quando não encontrou nada.',
   truncated,
   onDownloadCsv,
+  defaultExpandWithIssues = false,
 }: InconsistencyChecksPanelProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-
   const issuesByCheck = useMemo(() => groupIssuesByCheck(issues), [issues])
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    if (!defaultExpandWithIssues) return new Set()
+    return new Set(checks.filter((c) => c.count > 0).map((c) => c.id))
+  })
+
+  useEffect(() => {
+    if (!defaultExpandWithIssues) return
+    setExpanded(new Set(checks.filter((c) => c.count > 0).map((c) => c.id)))
+  }, [checks, defaultExpandWithIssues])
 
   if (!checks.length) return null
 
@@ -48,6 +65,25 @@ export function InconsistencyChecksPanel({
       else next.add(id)
       return next
     })
+  }
+
+  const resolveCheckIssues = (
+    checkId: string,
+    severity: ValidationCheckSummaryItem['severity']
+  ): ValidationIssue[] => {
+    const direct = issuesByCheck.get(checkId) ?? []
+    if (direct.length > 0) {
+      // Mantém só a severidade do painel (erros vs alertas), salvo checagens específicas.
+      if (checkId === 'other_error' || checkId === 'other_warning' || checkId === 'other') {
+        return direct.filter((i) => i.severity === severity)
+      }
+      return direct.filter((i) => i.severity === severity)
+    }
+    if (checkId === 'other_error' || checkId === 'other_warning' || checkId === 'other') {
+      const legacy = issuesByCheck.get('other') ?? []
+      return legacy.filter((i) => i.severity === severity)
+    }
+    return []
   }
 
   return (
@@ -81,8 +117,17 @@ export function InconsistencyChecksPanel({
           {checks.map((check) => {
             const ok = check.count === 0
             const isOpen = expanded.has(check.id)
-            const checkIssues = issuesByCheck.get(check.id) ?? []
+            const checkIssues = resolveCheckIssues(check.id, check.severity)
             const canExpand = !ok
+            // Compat: checagens antigas "other" também expandem
+            const displayIssues =
+              checkIssues.length > 0
+                ? checkIssues
+                : check.id === 'other'
+                  ? resolveCheckIssues('other_error', 'error').concat(
+                      resolveCheckIssues('other_warning', 'warning')
+                    )
+                  : []
 
             return (
               <li key={check.id}>
@@ -142,11 +187,11 @@ export function InconsistencyChecksPanel({
                   </span>
                 </div>
 
-                {canExpand && isOpen && checkIssues.length > 0 && (
+                {canExpand && isOpen && displayIssues.length > 0 && (
                   <div className="border-t border-border bg-muted/20 px-3 pb-3 pt-2">
-                    {checkIssues.length < check.count && (
+                    {displayIssues.length < check.count && (
                       <p className="mb-2 text-xs text-muted-foreground">
-                        Mostrando {formatNumber(checkIssues.length)} de{' '}
+                        Mostrando {formatNumber(displayIssues.length)} de{' '}
                         {formatNumber(check.count)} ocorrência(s). Use &quot;Exportar CSV&quot; para
                         baixar o que couber na exportação.
                       </p>
@@ -163,7 +208,7 @@ export function InconsistencyChecksPanel({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {checkIssues.map((issue, index) => (
+                          {displayIssues.map((issue, index) => (
                             <TableRow key={`${issue.row}-${issue.field}-${index}`}>
                               <TableCell>{issue.row || '-'}</TableCell>
                               <TableCell>
@@ -194,10 +239,10 @@ export function InconsistencyChecksPanel({
                   </div>
                 )}
 
-                {canExpand && isOpen && checkIssues.length === 0 && (
+                {canExpand && isOpen && displayIssues.length === 0 && (
                   <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
                     Há {formatNumber(check.count)} ocorrência(s), mas nenhum detalhe foi carregado.
-                    Revalide ou use Exportar CSV.
+                    Clique em Revalidar ou use Exportar CSV / Ver erros.
                   </p>
                 )}
               </li>

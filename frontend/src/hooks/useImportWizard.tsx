@@ -25,7 +25,6 @@ export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
   auxiliary: 'Auxiliares',
   file: 'Produtos',
   errors: 'Erros',
-  preview: 'Prévia',
   send: 'Envio',
 }
 
@@ -33,7 +32,6 @@ export const WIZARD_STEPS: WizardStep[] = [
   'auxiliary',
   'file',
   'errors',
-  'preview',
   'send',
 ]
 
