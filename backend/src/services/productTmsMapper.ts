@@ -311,9 +311,9 @@ function resolveDcbId(
 
 /**
  * Regras fiscais (CFOP não vem do CSV):
- * - ST (st=S) → CFOP 5405, csticmsnormal cic60, csticms cic500
- * - Não ST e alíquota > 0 → CFOP 5102, csticmsnormal cic00, csticms cic102
- * - Alíquota 0 → exige ST ou isento (validação); isento → csticmsnormal cic40
+ * - Alíquota > 0 → CFOP 5102 (ignora st/isento; usa a alíquota)
+ * - Alíquota 0 + st=S → CFOP 5405, csticmsnormal cic60, csticms cic500
+ * - Alíquota 0 + isento=S → csticmsnormal cic40
  */
 function resolveFiscalOverrides(row: Record<string, string>): {
   cfopCode?: string
@@ -324,19 +324,20 @@ function resolveFiscalOverrides(row: Record<string, string>): {
   const isSt = str(row.st)?.toUpperCase() === 'S'
   const isIsento = str(row.isento)?.toUpperCase() === 'S'
 
-  if (isSt) {
-    return {
-      cfopCode: '5405',
-      csticmsnormal: 'cic60',
-      csticms: 'cic500',
-    }
-  }
-
   if (aliquota !== undefined && aliquota > 0) {
     return {
       cfopCode: '5102',
       csticmsnormal: 'cic00',
       csticms: 'cic102',
+    }
+  }
+
+  // aliquota = 0: só então st / isento definem o fiscal
+  if (isSt) {
+    return {
+      cfopCode: '5405',
+      csticmsnormal: 'cic60',
+      csticms: 'cic500',
     }
   }
 
@@ -441,7 +442,8 @@ export function mapCsvRowToProductPayload(
     tipoListaPisCofins: listaMap.tipo,
     monofasico: listaMap.monofasico,
     atualizarestoque: snToBool(row.atualizaestoque) ?? true,
-    atualizarpreco: true,
+    atualizarpreco: snToBool(row.atualizarpreco) ?? true,
+    pagarcomissao: snToBool(row.pagarpremicao) ?? false,
     permitirdescontovenda: snToBool(row.permitedesconto) ?? true,
     origemmercadoria: 'omNacional',
     apresentacao: 'taCapCompDrag',

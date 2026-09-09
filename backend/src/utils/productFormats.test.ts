@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeMarkupFromCustoVenda,
+  eanValidationFailureReason,
   formatBrazilianDecimal,
   isValidCfop,
   isValidEanCheckDigit,
@@ -56,12 +57,44 @@ describe('formatBrazilianDecimal', () => {
 })
 
 describe('isValidEanCheckDigit', () => {
+  it('accepts EAN-8', () => {
+    expect(isValidEanCheckDigit('96385074')).toBe(true)
+  })
+
+  it('accepts UPC-A (12)', () => {
+    expect(isValidEanCheckDigit('042100005264')).toBe(true)
+  })
+
   it('validates EAN-13', () => {
     expect(isValidEanCheckDigit('7894900011517')).toBe(true)
   })
 
+  it('accepts GTIN-14', () => {
+    // EAN-13 7894900011517 padded to GTIN-14
+    expect(isValidEanCheckDigit('07894900011517')).toBe(true)
+  })
+
   it('rejects wrong check digit', () => {
     expect(isValidEanCheckDigit('7894900011510')).toBe(false)
+  })
+
+  it('rejects unsupported lengths', () => {
+    expect(isValidEanCheckDigit('123')).toBe(false)
+    expect(isValidEanCheckDigit('12345678901')).toBe(false) // 11
+  })
+})
+
+describe('eanValidationFailureReason', () => {
+  it('reports invalid length', () => {
+    expect(eanValidationFailureReason('123')).toContain('tamanho inválido')
+  })
+
+  it('reports bad check digit', () => {
+    expect(eanValidationFailureReason('7894900011510')).toContain('dígito verificador')
+  })
+
+  it('returns null for valid EAN-13', () => {
+    expect(eanValidationFailureReason('7894900011517')).toBeNull()
   })
 })
 

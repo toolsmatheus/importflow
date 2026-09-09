@@ -98,6 +98,7 @@ function buildDirectPayload(
     monofasico: false,
     atualizarestoque: true,
     atualizarpreco: true,
+    pagarcomissao: false,
     permitirdescontovenda: true,
     origemmercadoria: 'omNacional',
     apresentacao: 'taCapCompDrag',

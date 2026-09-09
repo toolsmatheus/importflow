@@ -66,11 +66,11 @@ export function isValidIntegerId(value: string): boolean {
 }
 
 /**
- * Valida dígito verificador EAN-13.
- * Aceita também EAN-8 / UPC-A (12 dígitos) com o mesmo algoritmo de peso.
+ * Valida dígito verificador GS1 (EAN/UPC/GTIN).
+ * Tamanhos aceitos: 8 (EAN-8), 12 (UPC-A), 13 (EAN-13), 14 (GTIN-14).
  */
 export function isValidEanCheckDigit(raw: string): boolean {
-  const digits = raw.trim()
+  const digits = raw.trim().replace(/\D/g, '')
   if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(digits)) return false
 
   const body = digits.slice(0, -1)
@@ -84,6 +84,19 @@ export function isValidEanCheckDigit(raw: string): boolean {
 
   const expected = (10 - (sum % 10)) % 10
   return expected === check
+}
+
+/** Motivo legível quando o EAN falha (tamanho ou dígito). */
+export function eanValidationFailureReason(raw: string): string | null {
+  const digits = raw.trim().replace(/\D/g, '')
+  if (!digits) return null
+  if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(digits)) {
+    return `tamanho inválido (${digits.length} dígitos; aceitos: 8, 12, 13 ou 14)`
+  }
+  if (!isValidEanCheckDigit(digits)) {
+    return 'dígito verificador EAN não confere'
+  }
+  return null
 }
 
 /**

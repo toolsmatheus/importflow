@@ -11,7 +11,8 @@ Importação de produtos via CSV para o banco de dados (ToolsPharma), com valida
 
 ### Regras automáticas (validação)
 
-- **CFOP** — não é coluna obrigatória: ST → 5405; alíquota ICMS > 0 → 5102; alíquota 0 exige ST ou isento
+- **CFOP** — não é coluna obrigatória: alíquota ICMS > 0 → 5102; alíquota 0 + ST → 5405; alíquota 0 exige exatamente ST ou isento
+- **Flags S/N obrigatórias** — `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto` (mapeiam para o produto no TMS)
 - **Markup** — se vazio ou inconsistente com custo/venda, é recalculado com aviso
 - **EAN inválido** — alerta (não bloqueia o envio)
 

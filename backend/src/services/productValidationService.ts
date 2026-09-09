@@ -12,7 +12,6 @@ import {
 import {
   isBlank,
   isValidCfop,
-  isValidEanCheckDigit,
   isValidIntegerId,
   isValidMigrationCode,
   isValidNcm,
@@ -21,6 +20,7 @@ import {
   formatBrazilianDecimal,
   markupMatchesSale,
   parseBrazilianNumber,
+  eanValidationFailureReason,
 } from '../utils/productFormats.js'
 import {
   aliquotaMatchesUf,
@@ -92,7 +92,10 @@ const VALIDATION_CHECK_DEFS: Array<{
     label: 'Códigos de barras inválidos (EAN)',
     severity: 'warning',
     match: (i) =>
-      i.field === 'codigobarras' && i.message.toLowerCase().includes('dígito verificador'),
+      i.field === 'codigobarras' &&
+      (i.message.toLowerCase().includes('dígito verificador') ||
+        i.message.toLowerCase().includes('tamanho inválido') ||
+        i.message.toLowerCase().includes('código de barras inválido')),
   },
   {
     id: 'duplicate_codigo',
@@ -194,6 +197,16 @@ const VALIDATION_CHECK_DEFS: Array<{
     match: (i) => i.field === 'descontofixo',
   },
   {
+    id: 'custo_maior_venda',
+    label: 'Custo maior que a venda',
+    severity: 'warning',
+    match: (i) =>
+      (i.field === 'custo' || i.field === 'venda') &&
+      i.message.toLowerCase().includes('custo') &&
+      i.message.toLowerCase().includes('venda') &&
+      i.severity === 'warning',
+  },
+  {
     id: 'markup_auto',
     label: 'Markup recalculado (custo × venda)',
     severity: 'warning',
@@ -245,10 +258,12 @@ function buildCheckSummary(
 
 const SN_FIELDS = [
   'atualizaestoque',
+  'atualizarpreco',
+  'pagarpremicao',
+  'permitedesconto',
   'st',
   'isento',
   'semincidencia',
-  'permitedesconto',
   'usocontinuo',
   'medfciapop',
 ] as const
@@ -659,6 +674,16 @@ function validateRow(
     })
   }
 
+  if (custo !== null && venda !== null && custo > venda) {
+    pushIssue(issues, counters, {
+      row: rowNumber,
+      field: 'custo',
+      value: custoRaw,
+      message: `Custo (${formatBrazilianDecimal(custo)}) é maior que a venda (${formatBrazilianDecimal(venda)}).`,
+      severity: 'warning',
+    })
+  }
+
   const computedMarkup =
     custo !== null && venda !== null ? computeMarkupFromCustoVenda(custo, venda) : null
   const markupBlank = isBlank(markupRaw)
@@ -787,14 +812,17 @@ function validateRow(
 
   if (hasColumn(columns, 'codigobarras')) {
     const ean = cell(record, 'codigobarras').trim()
-    if (!isBlank(ean) && !isValidEanCheckDigit(ean)) {
-      pushIssue(issues, counters, {
-        row: rowNumber,
-        field: 'codigobarras',
-        value: ean,
-        message: 'Código de barras inválido (dígito verificador EAN não confere).',
-        severity: 'warning',
-      })
+    if (!isBlank(ean)) {
+      const reason = eanValidationFailureReason(ean)
+      if (reason) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'codigobarras',
+          value: ean,
+          message: `Código de barras inválido (${reason}).`,
+          severity: 'warning',
+        })
+      }
     }
   }
 
@@ -856,19 +884,7 @@ function validateRow(
     }
   }
 
-  if (hasColumn(columns, 'st') && cell(record, 'st').trim().toUpperCase() === 'S') {
-    const isentoOn =
-      hasColumn(columns, 'isento') && cell(record, 'isento').trim().toUpperCase() === 'S'
-    if (isentoOn) {
-      pushIssue(issues, counters, {
-        row: rowNumber,
-        field: 'st',
-        value: 'S',
-        message: 'st e isento não podem ser S ao mesmo tempo.',
-        severity: 'error',
-      })
-    }
-  }
+  // st/isento só são cruzados quando aliquota=0 (bloco acima). Com alíquota > 0, usa-se a alíquota.
 
   if (hasColumn(columns, 'descontofixo') && hasColumn(columns, 'descontomax')) {
     const fixo = parseBrazilianNumber(cell(record, 'descontofixo'))

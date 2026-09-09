@@ -22,6 +22,10 @@ export const REQUIRED_HEADERS = [
   'aliquota',
   'ncm',
   'cstpiscofins',
+  'atualizaestoque',
+  'atualizarpreco',
+  'pagarpremicao',
+  'permitedesconto',
 ] as const
 
 export const OPTIONAL_HEADERS = [
@@ -37,13 +41,11 @@ export const OPTIONAL_HEADERS = [
   'estoque',
   'descontofixo',
   'comissao',
-  'atualizaestoque',
   'demanda',
   'ativo',
   'st',
   'isento',
   'semincidencia',
-  'permitedesconto',
   'localizacao',
   'usocontinuo',
   'observacao',
@@ -93,6 +95,10 @@ export const productCsvRowSchema = z.object({
   aliquota: z.string(),
   ncm: z.string(),
   cstpiscofins: z.string(),
+  atualizaestoque: z.string(),
+  atualizarpreco: z.string(),
+  pagarpremicao: z.string(),
+  permitedesconto: z.string(),
   markup: z.string().optional(),
   cfop: z.string().optional(),
   valorpmc: z.string().optional(),
@@ -105,13 +111,11 @@ export const productCsvRowSchema = z.object({
   estoque: z.string().optional(),
   descontofixo: z.string().optional(),
   comissao: z.string().optional(),
-  atualizaestoque: z.string().optional(),
   demanda: z.string().optional(),
   ativo: z.string().optional(),
   st: z.string().optional(),
   isento: z.string().optional(),
   semincidencia: z.string().optional(),
-  permitedesconto: z.string().optional(),
   localizacao: z.string().optional(),
   usocontinuo: z.string().optional(),
   observacao: z.string().optional(),
@@ -178,6 +182,8 @@ function buildExampleProductRow(values: {
   descontofixo?: string
   comissao?: string
   atualizaestoque?: string
+  atualizarpreco?: string
+  pagarpremicao?: string
   demanda?: string
   ativo?: string
   st?: string
@@ -210,10 +216,14 @@ function buildExampleProductRow(values: {
     fator: values.fator ?? '1',
     listapiscofins: values.listapiscofins ?? 'NEUTRA',
     aliquota: values.aliquota ?? '17',
-    /** Preenchido automaticamente no envio (ST→5405; alíquota>0→5102). */
+    /** Preenchido automaticamente no envio (alíquota>0→5102; alíquota 0+ST→5405). */
     cfop: values.cfop ?? '',
     ncm: values.ncm ?? '30049099',
     cstpiscofins: values.cstpiscofins ?? '01',
+    atualizaestoque: values.atualizaestoque ?? 'S',
+    atualizarpreco: values.atualizarpreco ?? 'S',
+    pagarpremicao: values.pagarpremicao ?? 'N',
+    permitedesconto: values.permitedesconto ?? 'S',
     valorpmc: values.valorpmc ?? '',
     codigobarras: values.codigobarras ?? '',
     subgrupo: values.subgrupo ?? '',
@@ -224,13 +234,11 @@ function buildExampleProductRow(values: {
     estoque: values.estoque ?? '10',
     descontofixo: values.descontofixo ?? '0',
     comissao: values.comissao ?? '0',
-    atualizaestoque: values.atualizaestoque ?? 'S',
     demanda: values.demanda ?? '0',
     ativo: values.ativo ?? 'A',
     st: values.st ?? 'N',
     isento: values.isento ?? 'N',
     semincidencia: values.semincidencia ?? 'N',
-    permitedesconto: values.permitedesconto ?? 'S',
     localizacao: values.localizacao ?? '',
     usocontinuo: values.usocontinuo ?? 'N',
     observacao: values.observacao ?? '',

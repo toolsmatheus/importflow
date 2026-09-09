@@ -43,6 +43,10 @@ function baseRow(overrides: Record<string, string> = {}): Record<string, string>
     aliquota: '18',
     ncm: '30049099',
     cstpiscofins: '04',
+    atualizaestoque: 'S',
+    atualizarpreco: 'S',
+    pagarpremicao: 'N',
+    permitedesconto: 'S',
     ...overrides,
   }
 }
@@ -58,7 +62,21 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     expect(result.payload.csticmsnormal).toBe('cic00')
   })
 
-  it('aplica CFOP 5405 e CST ST quando st=S', () => {
+  it('com alíquota > 0 usa 5102 mesmo se st=S (st só conta com aliquota=0)', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({ aliquota: '18', st: 'S', isento: 'N' }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.payload['cfopvenda@xdata.ref']).toBe('CFOP(2300)')
+    expect(result.payload.csticms).toBe('cic102')
+    expect(result.payload.csticmsnormal).toBe('cic00')
+  })
+
+  it('aplica CFOP 5405 e CST ST quando aliquota=0 e st=S', () => {
     const result = mapCsvRowToProductPayload(
       baseRow({ aliquota: '0', st: 'S', isento: 'N' }),
       1,
@@ -103,6 +121,25 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
       baseCatalogs()
     )
     expect(bothOn.ok).toBe(false)
+  })
+  it('mapeia flags S/N de estoque, preço, premiação e desconto', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({
+        atualizaestoque: 'N',
+        atualizarpreco: 'N',
+        pagarpremicao: 'S',
+        permitedesconto: 'N',
+      }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.payload.atualizarestoque).toBe(false)
+    expect(result.payload.atualizarpreco).toBe(false)
+    expect(result.payload.pagarcomissao).toBe(true)
+    expect(result.payload.permitirdescontovenda).toBe(false)
   })
 })
 

@@ -13,6 +13,10 @@ function baseRow(overrides: Record<string, string> = {}): Record<string, string>
     aliquota: '18',
     ncm: '30049099',
     cstpiscofins: '04',
+    atualizaestoque: 'S',
+    atualizarpreco: 'S',
+    pagarpremicao: 'N',
+    permitedesconto: 'S',
     ...overrides,
   }
 }
@@ -39,6 +43,19 @@ describe('validateProductRows — alíquota zero', () => {
     )
     expect(aliquotaErrors.some((i) => i.message.includes('exatamente uma'))).toBe(false)
   })
+
+  it('com alíquota > 0 não exige cruzamento st/isento', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ aliquota: '18', st: 'S', isento: 'S' })],
+    })
+
+    const stIsentoErrors = result.issues.filter(
+      (i) =>
+        i.severity === 'error' &&
+        (i.message.includes('st e isento') || i.message.includes('exatamente uma'))
+    )
+    expect(stIsentoErrors).toHaveLength(0)
+  })
 })
 
 describe('validateProductRows — markup automático', () => {
@@ -50,6 +67,18 @@ describe('validateProductRows — markup automático', () => {
     expect(result.rows[0].markup).toBe('50,00')
     const warnings = result.issues.filter((i) => i.field === 'markup' && i.severity === 'warning')
     expect(warnings.some((i) => i.message.includes('recalculado'))).toBe(true)
+  })
+
+  it('avisa quando custo é maior que a venda sem bloquear', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ custo: '20,00', venda: '15,00', markup: '' })],
+    })
+
+    const warnings = result.issues.filter(
+      (i) => i.severity === 'warning' && i.message.toLowerCase().includes('maior que a venda')
+    )
+    expect(warnings.length).toBeGreaterThan(0)
+    expect(result.issues.some((i) => i.field === 'custo' && i.severity === 'error')).toBe(false)
   })
 })
 

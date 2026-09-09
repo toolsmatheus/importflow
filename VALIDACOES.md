@@ -51,7 +51,7 @@ Mapeamento produto → auxiliar:
 ## Produtos — arquivo
 
 Cabeçalhos obrigatórios:  
-`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `fator`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`
+`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `fator`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`, `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto`
 
 - [ ] **cabeçalhos obrigatórios** presentes · **error**  
   *Ex.:* CSV sem a coluna `ncm` no cabeçalho.
@@ -83,11 +83,29 @@ Cabeçalhos obrigatórios:
 - [ ] **`codigogrupo` inteiro** se preenchido · **error**  
   *Ex.:* `codigogrupo=1A` ou `codigogrupo=grupo1`.
 
+### Flags S/N obrigatórias
+
+| Coluna CSV | Envio TMS | Exemplo |
+|------------|-----------|---------|
+| `atualizaestoque` | `atualizarestoque` | `S` / `N` |
+| `atualizarpreco` | `atualizarpreco` | `S` / `N` |
+| `pagarpremicao` | `pagarcomissao` | `S` / `N` |
+| `permitedesconto` | `permitirdescontovenda` | `S` / `N` |
+
+- [ ] **flags obrigatórias preenchidas** · **error**  
+  *Ex.:* `atualizarpreco` em branco.
+
+- [ ] **flags = `S` ou `N`** · **error**  
+  *Ex.:* `pagarpremicao=SIM` ou `permitedesconto=1`.
+
 ### Números e markup
 
 - [ ] **números no formato BR** válidos · **error**  
   *Ex.:* `custo=dez reais` ou `venda=10.abc` → “Valor numérico inválido”.  
   *Ok:* `10,50` / `1.234,56`.
+
+- [ ] **`custo` > `venda`** · **warning** *(mesmo tratamento do desconto fixo > máximo)*  
+  *Ex.:* `custo=20,00` e `venda=15,00` → aviso; não bloqueia o envio.
 
 - [ ] **markup vazio / inválido / inconsistente** → **recalcula** · **warning**  
   *Ex.:* `custo=10,00`, `venda=15,00`, `markup=` (vazio) → grava `50,00` e avisa.  
@@ -100,13 +118,13 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
 
 ### Fiscal (alíquota, ST, isento, PIS/COFINS, NCM, CFOP)
 
-- [ ] **`aliquota = 0`** → exatamente uma de `st` ou `isento` = `S` · **error**  
+- [ ] **`aliquota = 0`** → verifica `st` / `isento` (exatamente uma = `S`) · **error**  
   *Ex. erro:* `aliquota=0`, `st=N`, `isento=N` (nenhuma).  
   *Ex. erro:* `aliquota=0`, `st=S`, `isento=S` (ambas).  
   *Ex. ok:* `aliquota=0`, `st=S`, `isento=N` **ou** `st=N`, `isento=S`.
 
-- [ ] **`st` e `isento` ambos `S`** · **error**  
-  *Ex.:* `st=S` e `isento=S` (mesmo com alíquota > 0).
+- [ ] **`aliquota > 0`** → **não** cruza `st`/`isento`; usa a alíquota (envio CFOP 5102)  
+  *Ex.:* `aliquota=18`, `st=S` → ok na validação; no envio aplica alíquota/CFOP 5102.
 
 - [ ] **`aliquota` diferente da padrão da UF** · **warning**  
   *Ex.:* cliente UF=`SP` (padrão 18%) e produto com `aliquota=17`.
@@ -123,7 +141,8 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
 ### Código de barras
 
 - [ ] **EAN inválido** (tamanho ou dígito verificador) · **warning**  
-  *Ex.:* `codigobarras=123` (tamanho inválido) ou EAN-13 com dígito final errado.  
+  *Tamanhos aceitos:* **8**, **12** (UPC-A), **13**, **14** dígitos.  
+  *Ex.:* `codigobarras=123` (tamanho) ou EAN-13 com dígito final errado.  
   *Não bloqueia o envio.*
 
 ### IDs, flags e status
@@ -131,16 +150,17 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
 - [ ] **IDs auxiliares inteiros** se preenchidos · **error**  
   *Ex.:* `laboratorio=LAB01` ou `subgrupo=1.5`.
 
-- [ ] **flags `S` ou `N`** · **error**  
-  *Ex.:* `st=SIM`, `usocontinuo=1`, `medfciapop=X`.
+- [ ] **flags opcionais `S` ou `N`** (`st`, `isento`, `semincidencia`, `usocontinuo`, `medfciapop`) · **error**  
+  *Ex.:* `st=SIM`, `usocontinuo=1`.
 
 - [ ] **`ativo`** = `A` ou `I` · **error**  
   *Ex.:* `ativo=S` ou `ativo=1`.
 
 ### Descontos e Farmácia Popular
 
-- [ ] **`descontofixo` ≤ `descontomax`** · **warning**  
-  *Ex.:* `descontofixo=15` e `descontomax=10`.
+- [ ] **`descontofixo` > `descontomax`** · **warning**  
+  *Ex.:* `descontofixo=15` e `descontomax=10` → aviso.  
+  *Ok:* `15` e `15` (igual não avisa); ou fixo menor que o máximo.
 
 - [ ] **`medfciapop = S`** → `qtdfciapop` e `valorfciapop` obrigatórios · **error**  
   *Ex.:* `medfciapop=S` com `qtdfciapop` e/ou `valorfciapop` vazios.
