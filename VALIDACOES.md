@@ -127,7 +127,8 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
   *Ex.:* `aliquota=18`, `st=S` → ok na validação; no envio aplica alíquota/CFOP 5102.
 
 - [ ] **`aliquota` diferente da padrão da UF** · **warning**  
-  *Ex.:* cliente UF=`SP` (padrão 18%) e produto com `aliquota=17`.
+  *Ex.:* cliente UF=`SP` (padrão 18%) e produto com `aliquota=17`.  
+  *UI:* botão **Verificar alíquotas diferenciadas** (resumo + lista); só altera se confirmar **Aplicar padrão da UF** (ou manter como estão).
 
 - [ ] **`listapiscofins`** ∈ `NEUTRA` \| `POSITIVA` \| `NEGATIVA` · **error**  
   *Ex.:* `listapiscofins=ISENTA` ou `listapiscofins=positiva` (valor fora da lista).

@@ -23,10 +23,10 @@ import { csvService, type UploadAnalyzeProgress } from '@/services/csvService'
 import { productService } from '@/services/productService'
 import {
   applyExpectedAliquota,
-  findAliquotaMismatches,
   formatAliquotaCsv,
   getUfIcms,
   UF_ICMS_TABLE,
+  type AliquotaMismatch,
 } from '@/lib/icmsByUf'
 import { formatNumber } from '@/lib/utils'
 import type { FileInputMode, FolderCollectResult, ProductValidationResult } from '@/types'
@@ -37,12 +37,14 @@ function isAliquotaUfWarning(issue: { field: string; message: string }) {
 
 function applyAliquotaFixToResult(
   result: ProductValidationResult,
-  uf: string
+  uf: string,
+  mismatches: AliquotaMismatch[]
 ): ProductValidationResult | null {
-  const mismatch = findAliquotaMismatches(result.rows, uf)
-  if (!mismatch || mismatch.mismatches.length === 0) return null
+  if (mismatches.length === 0) return null
+  const entry = getUfIcms(uf)
+  if (!entry) return null
 
-  const nextRows = applyExpectedAliquota(result.rows, mismatch.mismatches, mismatch.expected)
+  const nextRows = applyExpectedAliquota(result.rows, mismatches, entry.aliquota)
   const removed = result.issues.filter(isAliquotaUfWarning)
   const kept = result.issues.filter((i) => !isAliquotaUfWarning(i))
 
@@ -52,7 +54,7 @@ function applyAliquotaFixToResult(
     issues: kept,
     warningCount: Math.max(
       0,
-      result.warningCount - Math.max(removed.length, mismatch.mismatches.length)
+      result.warningCount - Math.max(removed.length, mismatches.length)
     ),
     checkSummary: result.checkSummary?.map((check) =>
       check.id === 'aliquota_uf' ? { ...check, count: 0 } : check
@@ -212,19 +214,19 @@ export function ProductImportPage() {
     }
   }
 
-  const handleFixAliquotas = () => {
+  const handleApplyAliquotaUf = (mismatches: AliquotaMismatch[]) => {
     if (!wizard.validationResult || !wizard.clientUf) return
-    const fixed = findAliquotaMismatches(wizard.validationResult.rows, wizard.clientUf)
-    const next = applyAliquotaFixToResult(wizard.validationResult, wizard.clientUf)
+    const next = applyAliquotaFixToResult(wizard.validationResult, wizard.clientUf, mismatches)
     if (!next) {
-      toast.message('Nenhuma alíquota divergente para corrigir na prévia')
+      toast.message('Nenhuma alíquota divergente para corrigir')
       return
     }
+    const expected = getUfIcms(wizard.clientUf)?.aliquota ?? 0
     wizard.setValidationResult(next)
     wizard.setPreviewRows(next.rows)
     toast.success(
-      `${formatNumber(fixed?.mismatches.length ?? 0)} alíquota(s) ajustada(s) para ${formatAliquotaCsv(
-        fixed?.expected ?? 0
+      `${formatNumber(mismatches.length)} alíquota(s) ajustada(s) para ${formatAliquotaCsv(
+        expected
       )}% (${wizard.clientUf})`
     )
   }
@@ -385,7 +387,7 @@ export function ProductImportPage() {
           onFixAuxiliary={() => wizard.setCurrentStep('auxiliary')}
           onRevalidate={() => validateMutation.mutate()}
           isRevalidating={isRevalidating}
-          onFixAliquotas={handleFixAliquotas}
+          onApplyAliquotaUf={handleApplyAliquotaUf}
           onContinue={() => {
             if (wizard.validationResult?.rows?.length) {
               wizard.setPreviewRows(wizard.validationResult.rows)

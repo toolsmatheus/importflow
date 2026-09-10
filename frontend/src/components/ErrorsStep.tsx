@@ -19,13 +19,14 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { InconsistencyChecksPanel } from '@/components/InconsistencyChecksPanel'
 import { ControladoSuggestPanel } from '@/components/ControladoSuggestPanel'
-import { formatAliquotaCsv, getUfIcms } from '@/lib/icmsByUf'
+import { AliquotaUfReviewPanel } from '@/components/AliquotaUfReviewPanel'
 import { formatNumber } from '@/lib/utils'
 import type {
   AuxiliaryEntity,
   ProductValidationResult,
   ValidationIssue,
 } from '@/types'
+import type { AliquotaMismatch } from '@/lib/icmsByUf'
 
 interface ErrorsStepProps {
   result: ProductValidationResult | null
@@ -37,13 +38,10 @@ interface ErrorsStepProps {
   onFixFile: () => void
   onFixAuxiliary: () => void
   onRevalidate: () => void
-  onFixAliquotas?: () => void
+  /** Aplica o padrão da UF nas divergências escolhidas (após confirmação na UI). */
+  onApplyAliquotaUf?: (mismatches: AliquotaMismatch[]) => void
   onContinue: () => void
   isRevalidating?: boolean
-}
-
-function isAliquotaUfWarning(issue: { field: string; message: string }) {
-  return issue.field === 'aliquota' && issue.message.includes('padrão da UF')
 }
 
 function downloadIssuesCsv(issues: ValidationIssue[], fileName: string) {
@@ -75,16 +73,11 @@ export function ErrorsStep({
   onFixFile,
   onFixAuxiliary,
   onRevalidate,
-  onFixAliquotas,
+  onApplyAliquotaUf,
   onContinue,
   isRevalidating,
 }: ErrorsStepProps) {
   const [errorsOpen, setErrorsOpen] = useState(false)
-
-  const aliquotaUfWarnings = useMemo(() => {
-    if (!result) return []
-    return result.issues.filter(isAliquotaUfWarning)
-  }, [result])
 
   const errorIssues = useMemo(() => {
     if (!result) return []
@@ -100,8 +93,6 @@ export function ErrorsStep({
     if (!result?.checkSummary) return []
     return result.checkSummary.filter((c) => c.severity === 'warning')
   }, [result])
-
-  const ufEntry = clientUf ? getUfIcms(clientUf) : null
 
   if (!result) {
     return (
@@ -162,26 +153,13 @@ export function ErrorsStep({
         </Card>
       </div>
 
-      {aliquotaUfWarnings.length > 0 && ufEntry && (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
-          <CardContent className="space-y-3 p-4 text-sm text-amber-900 dark:text-amber-100">
-            <p>
-              <span className="font-medium">Alíquota × UF {clientUf}:</span> esperada{' '}
-              <span className="font-mono font-medium">
-                {formatAliquotaCsv(ufEntry.aliquota)}%
-              </span>
-              {ufEntry.note ? ` (${ufEntry.note})` : ''}. Há{' '}
-              <span className="font-medium">{formatNumber(aliquotaUfWarnings.length)}</span>{' '}
-              alerta(s) de divergência
-              {result.truncated ? ' (lista pode estar truncada)' : ''}. Isso não bloqueia o envio.
-            </p>
-            {onFixAliquotas ? (
-              <Button size="sm" variant="outline" onClick={onFixAliquotas}>
-                Corrigir todas para {formatAliquotaCsv(ufEntry.aliquota)}%
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
+      {clientUf && onApplyAliquotaUf && rows.length > 0 && (
+        <AliquotaUfReviewPanel
+          rows={rows}
+          clientUf={clientUf}
+          truncatedIssues={result.truncated}
+          onApplyUfStandard={onApplyAliquotaUf}
+        />
       )}
 
       {canContinue ? (

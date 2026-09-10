@@ -101,9 +101,10 @@ function parseAliquotaCell(raw: string): number | null {
 
 export interface AliquotaMismatch {
   rowIndex: number
-  /** Linha CSV (header = 1). */
+  /** Linha CSV (header = 1 → dados começam em 2). */
   row: number
   codigo: string
+  nome: string
   current: number
   currentRaw: string
   expected: number
@@ -128,6 +129,7 @@ export function findAliquotaMismatches(
       rowIndex,
       row: rowIndex + 2,
       codigo: String(row.codigo ?? '').trim(),
+      nome: String(row.nome ?? '').trim(),
       current: value,
       currentRaw: raw,
       expected: entry.aliquota,
@@ -135,6 +137,24 @@ export function findAliquotaMismatches(
   })
 
   return { expected: entry.aliquota, entry, mismatches }
+}
+
+/** Agrupa divergências pela alíquota atual (resumo na UI). */
+export function summarizeAliquotaMismatches(
+  mismatches: AliquotaMismatch[]
+): Array<{ aliquota: number; label: string; count: number }> {
+  const map = new Map<number, number>()
+  for (const m of mismatches) {
+    const key = Math.round(m.current * 1000) / 1000
+    map.set(key, (map.get(key) ?? 0) + 1)
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([aliquota, count]) => ({
+      aliquota,
+      label: formatAliquotaCsv(aliquota),
+      count,
+    }))
 }
 
 export function applyExpectedAliquota(
