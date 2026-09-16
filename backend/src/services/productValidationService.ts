@@ -21,6 +21,7 @@ import {
   markupMatchesSale,
   parseBrazilianNumber,
   eanValidationFailureReason,
+  parseCodigoAdicionalList,
 } from '../utils/productFormats.js'
 import {
   aliquotaMatchesUf,
@@ -92,7 +93,7 @@ const VALIDATION_CHECK_DEFS: Array<{
     label: 'Códigos de barras inválidos (EAN)',
     severity: 'warning',
     match: (i) =>
-      i.field === 'codigobarras' &&
+      (i.field === 'codigobarras' || i.field === 'codigoadicional') &&
       (i.message.toLowerCase().includes('dígito verificador') ||
         i.message.toLowerCase().includes('tamanho inválido') ||
         i.message.toLowerCase().includes('código de barras inválido')),
@@ -820,6 +821,23 @@ function validateRow(
           field: 'codigobarras',
           value: ean,
           message: `Código de barras inválido (${reason}).`,
+          severity: 'warning',
+        })
+      }
+    }
+  }
+
+  if (hasColumn(columns, 'codigoadicional')) {
+    const primary = cell(record, 'codigobarras').trim()
+    const extras = parseCodigoAdicionalList(cell(record, 'codigoadicional'), primary)
+    for (const extra of extras) {
+      const reason = eanValidationFailureReason(extra)
+      if (reason) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'codigoadicional',
+          value: extra,
+          message: `Código de barras adicional inválido (${reason}).`,
           severity: 'warning',
         })
       }

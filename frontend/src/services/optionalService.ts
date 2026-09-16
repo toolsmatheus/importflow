@@ -3,7 +3,7 @@ export type OptionalSendMode = 'live' | 'simulate'
 export interface OptionalJobError {
   index: number
   codigo: string
-  /** Barras+: EAN adicional; Fornecedor: código do fornecedor. */
+  /** Fornecedor: código do fornecedor. */
   detail: string
   message: string
 }
@@ -23,7 +23,6 @@ export interface OptionalJobSnapshot {
   errors: Array<{
     index: number
     codigo: string
-    codigoadicional?: string
     codigofornecedor?: string
     message: string
   }>
@@ -31,7 +30,6 @@ export interface OptionalJobSnapshot {
   skipped?: Array<{
     index: number
     codigo: string
-    codigoadicional?: string
     codigofornecedor?: string
     message: string
   }>
@@ -78,34 +76,10 @@ async function cancelOptionalJob(url: string, failMessage: string): Promise<Opti
 }
 
 export const optionalService = {
-  barcodeTemplateUrl: '/api/opcionais/barcodes/template',
   supplierTemplateUrl: '/api/opcionais/supplier-refs/template',
   validityTemplateUrl: '/api/opcionais/validity/template',
   stockTemplateUrl: '/api/opcionais/stock/template',
   lotsTemplateUrl: '/api/opcionais/lots/template',
-
-  async startBarcodeSend(
-    file: File,
-    options?: { tmsBaseUrl?: string; mode?: OptionalSendMode }
-  ): Promise<OptionalJobSnapshot> {
-    return startOptionalSend(
-      '/api/opcionais/barcodes/send/start',
-      file,
-      options,
-      'Erro ao iniciar importação de códigos de barras'
-    )
-  },
-
-  async getBarcodeJob(jobId: string): Promise<OptionalJobSnapshot> {
-    return getOptionalJob(`/api/opcionais/barcodes/send/${jobId}`, 'Erro ao consultar job')
-  },
-
-  async cancelBarcodeJob(jobId: string): Promise<OptionalJobSnapshot> {
-    return cancelOptionalJob(
-      `/api/opcionais/barcodes/send/${jobId}/cancel`,
-      'Erro ao cancelar job'
-    )
-  },
 
   async startSupplierSend(
     file: File,

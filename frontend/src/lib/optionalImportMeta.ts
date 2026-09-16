@@ -14,7 +14,6 @@ export interface OptionalImportMeta {
 }
 
 export const OPTIONAL_IMPORT_KINDS: OptionalImportKind[] = [
-  'barcodes',
   'supplierRefs',
   'validity',
   'stock',
@@ -22,17 +21,6 @@ export const OPTIONAL_IMPORT_KINDS: OptionalImportKind[] = [
 ]
 
 export const OPTIONAL_IMPORT_META: Record<OptionalImportKind, OptionalImportMeta> = {
-  barcodes: {
-    id: 'barcodes',
-    title: 'Códigos de barras adicionais',
-    shortLabel: 'Barras+',
-    description: 'EANs extras além do código de barras principal.',
-    columns: ['codigo', 'codigobarras', 'codigoadicional', 'fator'],
-    sampleRow: ['', '7891234567890', '7891234567891', '1'],
-    sourceHint:
-      'Localize por codigobarras ou codigo; codigoadicional = EAN novo; fator = conversão.',
-    exampleFileName: 'codigos-barras-adicionais.csv',
-  },
   supplierRefs: {
     id: 'supplierRefs',
     title: 'Referências de fornecedor',

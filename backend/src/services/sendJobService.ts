@@ -3,6 +3,7 @@ import {
   auxiliaryMigracaoExists,
   ensureAliquotaPercent,
   fetchAuxiliaryExistenceCatalogs,
+  fetchProdutoIdByMigracaoOrBarcode,
   fetchProductExistenceCatalogs,
   fetchProductLookupCatalogs,
   fetchServerIdentification,
@@ -10,6 +11,7 @@ import {
   getDefaultTmsBaseUrl,
   importarListaProdutos,
   insertAuxiliaryEntity,
+  insertCodigoBarraProduto,
   mapCsvRowToProductPayload,
   markAuxiliaryMigracaoExists,
   type AuxiliaryMigracaoEntity,
@@ -19,7 +21,7 @@ import {
 } from './tmsService.js'
 import { lookupAnvisaDcb, lookupAnvisaDcbByDescricao, padDcbCode } from './dcbIndexService.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
-import { parseBrazilianNumber } from '../utils/productFormats.js'
+import { parseBrazilianNumber, parseCodigoAdicionalList } from '../utils/productFormats.js'
 
 export type SendJobStatus =
   | 'queued'
@@ -149,6 +151,7 @@ interface PreparedProductSend {
   index: number
   codigo: string
   barcode: string
+  additionalBarcodes: string[]
   payload: Record<string, unknown>
   warnings: string[]
 }
@@ -473,6 +476,10 @@ async function processOneBatch(
     const codigo = String(row.codigo ?? '').trim()
     const barcode = String(row.codigobarras ?? '').trim()
     const nome = String(row.nome ?? '').trim()
+    const additionalBarcodes = parseCodigoAdicionalList(
+      String(row.codigoadicional ?? ''),
+      barcode
+    )
 
     const existingMigracaoId = codigo
       ? lookupExistenceId(existence.byMigracao, codigo)
@@ -594,6 +601,7 @@ async function processOneBatch(
       index,
       codigo,
       barcode,
+      additionalBarcodes,
       payload: mapped.payload,
       warnings: mapped.warnings ?? [],
     })
@@ -614,6 +622,8 @@ async function processOneBatch(
 
   const batchFailed =
     !listaResult.ok && (listaResult.itemErrors?.length ?? 0) === 0 && prepared.length > 0
+
+  const needExtraBarcodes: PreparedProductSend[] = []
 
   for (const item of prepared) {
     const migracaoKey = String(item.payload.codigo_migracao ?? item.codigo).trim()
@@ -649,8 +659,66 @@ async function processOneBatch(
           })
         }
       }
+      if (item.additionalBarcodes.length > 0) {
+        needExtraBarcodes.push(item)
+      }
     }
     job.processed++
+  }
+
+  for (const item of needExtraBarcodes) {
+    if (job.cancelRequested) break
+    const produtoId = await fetchProdutoIdByMigracaoOrBarcode(
+      item.codigo,
+      item.barcode,
+      job.tmsBaseUrl
+    )
+    if (produtoId === undefined) {
+      if (job.errors.length < MAX_STORED_ERRORS) {
+        job.errors.push({
+          index: item.index,
+          codigo: item.codigo,
+          message:
+            'Produto importado, mas não foi possível localizar o id no banco para cadastrar codigoadicional',
+          batch: batchNumber,
+        })
+      }
+      continue
+    }
+
+    for (const extra of item.additionalBarcodes) {
+      if (lookupExistenceId(existence.byBarcode, extra) !== undefined) {
+        if (job.errors.length < MAX_STORED_ERRORS) {
+          job.errors.push({
+            index: item.index,
+            codigo: item.codigo,
+            message: `Aviso: código adicional ${extra} já existe — não cadastrado de novo`,
+            batch: batchNumber,
+          })
+        }
+        continue
+      }
+
+      const insertResult = await insertCodigoBarraProduto(
+        produtoId,
+        { codigoBarra: extra, fator: 1 },
+        job.tmsBaseUrl
+      )
+      if (!insertResult.ok) {
+        if (job.errors.length < MAX_STORED_ERRORS) {
+          job.errors.push({
+            index: item.index,
+            codigo: item.codigo,
+            message: `Aviso: falha ao cadastrar código adicional ${extra}: ${
+              insertResult.message || 'erro TMS'
+            }`,
+            batch: batchNumber,
+          })
+        }
+        continue
+      }
+      confirmExistenceKey(existence.byBarcode, extra, produtoId)
+    }
   }
 }
 

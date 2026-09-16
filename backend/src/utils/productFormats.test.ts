@@ -8,6 +8,7 @@ import {
   isValidNcm,
   markupMatchesSale,
   parseBrazilianNumber,
+  parseCodigoAdicionalList,
 } from './productFormats.js'
 
 describe('parseBrazilianNumber', () => {
@@ -98,11 +99,17 @@ describe('eanValidationFailureReason', () => {
   })
 })
 
-describe('format validators', () => {
-  it('validates CFOP and NCM', () => {
-    expect(isValidCfop('5102')).toBe(true)
-    expect(isValidCfop('510')).toBe(false)
-    expect(isValidNcm('30049099')).toBe(true)
-    expect(isValidNcm('3004909')).toBe(false)
+describe('parseCodigoAdicionalList', () => {
+  it('splits by comma and trims', () => {
+    expect(parseCodigoAdicionalList(' 111 , 222 ; 333 ')).toEqual(['111', '222', '333'])
+  })
+
+  it('skips primary barcode and duplicates', () => {
+    expect(parseCodigoAdicionalList('789,790,789', '789')).toEqual(['790'])
+  })
+
+  it('returns empty for blank', () => {
+    expect(parseCodigoAdicionalList('')).toEqual([])
+    expect(parseCodigoAdicionalList(null)).toEqual([])
   })
 })

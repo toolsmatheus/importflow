@@ -51,7 +51,7 @@ Mapeamento produto → auxiliar:
 ## Produtos — arquivo
 
 Cabeçalhos obrigatórios:  
-`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `fator`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`, `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto`
+`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `fator`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`, `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto` cfop definido com base em regra. atualiza estoque, permite desconto, atualiza preço e pagar premiação estão sendo tratados como obrigatórios
 
 - [ ] **cabeçalhos obrigatórios** presentes · **error**  
   *Ex.:* CSV sem a coluna `ncm` no cabeçalho.
@@ -145,6 +145,11 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
   *Tamanhos aceitos:* **8**, **12** (UPC-A), **13**, **14** dígitos.  
   *Ex.:* `codigobarras=123` (tamanho) ou EAN-13 com dígito final errado.  
   *Não bloqueia o envio.*
+
+- [ ] **`codigoadicional`** (opcional, após `codigobarras`) — EANs extras separados por `,` (ou `;`)  
+  *Ex.:* `789...,790...,791...`  
+  *No envio:* cadastra cada EAN em `listacodigobarras` do produto.  
+  *Validação:* mesmo aviso de EAN inválido por item.
 
 ### IDs, flags e status
 

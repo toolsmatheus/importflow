@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
   ArrowLeft,
-  Barcode,
   Building2,
   CalendarClock,
   ChevronRight,
@@ -32,7 +31,6 @@ const THEME_ICONS: Record<OptionalThemeId, typeof Package> = {
 }
 
 const KIND_ICONS: Record<OptionalImportKind, typeof Warehouse> = {
-  barcodes: Barcode,
   supplierRefs: Building2,
   validity: CalendarClock,
   stock: Warehouse,

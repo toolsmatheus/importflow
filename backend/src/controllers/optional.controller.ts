@@ -1,12 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
-  cancelBarcodeJob,
-  getBarcodeJob,
-  parseBarcodeCsvText,
-  startBarcodeJob,
-} from '../services/optionalBarcodeJobService.js'
-import {
   cancelLotJob,
   getLotJob,
   parseLotCsvText,
@@ -130,54 +124,6 @@ async function startOptionalSend(
       message: error instanceof Error ? error.message : options.failMessage,
     })
   }
-}
-
-export async function startBarcodeSendHandler(request: FastifyRequest, reply: FastifyReply) {
-  return startOptionalSend(request, reply, {
-    parseRows: parseBarcodeCsvText,
-    startJob: startBarcodeJob,
-    emptyMessage:
-      'CSV sem registros. Esperado: codigo;codigobarras;codigoadicional;fator (codigo opcional)',
-    failMessage: 'Erro ao iniciar importação de códigos de barras',
-    logLabel: 'Barcode send start failed',
-  })
-}
-
-export async function getBarcodeSendHandler(request: FastifyRequest, reply: FastifyReply) {
-  const jobId = (request.params as { jobId?: string }).jobId
-  if (!jobId) {
-    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
-  }
-  const snapshot = getBarcodeJob(jobId)
-  if (!snapshot) {
-    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
-  }
-  return reply.send(snapshot)
-}
-
-export async function cancelBarcodeSendHandler(request: FastifyRequest, reply: FastifyReply) {
-  const jobId = (request.params as { jobId?: string }).jobId
-  if (!jobId) {
-    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
-  }
-  const snapshot = cancelBarcodeJob(jobId)
-  if (!snapshot) {
-    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
-  }
-  return reply.send(snapshot)
-}
-
-export async function barcodeTemplateHandler(_request: FastifyRequest, reply: FastifyReply) {
-  const csv =
-    'codigo;codigobarras;codigoadicional;fator\n' +
-    '1001;7891234567890;7891234567891;1\n' +
-    ';7891234567890;7891234567892;2\n'
-  reply.header('Content-Type', 'text/csv; charset=utf-8')
-  reply.header(
-    'Content-Disposition',
-    'attachment; filename="modelo-codigos-barras-adicionais.csv"'
-  )
-  return reply.send(csv)
 }
 
 export async function startSupplierSendHandler(request: FastifyRequest, reply: FastifyReply) {

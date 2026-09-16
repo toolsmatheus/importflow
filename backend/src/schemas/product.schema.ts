@@ -33,6 +33,7 @@ export const OPTIONAL_HEADERS = [
   'cfop',
   'valorpmc',
   'codigobarras',
+  'codigoadicional',
   'subgrupo',
   'categoria',
   'laboratorio',
@@ -103,6 +104,7 @@ export const productCsvRowSchema = z.object({
   cfop: z.string().optional(),
   valorpmc: z.string().optional(),
   codigobarras: z.string().optional(),
+  codigoadicional: z.string().optional(),
   subgrupo: z.string().optional(),
   categoria: z.string().optional(),
   laboratorio: z.string().optional(),
@@ -173,6 +175,7 @@ function buildExampleProductRow(values: {
   cstpiscofins?: string
   valorpmc?: string
   codigobarras?: string
+  codigoadicional?: string
   subgrupo?: string
   categoria?: string
   laboratorio?: string
@@ -226,6 +229,7 @@ function buildExampleProductRow(values: {
     permitedesconto: values.permitedesconto ?? 'S',
     valorpmc: values.valorpmc ?? '',
     codigobarras: values.codigobarras ?? '',
+    codigoadicional: values.codigoadicional ?? '',
     subgrupo: values.subgrupo ?? '',
     categoria: values.categoria ?? '',
     laboratorio: values.laboratorio ?? '',
@@ -274,6 +278,7 @@ export function buildTemplateCsvContent(): string {
       aliquota: '17',
       valorpmc: '9,50',
       codigobarras: '7891058001155',
+      codigoadicional: '7891058001156,7891058001157',
       subgrupo: '1',
       categoria: '1',
       laboratorio: '1',

@@ -118,3 +118,28 @@ export function formatBrazilianDecimal(value: number, decimals = 2): string {
   const rounded = Number(value.toFixed(decimals))
   return rounded.toFixed(decimals).replace('.', ',')
 }
+
+/**
+ * Códigos de barras adicionais no CSV (`codigoadicional`), separados por vírgula.
+ * Remove vazios, espaços e duplicatas; opcionalmente exclui o EAN principal.
+ */
+export function parseCodigoAdicionalList(
+  raw: string | undefined | null,
+  primaryBarcode?: string
+): string[] {
+  if (!raw || !String(raw).trim()) return []
+  const primary = (primaryBarcode ?? '').trim().replace(/\D/g, '')
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of String(raw).split(/[,;]/)) {
+    const code = part.trim()
+    if (!code) continue
+    const digits = code.replace(/\D/g, '')
+    const key = digits || code
+    if (primary && key === primary) continue
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(code.replace(/\s/g, ''))
+  }
+  return out
+}

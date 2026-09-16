@@ -38,13 +38,13 @@ function isCsvFile(file: File) {
 }
 
 function errorDetail(err: OptionalJobSnapshot['errors'][number]): string {
-  return err.codigoadicional || err.codigofornecedor || err.codigo || '-'
+  return err.codigofornecedor || err.codigo || '-'
 }
 
 function skippedDetail(
   skip: NonNullable<OptionalJobSnapshot['skipped']>[number]
 ): string {
-  return skip.codigoadicional || skip.codigofornecedor || skip.codigo || '-'
+  return skip.codigofornecedor || skip.codigo || '-'
 }
 
 export function OptionalImportPanel({
@@ -67,23 +67,20 @@ export function OptionalImportPanel({
 
   const headerLine = meta.columns.join(';')
   const importReady =
-    kind === 'barcodes' ||
     kind === 'supplierRefs' ||
     kind === 'validity' ||
     kind === 'stock' ||
     kind === 'lots'
   const templateUrl =
-    kind === 'barcodes'
-      ? optionalService.barcodeTemplateUrl
-      : kind === 'supplierRefs'
-        ? optionalService.supplierTemplateUrl
-        : kind === 'validity'
-          ? optionalService.validityTemplateUrl
-          : kind === 'stock'
-            ? optionalService.stockTemplateUrl
-            : kind === 'lots'
-              ? optionalService.lotsTemplateUrl
-              : null
+    kind === 'supplierRefs'
+      ? optionalService.supplierTemplateUrl
+      : kind === 'validity'
+        ? optionalService.validityTemplateUrl
+        : kind === 'stock'
+          ? optionalService.stockTemplateUrl
+          : kind === 'lots'
+            ? optionalService.lotsTemplateUrl
+            : null
   const active = job?.status === 'queued' || job?.status === 'running'
   const finished =
     job &&
@@ -107,9 +104,7 @@ export function OptionalImportPanel({
               ? await optionalService.getValidityJob(job.id)
               : kind === 'stock'
                 ? await optionalService.getStockJob(job.id)
-                : kind === 'lots'
-                  ? await optionalService.getLotJob(job.id)
-                  : await optionalService.getBarcodeJob(job.id)
+                : await optionalService.getLotJob(job.id)
         setJob(next)
       } catch {
         /* ignore poll errors */
@@ -161,9 +156,7 @@ export function OptionalImportPanel({
             ? await optionalService.startValiditySend(selectedFile, { tmsBaseUrl, mode })
             : kind === 'stock'
               ? await optionalService.startStockSend(selectedFile, { tmsBaseUrl, mode })
-              : kind === 'lots'
-                ? await optionalService.startLotSend(selectedFile, { tmsBaseUrl, mode })
-                : await optionalService.startBarcodeSend(selectedFile, { tmsBaseUrl, mode })
+              : await optionalService.startLotSend(selectedFile, { tmsBaseUrl, mode })
       setJob(snapshot)
       toast.success(mode === 'simulate' ? 'Simulação iniciada' : 'Importação iniciada')
     } catch (error) {

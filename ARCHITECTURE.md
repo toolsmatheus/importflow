@@ -100,7 +100,7 @@ Módulos extraídos de `tmsService.ts` (barrel de compatibilidade: `tmsService.t
 | Rota | Página |
 |------|--------|
 | `/import/produtos` | Wizard principal de produtos |
-| `/import/opcionais` | Barras, fornecedor, validade, estoque, lotes |
+| `/import/opcionais` | Fornecedor, validade, estoque, lotes |
 | `/import/favorecidos` | Placeholder |
 | `/import/financeiro` | Placeholder |
 | `/settings` | Configurações |

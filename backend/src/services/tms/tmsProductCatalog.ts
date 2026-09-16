@@ -1,7 +1,12 @@
 import { padDcbCode } from '../dcbIndexService.js'
 import type { ProductLookupCatalogs } from '../productTmsMapper.js'
 import { DEFAULT_TMS_BASE } from './tmsConfig.js'
-import { buildMigracaoMap, fetchTmsEntityRows } from './tmsClient.js'
+import {
+  buildMigracaoMap,
+  extractODataRows,
+  fetchTmsEntityRows,
+  tmsJsonRequest,
+} from './tmsClient.js'
 import type { ProductExistenceCatalogs, TmsDcbRecord } from './tmsTypes.js'
 
 /**
@@ -221,6 +226,49 @@ export function resolveProdutoIdFromCsv(
       existence.byBarcode.get(codigobarras.replace(/\D/g, ''))
   }
   return produtoId
+}
+
+/**
+ * Busca id do produto no TMS logo após o insert (existência local ainda pode ter placeholder -1).
+ */
+export async function fetchProdutoIdByMigracaoOrBarcode(
+  codigo: string,
+  barcode: string,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<number | undefined> {
+  const root = baseUrl.replace(/\/$/, '')
+  const migracao = usableMigracaoCodigo(codigo)
+
+  const tryFilter = async (filter: string): Promise<number | undefined> => {
+    const url = `${root}/tms/xdata/Produto?$filter=${encodeURIComponent(filter)}&$top=1`
+    const result = await tmsJsonRequest(url, { method: 'GET' }, baseUrl)
+    if (!result.ok || !result.message) return undefined
+    try {
+      const parsed = JSON.parse(result.message) as unknown
+      const rows = extractODataRows(parsed)
+      const id = Number(rows[0]?.id)
+      return Number.isFinite(id) && id > 0 ? id : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  if (migracao) {
+    const n = Number(migracao)
+    const filter = Number.isInteger(n)
+      ? `codigo_migracao eq ${n}`
+      : `codigo_migracao eq '${migracao.replace(/'/g, "''")}'`
+    const id = await tryFilter(filter)
+    if (id !== undefined) return id
+  }
+
+  const ean = barcode.trim()
+  if (ean) {
+    const filter = `codigoBarras eq '${ean.replace(/'/g, "''")}'`
+    return tryFilter(filter)
+  }
+
+  return undefined
 }
 
 function addExistenceKey(map: Map<string, number>, key: unknown, id: number) {

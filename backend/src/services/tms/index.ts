@@ -56,6 +56,7 @@ export {
   fetchTmsDcbCatalog,
   usableMigracaoCodigo,
   resolveProdutoIdFromCsv,
+  fetchProdutoIdByMigracaoOrBarcode,
   fetchProductExistenceCatalogs,
 } from './tmsProductCatalog.js'
 

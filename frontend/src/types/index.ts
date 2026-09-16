@@ -6,7 +6,6 @@ export type WizardStep =
 
 /** Importações complementares (aba Opcionais), independentes do wizard de produtos. */
 export type OptionalImportKind =
-  | 'barcodes'
   | 'supplierRefs'
   | 'validity'
   | 'stock'

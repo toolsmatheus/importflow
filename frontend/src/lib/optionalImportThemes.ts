@@ -18,7 +18,7 @@ export const OPTIONAL_THEMES: OptionalThemeMeta[] = [
   {
     id: 'produtos',
     label: 'Produtos',
-    description: 'Barras extras, fornecedor, validade, estoque e lotes de controlados.',
+    description: 'Fornecedor, validade, estoque e lotes de controlados.',
     importCount: OPTIONAL_IMPORT_KINDS.length,
     available: true,
     kinds: [...OPTIONAL_IMPORT_KINDS],
