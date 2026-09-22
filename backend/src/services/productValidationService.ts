@@ -72,6 +72,8 @@ export interface ProductValidationResult {
   issues: ValidationIssue[]
   /** Resumo do que foi pesquisado/validado (inclui zeros). */
   checkSummary: ValidationCheckSummaryItem[]
+  /** Contagem de atualizaestoque = S / N em todo o arquivo. */
+  atualizaEstoqueSummary: { s: number; n: number }
   truncated: boolean
   columns: string[]
   rows: Record<string, string>[]
@@ -726,7 +728,9 @@ function validateRow(
     })
   }
 
-  if (!isBlank(fatorRaw) && parseBrazilianNumber(fatorRaw) === null) {
+  if (isBlank(fatorRaw)) {
+    record.fator = '1'
+  } else if (parseBrazilianNumber(fatorRaw) === null) {
     pushIssue(issues, counters, {
       row: rowNumber,
       field: 'fator',
@@ -996,12 +1000,32 @@ function validateRow(
   validateAuxiliaryRefs(record, rowNumber, columns, catalogs, issues, counters, tmsDcb)
 }
 
+function countAtualizaEstoqueFlags(rows: Iterable<Record<string, string>>): {
+  s: number
+  n: number
+} {
+  let s = 0
+  let n = 0
+  for (const row of rows) {
+    const v = String(row.atualizaestoque ?? '').trim().toUpperCase()
+    if (v === 'S') s++
+    else if (v === 'N') n++
+  }
+  return { s, n }
+}
+
 function finalizeResult(
   base: Omit<
     ProductValidationResult,
-    'errorCount' | 'warningCount' | 'canProceed' | 'truncated' | 'checkSummary'
+    | 'errorCount'
+    | 'warningCount'
+    | 'canProceed'
+    | 'truncated'
+    | 'checkSummary'
+    | 'atualizaEstoqueSummary'
   > & {
     counters: IssueCounters
+    atualizaEstoqueSummary?: { s: number; n: number }
   }
 ): ProductValidationResult {
   return {
@@ -1016,6 +1040,7 @@ function finalizeResult(
     canProceed: base.counters.errors === 0,
     issues: base.issues,
     checkSummary: buildCheckSummary(base.counters.categories),
+    atualizaEstoqueSummary: base.atualizaEstoqueSummary ?? { s: 0, n: 0 },
     truncated: isIssueListTruncated(base.counters),
     columns: base.columns,
     rows: base.rows,
@@ -1049,6 +1074,8 @@ export async function validateProductCsv(
   let unknownHeaders: string[] = []
   let presentOptionalHeaders: string[] = []
   const rows: Record<string, string>[] = []
+  let atualizaEstoqueS = 0
+  let atualizaEstoqueN = 0
 
   if (!catalogs.grupo) {
     pushIssue(issues, counters, {
@@ -1105,6 +1132,10 @@ export async function validateProductCsv(
     totalRecords++
     const rowNumber = totalRecords + 1
 
+    const flagAtualiza = String(record.atualizaestoque ?? '').trim().toUpperCase()
+    if (flagAtualiza === 'S') atualizaEstoqueS++
+    else if (flagAtualiza === 'N') atualizaEstoqueN++
+
     if (missingRequiredHeaders.length === 0) {
       validateRow(
         record,
@@ -1120,6 +1151,11 @@ export async function validateProductCsv(
         columnSet.add('markup')
         const custoIdx = columns.indexOf('custo')
         columns.splice(custoIdx >= 0 ? custoIdx + 1 : columns.length, 0, 'markup')
+      }
+      if (record.fator !== undefined && !columnSet.has('fator')) {
+        columnSet.add('fator')
+        const markupIdx = columns.indexOf('markup')
+        columns.splice(markupIdx >= 0 ? markupIdx + 1 : columns.length, 0, 'fator')
       }
     }
 
@@ -1165,6 +1201,7 @@ export async function validateProductCsv(
     columns,
     rows,
     counters,
+    atualizaEstoqueSummary: { s: atualizaEstoqueS, n: atualizaEstoqueN },
   })
 }
 
@@ -1215,6 +1252,12 @@ export async function validateProductRows(
       columns = [...columns]
       columns.splice(custoIdx >= 0 ? custoIdx + 1 : columns.length, 0, 'markup')
     }
+    if (record.fator !== undefined && !columnSet.has('fator')) {
+      columnSet.add('fator')
+      const markupIdx = columns.indexOf('markup')
+      columns = [...columns]
+      columns.splice(markupIdx >= 0 ? markupIdx + 1 : columns.length, 0, 'fator')
+    }
 
     const codigo = cell(record, 'codigo').trim()
     if (codigo && isValidMigrationCode(codigo)) {
@@ -1248,5 +1291,6 @@ export async function validateProductRows(
     columns,
     rows,
     counters,
+    atualizaEstoqueSummary: countAtualizaEstoqueFlags(rows),
   })
 }

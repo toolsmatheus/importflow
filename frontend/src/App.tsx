@@ -6,8 +6,6 @@ import { ThemeProvider } from '@/hooks/useTheme'
 import { ImportPage } from '@/pages/ImportPage'
 import { ProductImportPage } from '@/pages/ProductImportPage'
 import { OpcionaisImportPage } from '@/pages/OpcionaisImportPage'
-import { FavorecidosImportPage } from '@/pages/FavorecidosImportPage'
-import { FinanceiroImportPage } from '@/pages/FinanceiroImportPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 const queryClient = new QueryClient({
@@ -29,8 +27,6 @@ function App() {
                   <Route index element={<Navigate to="produtos" replace />} />
                   <Route path="produtos" element={<ProductImportPage />} />
                   <Route path="opcionais" element={<OpcionaisImportPage />} />
-                  <Route path="favorecidos" element={<FavorecidosImportPage />} />
-                  <Route path="financeiro" element={<FinanceiroImportPage />} />
                 </Route>
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/import/produtos" replace />} />

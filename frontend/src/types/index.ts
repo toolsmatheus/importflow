@@ -51,6 +51,8 @@ export interface ProductValidationResult {
   issues: ValidationIssue[]
   /** Resumo do que foi pesquisado (inclui zeros → “nenhum”). */
   checkSummary?: ValidationCheckSummaryItem[]
+  /** Contagem de atualizaestoque = S / N em todo o arquivo. */
+  atualizaEstoqueSummary?: { s: number; n: number }
   truncated: boolean
   columns: string[]
   rows: Record<string, string>[]

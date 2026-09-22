@@ -51,7 +51,8 @@ Mapeamento produto → auxiliar:
 ## Produtos — arquivo
 
 Cabeçalhos obrigatórios:  
-`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `fator`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`, `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto` cfop definido com base em regra. atualiza estoque, permite desconto, atualiza preço e pagar premiação estão sendo tratados como obrigatórios
+`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`, `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto`  
+`fator` é opcional (vazio → `1`). `cfop` definido com base em regra.
 
 - [ ] **cabeçalhos obrigatórios** presentes · **error**  
   *Ex.:* CSV sem a coluna `ncm` no cabeçalho.

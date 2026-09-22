@@ -17,7 +17,6 @@ export const REQUIRED_HEADERS = [
   'codigogrupo',
   'custo',
   'venda',
-  'fator',
   'listapiscofins',
   'aliquota',
   'ncm',
@@ -30,6 +29,7 @@ export const REQUIRED_HEADERS = [
 
 export const OPTIONAL_HEADERS = [
   'markup',
+  'fator',
   'cfop',
   'valorpmc',
   'tipopreco',
@@ -93,7 +93,6 @@ export const productCsvRowSchema = z.object({
   codigogrupo: z.string(),
   custo: z.string(),
   venda: z.string(),
-  fator: z.string(),
   listapiscofins: z.string(),
   aliquota: z.string(),
   ncm: z.string(),
@@ -103,6 +102,7 @@ export const productCsvRowSchema = z.object({
   pagarpremicao: z.string(),
   permitedesconto: z.string(),
   markup: z.string().optional(),
+  fator: z.string().optional(),
   cfop: z.string().optional(),
   valorpmc: z.string().optional(),
   tipopreco: z.string().optional(),

@@ -162,6 +162,22 @@ export function ErrorsStep({
         />
       )}
 
+      {result.atualizaEstoqueSummary &&
+        result.atualizaEstoqueSummary.n > result.atualizaEstoqueSummary.s && (
+          <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
+            <CardContent className="p-4 text-sm text-amber-900 dark:text-amber-100">
+              <p className="font-medium">Atualiza estoque</p>
+              <p className="mt-1">
+                Mais produtos com <span className="font-mono">atualizaestoque=N</span> (
+                {formatNumber(result.atualizaEstoqueSummary.n)}) do que com{' '}
+                <span className="font-mono">=S</span> (
+                {formatNumber(result.atualizaEstoqueSummary.s)}). Confira se está correto antes
+                do envio.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
       {canContinue ? (
         <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40">
           <CardContent className="p-4 text-sm text-emerald-800 dark:text-emerald-200">

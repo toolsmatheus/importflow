@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import {
   auxiliaryMigracaoExists,
   ensureAliquotaPercent,
+  ensureLocalizacaoProduto,
   fetchAuxiliaryExistenceCatalogs,
   fetchProdutoIdByMigracaoOrBarcode,
   fetchProductExistenceCatalogs,
@@ -570,6 +571,33 @@ async function processOneBatch(
             index,
             codigo,
             message: ensured.message || `Falha ao garantir AliquotaICMS ${aliquotaNum}%`,
+            batch: batchNumber,
+          })
+        }
+        job.processed++
+        continue
+      }
+    }
+
+    const localizacaoRaw = String(row.localizacao ?? '').trim()
+    if (localizacaoRaw) {
+      const ensuredLoc = await ensureLocalizacaoProduto(
+        catalogs,
+        localizacaoRaw,
+        job.tmsBaseUrl
+      )
+      if (!ensuredLoc.ok) {
+        if (codigo) releaseExistenceKey(existence.byMigracao, codigo)
+        if (barcode) releaseExistenceKey(existence.byBarcode, barcode)
+        job.errorCount++
+        job.failedIndexes.push(index)
+        if (job.errors.length < MAX_STORED_ERRORS) {
+          job.errors.push({
+            index,
+            codigo,
+            message:
+              ensuredLoc.message ||
+              `Falha ao garantir LocalizacaoProduto "${localizacaoRaw}"`,
             batch: batchNumber,
           })
         }

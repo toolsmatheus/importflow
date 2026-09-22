@@ -1,7 +1,7 @@
 import type { OptionalImportKind } from '@/types'
 import { OPTIONAL_IMPORT_KINDS } from '@/lib/optionalImportMeta'
 
-export type OptionalThemeId = 'produtos' | 'favorecidos' | 'financeiro'
+export type OptionalThemeId = 'produtos'
 
 export interface OptionalThemeMeta {
   id: OptionalThemeId
@@ -22,24 +22,6 @@ export const OPTIONAL_THEMES: OptionalThemeMeta[] = [
     importCount: OPTIONAL_IMPORT_KINDS.length,
     available: true,
     kinds: [...OPTIONAL_IMPORT_KINDS],
-  },
-  {
-    id: 'favorecidos',
-    label: 'Favorecidos',
-    description: 'Complementos de fornecedores e favorecidos após o cadastro principal.',
-    importCount: 0,
-    available: false,
-    comingSoonHint: 'Em breve',
-    kinds: [],
-  },
-  {
-    id: 'financeiro',
-    label: 'Financeiro',
-    description: 'Ajustes e complementos de títulos e lançamentos.',
-    importCount: 0,
-    available: false,
-    comingSoonHint: 'Em breve',
-    kinds: [],
   },
 ]
 

@@ -181,14 +181,6 @@ export function OptionalImportPanel({
             Opcionais
           </button>
           <span aria-hidden>/</span>
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-          >
-            {themeLabel}
-          </button>
-          <span aria-hidden>/</span>
           <span className="font-medium text-foreground">{meta.shortLabel}</span>
         </nav>
 

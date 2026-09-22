@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Check, ChevronDown, Download, Eye, Loader2, Upload, X } from 'lucide-react'
+import { Check, Eye, Loader2, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/table'
 import { productService } from '@/services/productService'
 import { FolderCollectPanel } from '@/components/FolderCollectPanel'
-import { formatNumber, cn } from '@/lib/utils'
+import { formatNumber } from '@/lib/utils'
 import type { AuxiliaryEntity, AuxiliaryUploadResult, FolderCollectResult } from '@/types'
 
 const ENTITIES: { entity: AuxiliaryEntity; label: string; required?: boolean }[] = [
@@ -49,7 +49,6 @@ export function AuxiliaryStep({
   isValidating,
 }: AuxiliaryStepProps) {
   const [pendingEntity, setPendingEntity] = useState<AuxiliaryEntity | null>(null)
-  const [templatesOpen, setTemplatesOpen] = useState(false)
   const [previewEntity, setPreviewEntity] = useState<AuxiliaryEntity | null>(null)
   const inputRefs = useRef<Partial<Record<AuxiliaryEntity, HTMLInputElement | null>>>({})
 
@@ -83,21 +82,6 @@ export function AuxiliaryStep({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            productService.downloadTemplate()
-            toast.success('Download do modelo iniciado')
-          }}
-        >
-          <Download className="h-3.5 w-3.5" />
-          Modelo produtos
-        </Button>
-      </div>
-
       <FolderCollectPanel mode="auxiliaries" onCollected={onFolderCollected} />
 
       <div className="overflow-hidden rounded-lg border border-border">
@@ -108,33 +92,7 @@ export function AuxiliaryStep({
               {readyCount}/{ENTITIES.length}
             </span>
           </p>
-          <button
-            type="button"
-            onClick={() => setTemplatesOpen((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Modelos
-            <ChevronDown className={cn('h-3.5 w-3.5', templatesOpen && 'rotate-180')} />
-          </button>
         </div>
-
-        {templatesOpen && (
-          <div className="flex flex-wrap gap-1.5 border-b border-border bg-muted/30 px-3 py-2">
-            {ENTITIES.map(({ entity, label }) => (
-              <Button
-                key={entity}
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => productService.downloadAuxiliaryTemplate(entity)}
-              >
-                <Download className="h-3 w-3" />
-                {label}
-              </Button>
-            ))}
-          </div>
-        )}
 
         <ul className="divide-y divide-border">
           {ENTITIES.map(({ entity, label, required }) => {

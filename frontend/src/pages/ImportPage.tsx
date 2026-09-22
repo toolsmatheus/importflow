@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Package, Puzzle, Users, Wallet } from 'lucide-react'
+import { Package, Puzzle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const IMPORT_TABS = [
@@ -13,27 +13,15 @@ const IMPORT_TABS = [
     label: 'Opcionais',
     icon: Puzzle,
   },
-  {
-    to: '/import/favorecidos',
-    label: 'Favorecidos',
-    icon: Users,
-  },
-  {
-    to: '/import/financeiro',
-    label: 'Financeiro',
-    icon: Wallet,
-  },
 ] as const
 
 export function ImportPage() {
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold tracking-tight text-foreground">Importação</h1>
-
       <div
         role="tablist"
-        aria-label="Tipos de importação"
-        className="mb-6 flex flex-wrap gap-1 border-b border-border pb-px"
+        aria-label="Fluxos de importação"
+        className="mb-6 flex gap-6 border-b border-border"
       >
         {IMPORT_TABS.map((tab) => {
           const Icon = tab.icon
@@ -44,10 +32,10 @@ export function ImportPage() {
               role="tab"
               className={({ isActive }) =>
                 cn(
-                  'inline-flex items-center gap-2 rounded-t-md border border-transparent px-3 py-2 text-sm font-medium transition-colors',
+                  'relative -mb-px inline-flex items-center gap-2 border-b-2 pb-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? '-mb-px border-border border-b-background bg-card text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 )
               }
             >

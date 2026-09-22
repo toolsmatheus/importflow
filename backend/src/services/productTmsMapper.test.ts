@@ -20,6 +20,7 @@ function emptyMaps(): ProductLookupCatalogs {
     aliquotaIsentoId: 400,
     aliquotaSemIncidenciaId: 500,
     cfopByCode: new Map(),
+    localizacaoByDescricao: new Map(),
   }
 }
 
@@ -185,7 +186,22 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     expect(invalid.ok).toBe(false)
   })
 
-  it('envia localizacao quando preenchida', () => {
+  it('envia localizacao como ref LocalizacaoProduto quando catalogada', () => {
+    const catalogs = baseCatalogs({
+      localizacaoByDescricao: new Map([['A1-P02', 77]]),
+    })
+    const result = mapCsvRowToProductPayload(
+      baseRow({ localizacao: 'A1-P02' }),
+      1,
+      catalogs
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.payload['localizacao@xdata.ref']).toBe('LocalizacaoProduto(77)')
+    expect(result.payload.localizacao).toBeUndefined()
+  })
+
+  it('envia localizacao como objeto aninhado quando ainda não catalogada', () => {
     const result = mapCsvRowToProductPayload(
       baseRow({ localizacao: 'A1-P02' }),
       1,
@@ -193,7 +209,10 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     )
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.payload.localizacao).toBe('A1-P02')
+    expect(result.payload.localizacao).toEqual({
+      '@xdata.type': 'XData.Default.LocalizacaoProduto',
+      descricao: 'A1-P02',
+    })
   })
 
   it('envia estoqueminimo quando preenchido', () => {

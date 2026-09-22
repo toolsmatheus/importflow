@@ -9,7 +9,6 @@ SELECT
   CAST(p.codigogrupo AS varchar(20)) AS codigogrupo,       -- id do grupo.csv (auxiliar)
   REPLACE(CAST(p.custo AS varchar(30)), '.', ',') AS custo,
   REPLACE(CAST(p.venda AS varchar(30)), '.', ',') AS venda,
-  CAST(COALESCE(p.fator, 1) AS varchar(10)) AS fator,
   CAST(p.listapiscofins AS varchar(20)) AS listapiscofins, -- NEUTRA | POSITIVA | NEGATIVA
   REPLACE(CAST(p.aliquota AS varchar(20)), '.', ',') AS aliquota,
   CAST(p.ncm AS varchar(20)) AS ncm,
@@ -21,6 +20,7 @@ SELECT
 
   -- ===== OPCIONAIS =====
   REPLACE(CAST(p.markup AS varchar(30)), '.', ',') AS markup, -- se vazio, recalcula no ImportFlow
+  CAST(COALESCE(p.fator, 1) AS varchar(10)) AS fator,         -- opcional; vazio → 1
   '' AS cfop,                                                 -- deixe vazio: preenchido no envio
   REPLACE(CAST(p.valorpmc AS varchar(30)), '.', ',') AS valorpmc,
   CAST(COALESCE(p.tipopreco, 'LIBERADO') AS varchar(20)) AS tipopreco, -- LIBERADO/L | MONITORADO/M (vazio→LIBERADO)

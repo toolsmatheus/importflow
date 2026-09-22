@@ -49,6 +49,8 @@ export {
   favorecidoMigracaoExists,
   parseFavorecidoMigracao,
   fetchProductCodigoFornecedorKeys,
+  insertLocalizacaoProduto,
+  ensureLocalizacaoProduto,
 } from './tmsProductExtras.js'
 
 export {

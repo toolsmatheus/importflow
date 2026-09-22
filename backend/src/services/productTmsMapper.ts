@@ -26,6 +26,8 @@ export interface ProductLookupCatalogs {
   aliquotaSemIncidenciaId: number
   /** CFOP string → id preferido (com descrição quando houver) */
   cfopByCode: Map<string, number>
+  /** descrição UPPER → id LocalizacaoProduto */
+  localizacaoByDescricao: Map<string, number>
 }
 
 export interface MapProductResult {
@@ -541,7 +543,19 @@ export function mapCsvRowToProductPayload(
   if (usocontinuo !== undefined) payload.usocontinuo = usocontinuo
 
   const localizacao = str(row.localizacao)
-  if (localizacao) payload.localizacao = localizacao
+  if (localizacao) {
+    const locKey = localizacao.toLocaleUpperCase('pt-BR')
+    const locId = catalogs.localizacaoByDescricao.get(locKey)
+    if (locId !== undefined) {
+      payload['localizacao@xdata.ref'] = xdataRef('LocalizacaoProduto', locId)
+    } else {
+      // Fallback: XData espera objeto LocalizacaoProduto, não string livre.
+      payload.localizacao = {
+        '@xdata.type': 'XData.Default.LocalizacaoProduto',
+        descricao: localizacao,
+      }
+    }
+  }
 
   const observacao = str(row.observacao)
   if (observacao) payload.observacaovenda = observacao

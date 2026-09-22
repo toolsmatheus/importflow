@@ -29,6 +29,7 @@ export async function fetchProductLookupCatalogs(
     unidades,
     cfops,
     dcbs,
+    localizacoes,
   ] = await Promise.all([
     fetchTmsEntityRows('GrupoProdutoDrogaria', baseUrl),
     fetchTmsEntityRows('SubGrupoProdutoDrogaria', baseUrl),
@@ -40,7 +41,18 @@ export async function fetchProductLookupCatalogs(
     fetchTmsEntityRows('Unidade', baseUrl),
     fetchTmsEntityRows('CFOP', baseUrl, 500),
     fetchTmsEntityRows('DCB', baseUrl),
+    fetchTmsEntityRows('LocalizacaoProduto', baseUrl),
   ])
+
+  const localizacaoByDescricao = new Map<string, number>()
+  for (const row of localizacoes) {
+    const id = Number(row.id)
+    if (!Number.isFinite(id)) continue
+    const descricao = String(row.descricao ?? '')
+      .trim()
+      .toLocaleUpperCase('pt-BR')
+    if (descricao) localizacaoByDescricao.set(descricao, id)
+  }
 
   const similarByDescricao = new Map<string, number>()
   for (const row of similares) {
@@ -177,6 +189,7 @@ export async function fetchProductLookupCatalogs(
     aliquotaIsentoId,
     aliquotaSemIncidenciaId,
     cfopByCode,
+    localizacaoByDescricao,
   }
 }
 

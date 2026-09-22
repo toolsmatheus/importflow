@@ -92,6 +92,29 @@ describe('validateProductRows — tipopreco', () => {
   })
 })
 
+describe('validateProductRows — fator opcional', () => {
+  it('preenche fator vazio com 1', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ fator: '' })],
+    })
+    expect(result.rows[0].fator).toBe('1')
+    expect(result.issues.some((i) => i.field === 'fator' && i.severity === 'error')).toBe(false)
+  })
+})
+
+describe('validateProductRows — atualizaestoque summary', () => {
+  it('conta S e N corretamente', async () => {
+    const result = await validateProductRows({
+      rows: [
+        baseRow({ codigo: '1', atualizaestoque: 'S' }),
+        baseRow({ codigo: '2', atualizaestoque: 'N' }),
+        baseRow({ codigo: '3', atualizaestoque: 'N' }),
+      ],
+    })
+    expect(result.atualizaEstoqueSummary).toEqual({ s: 1, n: 2 })
+  })
+})
+
 describe('validateProductRows — markup automático', () => {
   it('recalcula markup vazio com aviso', async () => {
     const result = await validateProductRows({

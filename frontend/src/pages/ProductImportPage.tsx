@@ -233,25 +233,26 @@ export function ProductImportPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">Produtos</h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            wizard.resetWizard()
-            setSelectedFile(null)
-            setShowChangeSource(false)
-            setProductFromFolder(false)
-            toast.message('Importação reiniciada')
-          }}
-        >
-          <RotateCcw className="h-4 w-4" />
-          Reiniciar
-        </Button>
-      </div>
-
-      <Stepper currentStep={wizard.currentStep} />
+      <Stepper
+        currentStep={wizard.currentStep}
+        action={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-muted-foreground"
+            onClick={() => {
+              wizard.resetWizard()
+              setSelectedFile(null)
+              setShowChangeSource(false)
+              setProductFromFolder(false)
+              toast.message('Importação reiniciada')
+            }}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reiniciar
+          </Button>
+        }
+      />
 
       {wizard.currentStep === 'auxiliary' && (
         <AuxiliaryStep
