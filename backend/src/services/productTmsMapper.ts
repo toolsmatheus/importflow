@@ -23,6 +23,7 @@ export interface ProductLookupCatalogs {
   aliquotaByPercent: Map<number, number>
   aliquotaStId: number
   aliquotaIsentoId: number
+  aliquotaSemIncidenciaId: number
   /** CFOP string → id preferido (com descrição quando houver) */
   cfopByCode: Map<string, number>
 }
@@ -51,6 +52,29 @@ function snToBool(value: string | undefined): boolean | undefined {
   if (v === 'S') return true
   if (v === 'N') return false
   return undefined
+}
+
+/** CSV `tipopreco`: LIBERADO/L ou MONITORADO/M → enum TMS. Vazio → liberado. */
+export function mapTipoPreco(raw: string | undefined): 'tpLiberado' | 'tpMonitorado' | null {
+  if (isBlank(raw)) return 'tpLiberado'
+  const v = raw!.trim().toUpperCase().replace(/\s+/g, '')
+  if (
+    v === 'L' ||
+    v === 'LIBERADO' ||
+    v === 'TPLIBERADO' ||
+    v === 'TP_LIBERADO'
+  ) {
+    return 'tpLiberado'
+  }
+  if (
+    v === 'M' ||
+    v === 'MONITORADO' ||
+    v === 'TPMONITORADO' ||
+    v === 'TP_MONITORADO'
+  ) {
+    return 'tpMonitorado'
+  }
+  return null
 }
 
 function num(value: string | undefined): number | undefined {
@@ -226,15 +250,19 @@ function resolveAliquotaId(
 
   const st = str(row.st)?.toUpperCase() === 'S'
   const isento = str(row.isento)?.toUpperCase() === 'S'
+  const semIncidencia = str(row.semincidencia)?.toUpperCase() === 'S'
 
   if (aliquota === 0) {
-    if (st === isento) {
+    const flagsOn = [st, isento, semIncidencia].filter(Boolean).length
+    if (flagsOn !== 1) {
       return {
         error:
-          'Quando aliquota=0, exatamente uma coluna (st ou isento) deve ser S',
+          'Quando aliquota=0, exatamente uma coluna (st, isento ou semincidencia) deve ser S',
       }
     }
-    return { id: st ? catalogs.aliquotaStId : catalogs.aliquotaIsentoId }
+    if (st) return { id: catalogs.aliquotaStId }
+    if (isento) return { id: catalogs.aliquotaIsentoId }
+    return { id: catalogs.aliquotaSemIncidenciaId }
   }
 
   const found = catalogs.aliquotaByPercent.get(aliquota)
@@ -311,9 +339,10 @@ function resolveDcbId(
 
 /**
  * Regras fiscais (CFOP não vem do CSV):
- * - Alíquota > 0 → CFOP 5102 (ignora st/isento; usa a alíquota)
+ * - Alíquota > 0 → CFOP 5102 (ignora st/isento/semincidencia; usa a alíquota)
  * - Alíquota 0 + st=S → CFOP 5405, csticmsnormal cic60, csticms cic500
  * - Alíquota 0 + isento=S → csticmsnormal cic40
+ * - Alíquota 0 + semincidencia=S → csticmsnormal cic41
  */
 function resolveFiscalOverrides(row: Record<string, string>): {
   cfopCode?: string
@@ -323,6 +352,7 @@ function resolveFiscalOverrides(row: Record<string, string>): {
   const aliquota = num(row.aliquota)
   const isSt = str(row.st)?.toUpperCase() === 'S'
   const isIsento = str(row.isento)?.toUpperCase() === 'S'
+  const isSemIncidencia = str(row.semincidencia)?.toUpperCase() === 'S'
 
   if (aliquota !== undefined && aliquota > 0) {
     return {
@@ -332,7 +362,7 @@ function resolveFiscalOverrides(row: Record<string, string>): {
     }
   }
 
-  // aliquota = 0: só então st / isento definem o fiscal
+  // aliquota = 0: só então st / isento / semincidencia definem o fiscal
   if (isSt) {
     return {
       cfopCode: '5405',
@@ -344,6 +374,12 @@ function resolveFiscalOverrides(row: Record<string, string>): {
   if (isIsento) {
     return {
       csticmsnormal: 'cic40',
+    }
+  }
+
+  if (isSemIncidencia) {
+    return {
+      csticmsnormal: 'cic41',
     }
   }
 
@@ -431,6 +467,14 @@ export function mapCsvRowToProductPayload(
   }
   const fator = num(row.fator) ?? 1
 
+  const tipopreco = mapTipoPreco(row.tipopreco)
+  if (tipopreco === null) {
+    return {
+      ok: false,
+      message: 'tipopreco inválido (use LIBERADO/L ou MONITORADO/M)',
+    }
+  }
+
   const payload: Record<string, unknown> = {
     '@xdata.type': 'XData.Default.Produto',
     idFilial,
@@ -447,7 +491,7 @@ export function mapCsvRowToProductPayload(
     permitirdescontovenda: snToBool(row.permitedesconto) ?? true,
     origemmercadoria: 'omNacional',
     apresentacao: 'taCapCompDrag',
-    tipopreco: 'tpLiberado',
+    tipopreco,
     tipoitemsped: 'tisMercadoriaRevenda',
     listaControlado: mapListaControlado(row.listacontrole),
     listaControladoAdendo: 'tlNenhuma',
@@ -481,6 +525,9 @@ export function mapCsvRowToProductPayload(
   const demanda = num(row.demanda)
   if (demanda !== undefined) payload.demanda = demanda
 
+  const estoqueMinimo = num(row.estoqueminimo)
+  if (estoqueMinimo !== undefined) payload.estoqueMinimo = estoqueMinimo
+
   const desconto = num(row.descontofixo)
   if (desconto !== undefined) payload.desconto = desconto
 
@@ -492,6 +539,9 @@ export function mapCsvRowToProductPayload(
 
   const usocontinuo = snToBool(row.usocontinuo)
   if (usocontinuo !== undefined) payload.usocontinuo = usocontinuo
+
+  const localizacao = str(row.localizacao)
+  if (localizacao) payload.localizacao = localizacao
 
   const observacao = str(row.observacao)
   if (observacao) payload.observacaovenda = observacao

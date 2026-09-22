@@ -18,6 +18,7 @@ function emptyMaps(): ProductLookupCatalogs {
     aliquotaByPercent: new Map(),
     aliquotaStId: 100,
     aliquotaIsentoId: 400,
+    aliquotaSemIncidenciaId: 500,
     cfopByCode: new Map(),
   }
 }
@@ -78,7 +79,7 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
 
   it('aplica CFOP 5405 e CST ST quando aliquota=0 e st=S', () => {
     const result = mapCsvRowToProductPayload(
-      baseRow({ aliquota: '0', st: 'S', isento: 'N' }),
+      baseRow({ aliquota: '0', st: 'S', isento: 'N', semincidencia: 'N' }),
       1,
       baseCatalogs()
     )
@@ -93,7 +94,7 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
 
   it('aplica CST isento quando alíquota=0 e isento=S', () => {
     const result = mapCsvRowToProductPayload(
-      baseRow({ aliquota: '0', st: 'N', isento: 'S' }),
+      baseRow({ aliquota: '0', st: 'N', isento: 'S', semincidencia: 'N' }),
       1,
       baseCatalogs()
     )
@@ -105,9 +106,23 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     expect(result.payload['aliquotaicms@xdata.ref']).toBe('AliquotaICMS(400)')
   })
 
-  it('rejeita alíquota=0 sem st/isento exclusivo', () => {
+  it('aplica CST sem incidência quando alíquota=0 e semincidencia=S', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({ aliquota: '0', st: 'N', isento: 'N', semincidencia: 'S' }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.payload['cfopvenda@xdata.ref']).toBeUndefined()
+    expect(result.payload.csticmsnormal).toBe('cic41')
+    expect(result.payload['aliquotaicms@xdata.ref']).toBe('AliquotaICMS(500)')
+  })
+
+  it('rejeita alíquota=0 sem exatamente uma de st/isento/semincidencia', () => {
     const bothOff = mapCsvRowToProductPayload(
-      baseRow({ aliquota: '0', st: 'N', isento: 'N' }),
+      baseRow({ aliquota: '0', st: 'N', isento: 'N', semincidencia: 'N' }),
       1,
       baseCatalogs()
     )
@@ -116,11 +131,18 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     expect(bothOff.message).toContain('aliquota=0')
 
     const bothOn = mapCsvRowToProductPayload(
-      baseRow({ aliquota: '0', st: 'S', isento: 'S' }),
+      baseRow({ aliquota: '0', st: 'S', isento: 'S', semincidencia: 'N' }),
       1,
       baseCatalogs()
     )
     expect(bothOn.ok).toBe(false)
+
+    const threeOn = mapCsvRowToProductPayload(
+      baseRow({ aliquota: '0', st: 'S', isento: 'S', semincidencia: 'S' }),
+      1,
+      baseCatalogs()
+    )
+    expect(threeOn.ok).toBe(false)
   })
   it('mapeia flags S/N de estoque, preço, premiação e desconto', () => {
     const result = mapCsvRowToProductPayload(
@@ -140,6 +162,49 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     expect(result.payload.atualizarpreco).toBe(false)
     expect(result.payload.pagarcomissao).toBe(true)
     expect(result.payload.permitirdescontovenda).toBe(false)
+  })
+
+  it('tipopreco vazio assume liberado; MONITORADO mapeia tpMonitorado', () => {
+    const liberado = mapCsvRowToProductPayload(baseRow(), 1, baseCatalogs())
+    expect(liberado.ok).toBe(true)
+    if (liberado.ok) expect(liberado.payload.tipopreco).toBe('tpLiberado')
+
+    const monitorado = mapCsvRowToProductPayload(
+      baseRow({ tipopreco: 'MONITORADO' }),
+      1,
+      baseCatalogs()
+    )
+    expect(monitorado.ok).toBe(true)
+    if (monitorado.ok) expect(monitorado.payload.tipopreco).toBe('tpMonitorado')
+
+    const invalid = mapCsvRowToProductPayload(
+      baseRow({ tipopreco: 'FIXO' }),
+      1,
+      baseCatalogs()
+    )
+    expect(invalid.ok).toBe(false)
+  })
+
+  it('envia localizacao quando preenchida', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({ localizacao: 'A1-P02' }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.payload.localizacao).toBe('A1-P02')
+  })
+
+  it('envia estoqueminimo quando preenchido', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({ estoqueminimo: '5' }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.payload.estoqueMinimo).toBe(5)
   })
 })
 

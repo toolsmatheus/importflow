@@ -178,12 +178,15 @@ const VALIDATION_CHECK_DEFS: Array<{
   },
   {
     id: 'aliquota_rules',
-    label: 'Regras de alíquota / ST / isento',
+    label: 'Regras de alíquota / ST / isento / sem incidência',
     severity: 'error',
     match: (i) =>
       (i.field === 'aliquota' && !i.message.includes('padrão da UF')) ||
       i.field === 'st' ||
-      i.message.includes('st e isento'),
+      i.field === 'isento' ||
+      i.field === 'semincidencia' ||
+      i.message.includes('st e isento') ||
+      i.message.includes('semincidencia'),
   },
   {
     id: 'aliquota_uf',
@@ -281,6 +284,7 @@ const INTEGER_OPTIONAL_FIELDS = [
 const DECIMAL_OPTIONAL_FIELDS = [
   'valorpmc',
   'estoque',
+  'estoqueminimo',
   'descontofixo',
   'comissao',
   'demanda',
@@ -743,21 +747,23 @@ function validateRow(
 
   const aliquotaNum = !isBlank(aliquotaRaw) ? parseBrazilianNumber(aliquotaRaw) : null
   if (aliquotaNum === 0) {
-    const st = hasColumn(columns, 'st')
-      ? cell(record, 'st').trim().toUpperCase()
-      : ''
-    const isento = hasColumn(columns, 'isento')
-      ? cell(record, 'isento').trim().toUpperCase()
-      : ''
-    const stOn = st === 'S'
-    const isentoOn = isento === 'S'
-    if (stOn === isentoOn) {
+    const stOn = hasColumn(columns, 'st')
+      ? cell(record, 'st').trim().toUpperCase() === 'S'
+      : false
+    const isentoOn = hasColumn(columns, 'isento')
+      ? cell(record, 'isento').trim().toUpperCase() === 'S'
+      : false
+    const semIncidenciaOn = hasColumn(columns, 'semincidencia')
+      ? cell(record, 'semincidencia').trim().toUpperCase() === 'S'
+      : false
+    const zeroFlagsOn = [stOn, isentoOn, semIncidenciaOn].filter(Boolean).length
+    if (zeroFlagsOn !== 1) {
       pushIssue(issues, counters, {
         row: rowNumber,
         field: 'aliquota',
         value: aliquotaRaw,
         message:
-          'Quando aliquota=0, exatamente uma coluna deve ser S: st (substituição) ou isento.',
+          'Quando aliquota=0, exatamente uma coluna deve ser S: st, isento ou semincidencia.',
         severity: 'error',
       })
     }
@@ -902,7 +908,31 @@ function validateRow(
     }
   }
 
-  // st/isento só são cruzados quando aliquota=0 (bloco acima). Com alíquota > 0, usa-se a alíquota.
+  if (hasColumn(columns, 'tipopreco')) {
+    const tipopreco = cell(record, 'tipopreco').trim().toUpperCase().replace(/\s+/g, '')
+    if (!isBlank(tipopreco)) {
+      const ok =
+        tipopreco === 'L' ||
+        tipopreco === 'LIBERADO' ||
+        tipopreco === 'TPLIBERADO' ||
+        tipopreco === 'TP_LIBERADO' ||
+        tipopreco === 'M' ||
+        tipopreco === 'MONITORADO' ||
+        tipopreco === 'TPMONITORADO' ||
+        tipopreco === 'TP_MONITORADO'
+      if (!ok) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'tipopreco',
+          value: cell(record, 'tipopreco'),
+          message: 'Valor inválido. Opções: LIBERADO/L ou MONITORADO/M (vazio = LIBERADO).',
+          severity: 'error',
+        })
+      }
+    }
+  }
+
+  // st/isento/semincidencia só cruzados quando aliquota=0. Com alíquota > 0, usa-se a alíquota.
 
   if (hasColumn(columns, 'descontofixo') && hasColumn(columns, 'descontomax')) {
     const fixo = parseBrazilianNumber(cell(record, 'descontofixo'))

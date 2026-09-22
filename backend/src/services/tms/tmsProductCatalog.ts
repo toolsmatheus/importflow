@@ -106,6 +106,7 @@ export async function fetchProductLookupCatalogs(
   const aliquotaByPercent = new Map<number, number>()
   let aliquotaStId = 100
   let aliquotaIsentoId = 400
+  let aliquotaSemIncidenciaId = 500
 
   for (const row of aliquotas) {
     const id = Number(row.id)
@@ -121,19 +122,24 @@ export async function fetchProductLookupCatalogs(
       }
     }
 
-    if (
-      tipoImposto === 'tipICMS' &&
-      aliquota === 0 &&
-      (descricao.includes('SUBSTITU') || aliquotaisento === 0)
-    ) {
+    if (tipoImposto !== 'tipICMS' || aliquota !== 0) continue
+
+    const isSemIncidenciaDesc =
+      descricao.includes('SEM INCID') ||
+      descricao.includes('NAO TRIBUT') ||
+      descricao.includes('NÃO TRIBUT') ||
+      descricao.includes('NAOTRIBUT')
+    const isIsentoDesc = descricao.includes('ISENTO') && !isSemIncidenciaDesc
+    const isStDesc = descricao.includes('SUBSTITU')
+
+    if (isStDesc || (aliquotaisento === 0 && !isSemIncidenciaDesc && !isIsentoDesc)) {
       aliquotaStId = id
     }
-    if (
-      tipoImposto === 'tipICMS' &&
-      aliquota === 0 &&
-      (descricao.includes('ISENTO') || aliquotaisento === 1)
-    ) {
+    if (isIsentoDesc || aliquotaisento === 1) {
       aliquotaIsentoId = id
+    }
+    if (isSemIncidenciaDesc || aliquotaisento === 2) {
+      aliquotaSemIncidenciaId = id
     }
   }
 
@@ -169,6 +175,7 @@ export async function fetchProductLookupCatalogs(
     aliquotaByPercent,
     aliquotaStId,
     aliquotaIsentoId,
+    aliquotaSemIncidenciaId,
     cfopByCode,
   }
 }

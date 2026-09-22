@@ -105,6 +105,8 @@ export interface AliquotaMismatch {
   row: number
   codigo: string
   nome: string
+  codigobarras: string
+  codigogrupo: string
   current: number
   currentRaw: string
   expected: number
@@ -130,6 +132,8 @@ export function findAliquotaMismatches(
       row: rowIndex + 2,
       codigo: String(row.codigo ?? '').trim(),
       nome: String(row.nome ?? '').trim(),
+      codigobarras: String(row.codigobarras ?? '').trim(),
+      codigogrupo: String(row.codigogrupo ?? '').trim(),
       current: value,
       currentRaw: raw,
       expected: entry.aliquota,

@@ -114,16 +114,16 @@ Cabeçalhos obrigatórios:
 - [ ] **markup não recalculável** · **error**  
   *Ex.:* `markup` vazio e `custo=0` (ou custo/venda inválidos) → não dá para calcular.
 
-Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, `demanda`, `descontomax`, `qtdfciapop`, `valorfciapop`
+Decimais opcionais checados: `valorpmc`, `estoque`, `estoqueminimo`, `descontofixo`, `comissao`, `demanda`, `descontomax`, `qtdfciapop`, `valorfciapop`
 
 ### Fiscal (alíquota, ST, isento, PIS/COFINS, NCM, CFOP)
 
-- [ ] **`aliquota = 0`** → verifica `st` / `isento` (exatamente uma = `S`) · **error**  
-  *Ex. erro:* `aliquota=0`, `st=N`, `isento=N` (nenhuma).  
-  *Ex. erro:* `aliquota=0`, `st=S`, `isento=S` (ambas).  
-  *Ex. ok:* `aliquota=0`, `st=S`, `isento=N` **ou** `st=N`, `isento=S`.
+- [ ] **`aliquota = 0`** → verifica `st` / `isento` / `semincidencia` (exatamente uma = `S`) · **error**  
+  *Ex. erro:* `aliquota=0`, `st=N`, `isento=N`, `semincidencia=N` (nenhuma).  
+  *Ex. erro:* `aliquota=0`, `st=S`, `isento=S` (mais de uma).  
+  *Ex. ok:* exatamente uma = `S` entre `st`, `isento` ou `semincidencia`.
 
-- [ ] **`aliquota > 0`** → **não** cruza `st`/`isento`; usa a alíquota (envio CFOP 5102)  
+- [ ] **`aliquota > 0`** → **não** cruza `st`/`isento`/`semincidencia`; usa a alíquota (envio CFOP 5102)  
   *Ex.:* `aliquota=18`, `st=S` → ok na validação; no envio aplica alíquota/CFOP 5102.
 
 - [ ] **`aliquota` diferente da padrão da UF** · **warning**  
@@ -161,6 +161,10 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `descontofixo`, `comissao`, 
 
 - [ ] **`ativo`** = `A` ou `I` · **error**  
   *Ex.:* `ativo=S` ou `ativo=1`.
+
+- [ ] **`tipopreco`** (opcional) = `LIBERADO`/`L` ou `MONITORADO`/`M` · **error**  
+  *Vazio ou coluna ausente → LIBERADO no envio.*  
+  *Ex. erro:* `tipopreco=FIXO`.
 
 ### Descontos e Farmácia Popular
 

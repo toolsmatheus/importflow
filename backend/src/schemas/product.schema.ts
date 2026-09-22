@@ -32,6 +32,7 @@ export const OPTIONAL_HEADERS = [
   'markup',
   'cfop',
   'valorpmc',
+  'tipopreco',
   'codigobarras',
   'codigoadicional',
   'subgrupo',
@@ -40,6 +41,7 @@ export const OPTIONAL_HEADERS = [
   'grupodepreco',
   'similar',
   'estoque',
+  'estoqueminimo',
   'descontofixo',
   'comissao',
   'demanda',
@@ -103,6 +105,7 @@ export const productCsvRowSchema = z.object({
   markup: z.string().optional(),
   cfop: z.string().optional(),
   valorpmc: z.string().optional(),
+  tipopreco: z.string().optional(),
   codigobarras: z.string().optional(),
   codigoadicional: z.string().optional(),
   subgrupo: z.string().optional(),
@@ -111,6 +114,7 @@ export const productCsvRowSchema = z.object({
   grupodepreco: z.string().optional(),
   similar: z.string().optional(),
   estoque: z.string().optional(),
+  estoqueminimo: z.string().optional(),
   descontofixo: z.string().optional(),
   comissao: z.string().optional(),
   demanda: z.string().optional(),
@@ -174,6 +178,7 @@ function buildExampleProductRow(values: {
   ncm?: string
   cstpiscofins?: string
   valorpmc?: string
+  tipopreco?: string
   codigobarras?: string
   codigoadicional?: string
   subgrupo?: string
@@ -182,6 +187,7 @@ function buildExampleProductRow(values: {
   grupodepreco?: string
   similar?: string
   estoque?: string
+  estoqueminimo?: string
   descontofixo?: string
   comissao?: string
   atualizaestoque?: string
@@ -228,6 +234,7 @@ function buildExampleProductRow(values: {
     pagarpremicao: values.pagarpremicao ?? 'N',
     permitedesconto: values.permitedesconto ?? 'S',
     valorpmc: values.valorpmc ?? '',
+    tipopreco: values.tipopreco ?? 'LIBERADO',
     codigobarras: values.codigobarras ?? '',
     codigoadicional: values.codigoadicional ?? '',
     subgrupo: values.subgrupo ?? '',
@@ -236,6 +243,7 @@ function buildExampleProductRow(values: {
     grupodepreco: values.grupodepreco ?? '',
     similar: values.similar ?? '',
     estoque: values.estoque ?? '10',
+    estoqueminimo: values.estoqueminimo ?? '',
     descontofixo: values.descontofixo ?? '0',
     comissao: values.comissao ?? '0',
     demanda: values.demanda ?? '0',
@@ -284,6 +292,7 @@ export function buildTemplateCsvContent(): string {
       laboratorio: '1',
       grupodepreco: '1',
       estoque: '40',
+      estoqueminimo: '5',
       localizacao: 'A1-P02',
       cest: '1300100',
       observacao: 'Exemplo aliquota NEUTRA',
@@ -334,6 +343,7 @@ export function buildTemplateCsvContent(): string {
       aliquota: '0',
       isento: 'S',
       st: 'N',
+      semincidencia: 'N',
       ncm: '96190000',
       codigobarras: '7896004769011',
       subgrupo: '1',
@@ -353,6 +363,7 @@ export function buildTemplateCsvContent(): string {
       aliquota: '0',
       st: 'S',
       isento: 'N',
+      semincidencia: 'N',
       ncm: '22021000',
       codigobarras: '7896094921962',
       subgrupo: '1',
@@ -361,6 +372,25 @@ export function buildTemplateCsvContent(): string {
       grupodepreco: '1',
       cest: '0300100',
       observacao: 'Exemplo ST',
+    }),
+    buildExampleProductRow({
+      codigo: '10005b',
+      nome: 'Produto Sem Incidencia Exemplo',
+      codigogrupo: '3',
+      custo: '1,50',
+      markup: '50,00',
+      venda: '2,25',
+      aliquota: '0',
+      st: 'N',
+      isento: 'N',
+      semincidencia: 'S',
+      ncm: '30049099',
+      codigobarras: '7891234567895',
+      subgrupo: '1',
+      categoria: '2',
+      laboratorio: '1',
+      grupodepreco: '1',
+      observacao: 'Exemplo sem incidencia',
     }),
     buildExampleProductRow({
       codigo: '10006',
@@ -413,6 +443,7 @@ export function buildTemplateCsvContent(): string {
       aliquota: '0',
       isento: 'S',
       st: 'N',
+      semincidencia: 'N',
       codigobarras: '7896676402087',
       subgrupo: '1',
       categoria: '1',

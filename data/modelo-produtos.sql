@@ -23,6 +23,7 @@ SELECT
   REPLACE(CAST(p.markup AS varchar(30)), '.', ',') AS markup, -- se vazio, recalcula no ImportFlow
   '' AS cfop,                                                 -- deixe vazio: preenchido no envio
   REPLACE(CAST(p.valorpmc AS varchar(30)), '.', ',') AS valorpmc,
+  CAST(COALESCE(p.tipopreco, 'LIBERADO') AS varchar(20)) AS tipopreco, -- LIBERADO/L | MONITORADO/M (vazio→LIBERADO)
   CAST(p.codigobarras AS varchar(20)) AS codigobarras,        -- EAN 8/12/13/14
   CAST(p.codigoadicional AS varchar(200)) AS codigoadicional, -- EANs extras separados por ,
   CAST(p.subgrupo AS varchar(20)) AS subgrupo,                -- id do subgrupo.csv
@@ -30,14 +31,15 @@ SELECT
   CAST(p.laboratorio AS varchar(20)) AS laboratorio,
   CAST(p.grupodepreco AS varchar(20)) AS grupodepreco,
   CAST(p.similar AS varchar(20)) AS similar,
-  REPLACE(CAST(p.estoque AS varchar(30)), '.', ',') AS estoque,
+  REPLACE(CAST(p.estoque AS varchar(30)), '.', ',') AS estoque, -- qtd atual: não grava no cadastro (use importação opcional de estoque)
+  REPLACE(CAST(p.estoqueminimo AS varchar(30)), '.', ',') AS estoqueminimo, -- estoqueMinimo no TMS
   REPLACE(CAST(COALESCE(p.descontofixo, 0) AS varchar(30)), '.', ',') AS descontofixo,
   REPLACE(CAST(COALESCE(p.comissao, 0) AS varchar(30)), '.', ',') AS comissao,
   REPLACE(CAST(COALESCE(p.demanda, 0) AS varchar(30)), '.', ',') AS demanda,
   CAST(COALESCE(p.ativo, 'A') AS varchar(1)) AS ativo,        -- A/I
-  CAST(COALESCE(p.st, 'N') AS varchar(1)) AS st,              -- S/N (obrigatório cruzar se aliquota=0)
-  CAST(COALESCE(p.isento, 'N') AS varchar(1)) AS isento,      -- S/N (obrigatório cruzar se aliquota=0)
-  CAST(COALESCE(p.semincidencia, 'N') AS varchar(1)) AS semincidencia,
+  CAST(COALESCE(p.st, 'N') AS varchar(1)) AS st,              -- S/N (com aliquota=0: exatamente 1 de st/isento/semincidencia)
+  CAST(COALESCE(p.isento, 'N') AS varchar(1)) AS isento,      -- S/N
+  CAST(COALESCE(p.semincidencia, 'N') AS varchar(1)) AS semincidencia, -- S/N
   CAST(p.localizacao AS varchar(40)) AS localizacao,
   CAST(COALESCE(p.usocontinuo, 'N') AS varchar(1)) AS usocontinuo,
   CAST(p.observacao AS varchar(200)) AS observacao,

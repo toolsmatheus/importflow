@@ -31,12 +31,14 @@ interface AliquotaUfReviewPanelProps {
 }
 
 function downloadMismatchesCsv(mismatches: AliquotaMismatch[], uf: string, expected: number) {
-  const header = 'linha;codigo;nome;aliquota_atual;aliquota_esperada_uf;uf'
+  const header = 'linha;codigo;nome;codigobarras;codigogrupo;aliquota_atual;aliquota_esperada_uf;uf'
   const lines = mismatches.map((m) =>
     [
       m.row,
       m.codigo,
       `"${m.nome.replace(/"/g, '""')}"`,
+      m.codigobarras,
+      m.codigogrupo,
       m.currentRaw || formatAliquotaCsv(m.current),
       formatAliquotaCsv(expected),
       uf,
@@ -122,7 +124,7 @@ export function AliquotaUfReviewPanel({
           if (!next) setConfirmApply(false)
         }}
       >
-        <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
             <DialogTitle>Alíquotas diferenciadas — UF {clientUf}</DialogTitle>
             <DialogDescription>
@@ -146,12 +148,14 @@ export function AliquotaUfReviewPanel({
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">Linha</TableHead>
                     <TableHead className="w-24">Código</TableHead>
+                    <TableHead className="min-w-[140px]">Cód. barras</TableHead>
+                    <TableHead className="w-20">Grupo</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead className="w-28 text-right">Atual</TableHead>
                     <TableHead className="w-28 text-right">Esperada</TableHead>
@@ -162,7 +166,9 @@ export function AliquotaUfReviewPanel({
                     <TableRow key={`${m.row}-${m.codigo}`}>
                       <TableCell className="font-mono text-xs">{m.row}</TableCell>
                       <TableCell className="font-mono text-xs">{m.codigo || '—'}</TableCell>
-                      <TableCell className="max-w-[280px] truncate text-sm" title={m.nome}>
+                      <TableCell className="font-mono text-xs">{m.codigobarras || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{m.codigogrupo || '—'}</TableCell>
+                      <TableCell className="max-w-[240px] truncate text-sm" title={m.nome}>
                         {m.nome || '—'}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm text-amber-700 dark:text-amber-300">

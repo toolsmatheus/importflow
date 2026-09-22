@@ -22,9 +22,9 @@ function baseRow(overrides: Record<string, string> = {}): Record<string, string>
 }
 
 describe('validateProductRows — alíquota zero', () => {
-  it('exige st ou isento exclusivo quando alíquota=0', async () => {
+  it('exige exatamente uma de st/isento/semincidencia quando alíquota=0', async () => {
     const result = await validateProductRows({
-      rows: [baseRow({ aliquota: '0', st: 'N', isento: 'N' })],
+      rows: [baseRow({ aliquota: '0', st: 'N', isento: 'N', semincidencia: 'N' })],
     })
 
     const aliquotaErrors = result.issues.filter(
@@ -35,7 +35,7 @@ describe('validateProductRows — alíquota zero', () => {
 
   it('aceita st=S quando alíquota=0', async () => {
     const result = await validateProductRows({
-      rows: [baseRow({ aliquota: '0', st: 'S', isento: 'N' })],
+      rows: [baseRow({ aliquota: '0', st: 'S', isento: 'N', semincidencia: 'N' })],
     })
 
     const aliquotaErrors = result.issues.filter(
@@ -44,9 +44,20 @@ describe('validateProductRows — alíquota zero', () => {
     expect(aliquotaErrors.some((i) => i.message.includes('exatamente uma'))).toBe(false)
   })
 
-  it('com alíquota > 0 não exige cruzamento st/isento', async () => {
+  it('aceita semincidencia=S quando alíquota=0', async () => {
     const result = await validateProductRows({
-      rows: [baseRow({ aliquota: '18', st: 'S', isento: 'S' })],
+      rows: [baseRow({ aliquota: '0', st: 'N', isento: 'N', semincidencia: 'S' })],
+    })
+
+    const aliquotaErrors = result.issues.filter(
+      (i) => i.field === 'aliquota' && i.severity === 'error'
+    )
+    expect(aliquotaErrors.some((i) => i.message.includes('exatamente uma'))).toBe(false)
+  })
+
+  it('com alíquota > 0 não exige cruzamento st/isento/semincidencia', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ aliquota: '18', st: 'S', isento: 'S', semincidencia: 'S' })],
     })
 
     const stIsentoErrors = result.issues.filter(
@@ -55,6 +66,29 @@ describe('validateProductRows — alíquota zero', () => {
         (i.message.includes('st e isento') || i.message.includes('exatamente uma'))
     )
     expect(stIsentoErrors).toHaveLength(0)
+  })
+})
+
+describe('validateProductRows — tipopreco', () => {
+  it('rejeita tipopreco inválido', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ tipopreco: 'FIXO' })],
+    })
+    expect(
+      result.issues.some((i) => i.field === 'tipopreco' && i.severity === 'error')
+    ).toBe(true)
+  })
+
+  it('aceita tipopreco vazio ou MONITORADO', async () => {
+    const empty = await validateProductRows({
+      rows: [baseRow({ tipopreco: '' })],
+    })
+    expect(empty.issues.some((i) => i.field === 'tipopreco')).toBe(false)
+
+    const monitorado = await validateProductRows({
+      rows: [baseRow({ tipopreco: 'M' })],
+    })
+    expect(monitorado.issues.some((i) => i.field === 'tipopreco')).toBe(false)
   })
 })
 

@@ -209,7 +209,6 @@ export function ErrorsStep({
               ? () => downloadIssuesCsv(errorIssues, 'erros-validacao.csv')
               : undefined
           }
-          defaultExpandWithIssues
         />
       )}
 
@@ -220,7 +219,6 @@ export function ErrorsStep({
           title="Alertas (não bloqueiam)"
           description="Avisos informativos — não impedem seguir para o envio. Clique na seta para ver as ocorrências."
           truncated={result.truncated}
-          defaultExpandWithIssues
         />
       )}
 
