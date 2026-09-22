@@ -381,7 +381,7 @@ export async function startSendJobHandler(request: FastifyRequest, reply: Fastif
 
     const snapshot = await createSendJob({
       rows: parsed.data.rows,
-      mode: parsed.data.mode ?? 'simulate',
+      mode: parsed.data.mode ?? 'live',
       tmsBaseUrl: parsed.data.tmsBaseUrl,
       batchSize: parsed.data.batchSize,
       concurrency: parsed.data.concurrency,

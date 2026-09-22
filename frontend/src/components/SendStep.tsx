@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   CheckCircle2,
+  ChevronDown,
   Download,
   Loader2,
   Pause,
   Play,
   RotateCcw,
   Server,
-  Sparkles,
   Square,
   SkipForward,
   XCircle,
@@ -25,13 +25,16 @@ import {
   InconsistencyChecksPanel,
 } from '@/components/InconsistencyChecksPanel'
 import { productService } from '@/services/productService'
-import { formatNumber } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
 import type {
   AuxiliaryEntity,
   ProductValidationResult,
   SendJobSnapshot,
-  SendMode,
 } from '@/types'
+
+/** Defaults alinhados ao backend — não expostos na UI. */
+const SEND_BATCH_SIZE = 500
+const SEND_CONCURRENCY = 1
 
 interface SendStepProps {
   rows: Record<string, string>[]
@@ -44,6 +47,64 @@ interface SendStepProps {
   onFinish: () => void
   auxiliary?: Partial<Record<AuxiliaryEntity, string>>
   validationResult?: ProductValidationResult | null
+}
+
+function SoftExpand({
+  label,
+  count,
+  tone = 'neutral',
+  children,
+  defaultOpen = false,
+  actions,
+}: {
+  label: string
+  count?: number
+  tone?: 'neutral' | 'warning' | 'error' | 'success'
+  children: ReactNode
+  defaultOpen?: boolean
+  actions?: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-background/60">
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
+          aria-expanded={open}
+        >
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+              !open && '-rotate-90'
+            )}
+          />
+          <span className="font-medium text-foreground">{label}</span>
+          {count !== undefined ? (
+            <span
+              className={cn(
+                'tabular-nums text-muted-foreground',
+                tone === 'warning' && count > 0 && 'text-amber-700 dark:text-amber-300',
+                tone === 'error' && count > 0 && 'text-destructive',
+                tone === 'success' && 'text-emerald-700 dark:text-emerald-300'
+              )}
+            >
+              {formatNumber(count)}
+            </span>
+          ) : null}
+        </button>
+        {actions}
+      </div>
+      {open ? <div className="border-t border-border px-3 py-3">{children}</div> : null}
+    </div>
+  )
+}
+
+function skipReasonLabel(reason: string): string {
+  if (reason === 'codigo_barras') return 'Código de barras já existe'
+  if (reason === 'codigo_migracao') return 'Código de migração já existe'
+  return reason
 }
 
 function formatDuration(ms: number) {
@@ -92,8 +153,6 @@ export function SendStep({
 }: SendStepProps) {
   const [idFilialPreview, setIdFilialPreview] = useState<number | null>(null)
   const [versaoPreview, setVersaoPreview] = useState<string | null>(null)
-  const [batchSize, setBatchSize] = useState(500)
-  const [concurrency, setConcurrency] = useState(1)
   const progressRef = useRef<HTMLDivElement>(null)
 
   const active =
@@ -102,6 +161,22 @@ export function SendStep({
   const sendChecks = useMemo(
     () => (job ? buildSendCheckSummary(job) : []),
     [job]
+  )
+
+  const dcbWarnings = useMemo(
+    () =>
+      (job?.errors ?? []).filter((e) =>
+        e.message.trim().toLowerCase().startsWith('aviso:')
+      ),
+    [job?.errors]
+  )
+
+  const realErrors = useMemo(
+    () =>
+      (job?.errors ?? []).filter(
+        (e) => !e.message.trim().toLowerCase().startsWith('aviso:')
+      ),
+    [job?.errors]
   )
 
   const fileTotal = validationResult?.totalRecords
@@ -143,22 +218,18 @@ export function SendStep({
   })
 
   const startMutation = useMutation({
-    mutationFn: (payload: { mode: SendMode; rows: Record<string, string>[] }) =>
+    mutationFn: () =>
       productService.startSend({
-        rows: payload.rows,
-        mode: payload.mode,
+        rows,
+        mode: 'live',
         tmsBaseUrl,
-        batchSize,
-        concurrency,
+        batchSize: SEND_BATCH_SIZE,
+        concurrency: SEND_CONCURRENCY,
         auxiliary,
       }),
     onSuccess: (snapshot) => {
       onJobChange(snapshot)
-      toast.success(
-        snapshot.mode === 'simulate'
-          ? `Simulação iniciada — ${formatNumber(snapshot.total)} produto(s)`
-          : `Envio iniciado — ${formatNumber(snapshot.total)} produto(s)`
-      )
+      toast.success(`Envio iniciado — ${formatNumber(snapshot.total)} produto(s)`)
     },
     onError: (error: Error) => toast.error(error.message || 'Falha ao iniciar'),
   })
@@ -175,10 +246,6 @@ export function SendStep({
     onError: (error: Error) => toast.error(error.message || 'Falha no controle do envio'),
   })
 
-  const requestStart = (mode: SendMode) => {
-    startMutation.mutate({ mode, rows })
-  }
-
   const finished =
     job &&
     (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')
@@ -188,9 +255,7 @@ export function SendStep({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base">
-              Progresso {job.mode === 'simulate' ? '(simulação)' : '(envio ao vivo)'}
-            </CardTitle>
+            <CardTitle className="text-base">Progresso do envio</CardTitle>
             <CardDescription className="mt-1 text-base font-medium text-foreground">
               {phaseLabel(job)}
             </CardDescription>
@@ -329,96 +394,167 @@ export function SendStep({
         </div>
 
         {job.processed > 0 && (
-          <InconsistencyChecksPanel
-            checks={sendChecks}
-            title="Checagens do envio ao banco"
-            description="O que o envio pesquisou no destino — duplicados, avisos e falhas — mesmo quando o resultado é nenhum."
-          />
-        )}
-
-        {job.mode === 'simulate' && finished && (
-          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            Simulação concluída. Nenhum dado foi enviado ao banco.
-          </p>
+          <SoftExpand label="Checagens do envio">
+            <InconsistencyChecksPanel
+              checks={sendChecks}
+              embedded
+              defaultExpandWithIssues={false}
+            />
+          </SoftExpand>
         )}
 
         {(job.skipped?.length ?? 0) > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Produtos ignorados (código de barras ou codigo_migracao já existentes)
-              {job.skippedTruncated ? ' — lista parcial; use o CSV completo.' : ''}:
-            </p>
-            <div className="max-h-48 overflow-auto rounded-md border bg-background">
+          <SoftExpand
+            label="Produtos ignorados"
+            count={job.productSkipped ?? job.skipped!.length}
+            tone="warning"
+            actions={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  productService.downloadSkippedProducts(job.id)
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                CSV
+              </Button>
+            }
+          >
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Já existiam no banco (código de barras ou codigo_migracao). Não foram
+                reenviados.
+                {job.skippedTruncated ? ' Lista parcial — use o CSV completo.' : ''}
+              </p>
+              <div className="max-h-64 overflow-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">Linha</TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead className="min-w-[120px]">Cód. barras</TableHead>
+                      <TableHead className="w-28">Código</TableHead>
+                      <TableHead>Motivo</TableHead>
+                      <TableHead className="w-24">Id banco</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {job.skipped!.map((skip) => (
+                      <TableRow key={`skip-${skip.index}-${skip.reason}`}>
+                        <TableCell className="font-mono text-xs">{skip.index + 2}</TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={skip.nome}>
+                          {skip.nome || '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {skip.codigobarras || '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{skip.codigo || '—'}</TableCell>
+                        <TableCell>
+                          <span className="text-sm">{skipReasonLabel(skip.reason)}</span>
+                          {skip.message ? (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {skip.message}
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {skip.tmsProdutoId ?? '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </SoftExpand>
+        )}
+
+        {dcbWarnings.length > 0 && (
+          <SoftExpand label="Avisos de DCB" count={dcbWarnings.length} tone="warning">
+            <div className="space-y-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                O nome do DCB no auxiliar não bateu com a lista Anvisa (ou o código Anvisa
+                não existe no banco). O produto <strong className="text-foreground">foi
+                gravado normalmente</strong>, só sem vínculo de DCB. Não bloqueia o envio;
+                em controlados o SNGPC pode ficar sem DCB até corrigir o cadastro.
+              </p>
+              <div className="max-h-56 overflow-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">Linha</TableHead>
+                      <TableHead className="w-28">Código</TableHead>
+                      <TableHead>Aviso</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dcbWarnings.map((err) => (
+                      <TableRow key={`dcb-${err.index}-${err.batch}-${err.codigo}`}>
+                        <TableCell className="font-mono text-xs">
+                          {err.index >= 0 ? err.index + 2 : '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{err.codigo || '—'}</TableCell>
+                        <TableCell className="text-sm text-amber-800 dark:text-amber-200">
+                          {err.message.replace(/^Aviso:\s*/i, '')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </SoftExpand>
+        )}
+
+        {realErrors.length > 0 && (
+          <SoftExpand label="Falhas de inserção" count={realErrors.length} tone="error">
+            <div className="max-h-56 overflow-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Linha</TableHead>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Motivo</TableHead>
-                    <TableHead>Id destino</TableHead>
+                    <TableHead className="w-16">Linha</TableHead>
+                    <TableHead className="w-16">Lote</TableHead>
+                    <TableHead className="w-28">Código</TableHead>
                     <TableHead>Mensagem</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {job.skipped!.map((skip) => (
-                    <TableRow key={`skip-${skip.index}-${skip.reason}`}>
-                      <TableCell>{skip.index + 2}</TableCell>
-                      <TableCell className="font-mono">{skip.codigo || '-'}</TableCell>
-                      <TableCell className="font-mono text-xs">{skip.reason}</TableCell>
-                      <TableCell className="font-mono">
-                        {skip.tmsProdutoId ?? '-'}
+                  {realErrors.map((err) => (
+                    <TableRow key={`${err.index}-${err.batch}-${err.codigo}`}>
+                      <TableCell className="font-mono text-xs">
+                        {err.index >= 0 ? err.index + 2 : '—'}
                       </TableCell>
-                      <TableCell>{skip.message}</TableCell>
+                      <TableCell>{err.batch}</TableCell>
+                      <TableCell className="font-mono text-xs">{err.codigo || '—'}</TableCell>
+                      <TableCell className="text-sm text-destructive">{err.message}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </div>
-        )}
-
-        {job.errors.length > 0 && (
-          <div className="max-h-56 overflow-auto rounded-md border bg-background">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Linha</TableHead>
-                  <TableHead>Lote</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Mensagem</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {job.errors.map((err) => (
-                  <TableRow key={`${err.index}-${err.batch}-${err.codigo}`}>
-                    <TableCell>{err.index >= 0 ? err.index + 2 : '-'}</TableCell>
-                    <TableCell>{err.batch}</TableCell>
-                    <TableCell className="font-mono">{err.codigo || '-'}</TableCell>
-                    <TableCell className="text-destructive">{err.message}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          </SoftExpand>
         )}
       </CardContent>
     </Card>
   ) : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {progressCard}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Envio em lotes</CardTitle>
-          <CardDescription>
-            Envia todos os produtos validados ({formatNumber(rows.length)} no momento). No
-            envio ao vivo, os auxiliares (grupo, subgrupo, categoria, laboratório, grupo de
-            preço, similar e DCB) são inseridos primeiro; a descrição vai em maiúsculas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
+      <SoftExpand
+        label="Configuração do envio"
+        defaultOpen={!job}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Envia {formatNumber(rows.length)} produto(s) validado(s). Auxiliares são
+            inseridos primeiro.
+          </p>
+
           {rowsMismatch && (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
               Atenção: o arquivo tem {formatNumber(fileTotal!)} registro(s), mas só{' '}
@@ -438,37 +574,6 @@ export function SendStep({
               placeholder="http://localhost:2001"
               disabled={Boolean(active)}
             />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="batch-size" className="mb-1.5 block text-sm text-muted-foreground">
-                Produtos por lote (ImportarListaProdutos)
-              </label>
-              <Input
-                id="batch-size"
-                type="number"
-                min={10}
-                max={1000}
-                value={batchSize}
-                onChange={(e) => setBatchSize(Number(e.target.value) || 500)}
-                disabled={Boolean(active)}
-              />
-            </div>
-            <div>
-              <label htmlFor="concurrency" className="mb-1.5 block text-sm text-muted-foreground">
-                Lotes em paralelo
-              </label>
-              <Input
-                id="concurrency"
-                type="number"
-                min={1}
-                max={8}
-                value={concurrency}
-                onChange={(e) => setConcurrency(Number(e.target.value) || 1)}
-                disabled={Boolean(active)}
-              />
-            </div>
           </div>
 
           {auxiliary && Object.keys(auxiliary).length > 0 && (
@@ -494,19 +599,11 @@ export function SendStep({
               Testar conexão
             </Button>
             <Button
-              onClick={() => requestStart('live')}
+              onClick={() => startMutation.mutate()}
               disabled={startMutation.isPending || rows.length === 0 || Boolean(active)}
             >
               {startMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Enviar {formatNumber(rows.length)} produto(s)
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => requestStart('simulate')}
-              disabled={startMutation.isPending || rows.length === 0 || Boolean(active)}
-            >
-              <Sparkles className="h-4 w-4" />
-              Simular lotes
             </Button>
           </div>
 
@@ -522,20 +619,22 @@ export function SendStep({
               ) : null}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SoftExpand>
 
-      {(validationResult?.checkSummary?.length ?? 0) > 0 && !active && (
-        <InconsistencyChecksPanel
-          checks={validationResult!.checkSummary!}
-          issues={validationResult?.issues}
-          title="Checagens da validação (antes do envio)"
-          description="O que foi pesquisado no CSV — ex.: códigos de barras inválidos ficam explícitos mesmo quando o resultado é nenhum."
-          truncated={validationResult?.truncated}
-        />
+      {(validationResult?.checkSummary?.length ?? 0) > 0 && !active && !job && (
+        <SoftExpand label="Checagens da validação">
+          <InconsistencyChecksPanel
+            checks={validationResult!.checkSummary!}
+            issues={validationResult?.issues}
+            truncated={validationResult?.truncated}
+            embedded
+            defaultExpandWithIssues={false}
+          />
+        </SoftExpand>
       )}
 
-      <div className="flex justify-between">
+      <div className="flex justify-between pt-1">
         <Button variant="outline" onClick={onBack} disabled={Boolean(active)}>
           Voltar
         </Button>

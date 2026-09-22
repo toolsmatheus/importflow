@@ -16,6 +16,8 @@ interface InconsistencyChecksPanelProps {
   onDownloadCsv?: () => void
   /** Abre automaticamente checagens que têm ocorrências. */
   defaultExpandWithIssues?: boolean
+  /** Lista sem Card — para embutir em seções recolhíveis. */
+  embedded?: boolean
 }
 
 function groupIssuesByCheck(issues: ValidationIssue[]): Map<string, ValidationIssue[]> {
@@ -43,6 +45,7 @@ export function InconsistencyChecksPanel({
   truncated,
   onDownloadCsv,
   defaultExpandWithIssues = false,
+  embedded = false,
 }: InconsistencyChecksPanelProps) {
   const issuesByCheck = useMemo(() => groupIssuesByCheck(issues), [issues])
 
@@ -73,7 +76,6 @@ export function InconsistencyChecksPanel({
   ): ValidationIssue[] => {
     const direct = issuesByCheck.get(checkId) ?? []
     if (direct.length > 0) {
-      // Mantém só a severidade do painel (erros vs alertas), salvo checagens específicas.
       if (checkId === 'other_error' || checkId === 'other_warning' || checkId === 'other') {
         return direct.filter((i) => i.severity === severity)
       }
@@ -84,6 +86,178 @@ export function InconsistencyChecksPanel({
       return legacy.filter((i) => i.severity === severity)
     }
     return []
+  }
+
+  const list = (
+    <ul className={cn('divide-y divide-border', !embedded && 'rounded-lg border')}>
+      {checks.map((check) => {
+        const ok = check.count === 0
+        const isOpen = expanded.has(check.id)
+        const checkIssues = resolveCheckIssues(check.id, check.severity)
+        const canExpand = !ok
+        const displayIssues =
+          checkIssues.length > 0
+            ? checkIssues
+            : check.id === 'other'
+              ? resolveCheckIssues('other_error', 'error').concat(
+                  resolveCheckIssues('other_warning', 'warning')
+                )
+              : []
+
+        return (
+          <li key={check.id}>
+            <div
+              className={cn(
+                'flex items-start justify-between gap-3 px-1 py-2 text-sm',
+                !embedded && 'px-3 py-2.5',
+                canExpand && 'cursor-pointer hover:bg-muted/40'
+              )}
+              role={canExpand ? 'button' : undefined}
+              tabIndex={canExpand ? 0 : undefined}
+              onClick={canExpand ? () => toggle(check.id) : undefined}
+              onKeyDown={
+                canExpand
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggle(check.id)
+                      }
+                    }
+                  : undefined
+              }
+            >
+              <div className="flex min-w-0 items-start gap-2">
+                {canExpand ? (
+                  <ChevronDown
+                    className={cn(
+                      'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                      !isOpen && '-rotate-90'
+                    )}
+                  />
+                ) : (
+                  <span className="mt-0.5 inline-block h-4 w-4 shrink-0" />
+                )}
+                {ok ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <AlertTriangle
+                    className={
+                      check.severity === 'error'
+                        ? 'mt-0.5 h-4 w-4 shrink-0 text-destructive'
+                        : 'mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400'
+                    }
+                  />
+                )}
+                <span className="text-foreground">{check.label}</span>
+              </div>
+              <span
+                className={
+                  ok
+                    ? 'shrink-0 font-medium text-emerald-700 dark:text-emerald-300'
+                    : check.severity === 'error'
+                      ? 'shrink-0 font-medium text-destructive'
+                      : 'shrink-0 font-medium text-amber-700 dark:text-amber-300'
+                }
+              >
+                {ok ? 'nenhum' : formatNumber(check.count)}
+              </span>
+            </div>
+
+            {canExpand && isOpen && displayIssues.length > 0 && (
+              <div
+                className={cn(
+                  'border-t border-border bg-muted/20 pb-3 pt-2',
+                  embedded ? 'px-1' : 'px-3'
+                )}
+              >
+                {displayIssues.length < check.count && (
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Mostrando {formatNumber(displayIssues.length)} de{' '}
+                    {formatNumber(check.count)} ocorrência(s). Use &quot;Exportar CSV&quot; para
+                    baixar o que couber na exportação.
+                  </p>
+                )}
+                <div className="max-h-72 overflow-auto rounded-md border bg-card">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky top-0 z-10 w-16 bg-card">Linha</TableHead>
+                        <TableHead className="sticky top-0 z-10 w-20 bg-card">Tipo</TableHead>
+                        <TableHead className="sticky top-0 z-10 bg-card">Campo</TableHead>
+                        <TableHead className="sticky top-0 z-10 bg-card">Valor</TableHead>
+                        <TableHead className="sticky top-0 z-10 bg-card">Mensagem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {displayIssues.map((issue, index) => (
+                        <TableRow key={`${issue.row}-${issue.field}-${index}`}>
+                          <TableCell>{issue.row || '-'}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={issue.severity === 'error' ? 'destructive' : 'warning'}
+                            >
+                              {issue.severity === 'error' ? 'Erro' : 'Alerta'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{issue.field || '-'}</TableCell>
+                          <TableCell className="max-w-[120px] truncate font-mono text-xs">
+                            {issue.value || '-'}
+                          </TableCell>
+                          <TableCell
+                            className={
+                              issue.severity === 'error'
+                                ? 'text-destructive'
+                                : 'text-amber-700 dark:text-amber-300'
+                            }
+                          >
+                            {issue.message}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {canExpand && isOpen && displayIssues.length === 0 && (
+              <p
+                className={cn(
+                  'border-t border-border py-2 text-xs text-muted-foreground',
+                  embedded ? 'px-1' : 'px-3'
+                )}
+              >
+                Há {formatNumber(check.count)} ocorrência(s), mas nenhum detalhe foi carregado.
+                Clique em Revalidar ou use Exportar CSV.
+              </p>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+
+  if (embedded) {
+    return (
+      <div className="space-y-2">
+        {(onDownloadCsv || truncated) && (
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {truncated
+                ? 'Até 200 ocorrências por item; exporte o CSV para mais.'
+                : 'Clique na seta para ver as ocorrências.'}
+            </p>
+            {onDownloadCsv && issues.length > 0 && (
+              <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2" onClick={onDownloadCsv}>
+                <Download className="h-3.5 w-3.5" />
+                CSV
+              </Button>
+            )}
+          </div>
+        )}
+        {list}
+      </div>
+    )
   }
 
   return (
@@ -112,144 +286,7 @@ export function InconsistencyChecksPanel({
           )}
         </div>
       </CardHeader>
-      <CardContent>
-        <ul className="divide-y divide-border rounded-lg border">
-          {checks.map((check) => {
-            const ok = check.count === 0
-            const isOpen = expanded.has(check.id)
-            const checkIssues = resolveCheckIssues(check.id, check.severity)
-            const canExpand = !ok
-            // Compat: checagens antigas "other" também expandem
-            const displayIssues =
-              checkIssues.length > 0
-                ? checkIssues
-                : check.id === 'other'
-                  ? resolveCheckIssues('other_error', 'error').concat(
-                      resolveCheckIssues('other_warning', 'warning')
-                    )
-                  : []
-
-            return (
-              <li key={check.id}>
-                <div
-                  className={cn(
-                    'flex items-start justify-between gap-3 px-3 py-2.5 text-sm',
-                    canExpand && 'cursor-pointer hover:bg-muted/40'
-                  )}
-                  role={canExpand ? 'button' : undefined}
-                  tabIndex={canExpand ? 0 : undefined}
-                  onClick={canExpand ? () => toggle(check.id) : undefined}
-                  onKeyDown={
-                    canExpand
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            toggle(check.id)
-                          }
-                        }
-                      : undefined
-                  }
-                >
-                  <div className="flex min-w-0 items-start gap-2">
-                    {canExpand ? (
-                      <ChevronDown
-                        className={cn(
-                          'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                          !isOpen && '-rotate-90'
-                        )}
-                      />
-                    ) : (
-                      <span className="mt-0.5 inline-block h-4 w-4 shrink-0" />
-                    )}
-                    {ok ? (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <AlertTriangle
-                        className={
-                          check.severity === 'error'
-                            ? 'mt-0.5 h-4 w-4 shrink-0 text-destructive'
-                            : 'mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400'
-                        }
-                      />
-                    )}
-                    <span className="text-foreground">{check.label}</span>
-                  </div>
-                  <span
-                    className={
-                      ok
-                        ? 'shrink-0 font-medium text-emerald-700 dark:text-emerald-300'
-                        : check.severity === 'error'
-                          ? 'shrink-0 font-medium text-destructive'
-                          : 'shrink-0 font-medium text-amber-700 dark:text-amber-300'
-                    }
-                  >
-                    {ok ? 'nenhum' : formatNumber(check.count)}
-                  </span>
-                </div>
-
-                {canExpand && isOpen && displayIssues.length > 0 && (
-                  <div className="border-t border-border bg-muted/20 px-3 pb-3 pt-2">
-                    {displayIssues.length < check.count && (
-                      <p className="mb-2 text-xs text-muted-foreground">
-                        Mostrando {formatNumber(displayIssues.length)} de{' '}
-                        {formatNumber(check.count)} ocorrência(s). Use &quot;Exportar CSV&quot; para
-                        baixar o que couber na exportação.
-                      </p>
-                    )}
-                    <div className="max-h-72 overflow-auto rounded-md border bg-card">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="sticky top-0 z-10 w-16 bg-card">Linha</TableHead>
-                            <TableHead className="sticky top-0 z-10 w-20 bg-card">Tipo</TableHead>
-                            <TableHead className="sticky top-0 z-10 bg-card">Campo</TableHead>
-                            <TableHead className="sticky top-0 z-10 bg-card">Valor</TableHead>
-                            <TableHead className="sticky top-0 z-10 bg-card">Mensagem</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {displayIssues.map((issue, index) => (
-                            <TableRow key={`${issue.row}-${issue.field}-${index}`}>
-                              <TableCell>{issue.row || '-'}</TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={issue.severity === 'error' ? 'destructive' : 'warning'}
-                                >
-                                  {issue.severity === 'error' ? 'Erro' : 'Alerta'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">{issue.field || '-'}</TableCell>
-                              <TableCell className="max-w-[120px] truncate font-mono text-xs">
-                                {issue.value || '-'}
-                              </TableCell>
-                              <TableCell
-                                className={
-                                  issue.severity === 'error'
-                                    ? 'text-destructive'
-                                    : 'text-amber-700 dark:text-amber-300'
-                                }
-                              >
-                                {issue.message}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
-
-                {canExpand && isOpen && displayIssues.length === 0 && (
-                  <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                    Há {formatNumber(check.count)} ocorrência(s), mas nenhum detalhe foi carregado.
-                    Clique em Revalidar ou use Exportar CSV / Ver erros.
-                  </p>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      </CardContent>
+      <CardContent>{list}</CardContent>
     </Card>
   )
 }
@@ -264,7 +301,7 @@ export function buildSendCheckSummary(
   const dcbWarnings = (job.errors ?? []).filter((e) =>
     e.message.trim().toLowerCase().startsWith('aviso:')
   ).length
-  const realFailures = Math.max(0, (job.errorCount ?? 0) - dcbWarnings)
+  const realFailures = job.errorCount ?? 0
 
   return [
     {
@@ -281,7 +318,7 @@ export function buildSendCheckSummary(
     },
     {
       id: 'dcb_warning',
-      label: 'Avisos de DCB no insert (produto gravado sem vínculo)',
+      label: 'Avisos de DCB (produto gravado sem vínculo)',
       count: dcbWarnings,
       severity: 'warning',
     },

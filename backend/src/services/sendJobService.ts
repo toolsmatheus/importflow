@@ -846,7 +846,7 @@ export async function createSendJob(input: {
 }): Promise<SendJobSnapshot> {
   cleanupJobs()
 
-  const mode = input.mode ?? 'simulate'
+  const mode = input.mode ?? 'live'
   const tmsBaseUrl = input.tmsBaseUrl ?? getDefaultTmsBaseUrl()
   const batchSize = Math.min(1000, Math.max(10, input.batchSize ?? DEFAULT_BATCH_SIZE))
   const concurrency = Math.min(8, Math.max(1, input.concurrency ?? DEFAULT_CONCURRENCY))
