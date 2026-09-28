@@ -14,12 +14,13 @@ Guia para onboarding: como o monorepo se organiza, como os dados fluem do CSV at
 
 ```
 ImportFlow/
+├── package.json      npm workspaces (backend + frontend)
 ├── backend/          API Fastify (validação, jobs, integração TMS)
 ├── frontend/         Wizard React (produtos + opcionais)
 ├── data/             CSVs de exemplo + índices JSON (CMED, DCB, Portaria 344)
 ├── scripts/          Índices Anvisa (Python) + helpers de cliente (PowerShell)
 ├── backend/scripts/  Benchmarks/probes contra TMS local (dev only)
-├── start.bat         Deploy one-click (build + serve :3001)
+├── start.bat         Deploy one-click (npm install + build + serve :3001)
 ├── CONTRIBUTING.md   Setup local e “onde editar o quê”
 └── .env.example      Variáveis de ambiente
 ```
@@ -203,7 +204,7 @@ Usados em validação/sugestão de controlados — **sem HTTP à Anvisa em runti
 - **Idioma:** código em inglês; mensagens de usuário e regras em português.
 - **Imports backend:** extensão `.js` nos paths (ESM + TypeScript).
 - **API:** prefixo `/api`; Vite proxy em dev.
-- **Arquivos grandes:** `sendJobService.ts` concentra domínio de envio; validação em `validation/`; TMS isolado em `tms/`.
+- **Arquivos grandes:** envio em `sendJobService.ts` + `send/`; validação em `validation/`; TMS isolado em `tms/`.
 - **ICMS por UF:** fonte única em `backend/src/utils/icmsByUf.ts`; frontend importa via alias `@importflow/icms`.
 
 ---

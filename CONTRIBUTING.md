@@ -7,8 +7,8 @@ Guia curto para subir o projeto e saber **onde editar** cada coisa.
 Pré-requisito: **Node.js 20+**.
 
 ```bash
-# na raiz do repo
-npm run install:all
+# na raiz do repo (npm workspaces: backend + frontend)
+npm install
 copy .env.example .env   # Windows; ou cp .env.example .env
 ```
 

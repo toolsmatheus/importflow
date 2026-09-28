@@ -1,183 +1,143 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions
 cd /d "%~dp0"
 title ImportFlow
 
-echo ========================================
-echo   ImportFlow
-echo ========================================
-echo.
-
-REM --- Node.js: usa o do sistema se >= 20; senao baixa runtime portatil ---
-call :EnsureNode
-if errorlevel 1 exit /b 1
-
+set "NODE_MAJOR_MIN=20"
 set "PORT=3001"
-set "FORCE_BUILD=0"
-if /I "%~1"=="/rebuild" set "FORCE_BUILD=1"
-if /I "%~1"=="--rebuild" set "FORCE_BUILD=1"
+set "URL=http://localhost:%PORT%"
+set "FORCE_REBUILD=0"
+if /I "%~1"=="/rebuild" set "FORCE_REBUILD=1"
+if /I "%~1"=="--rebuild" set "FORCE_REBUILD=1"
 
-REM Libera a porta (instancia anterior / processo zumbi) sem perguntar
-call :FreePort %PORT%
+echo.
+echo  ImportFlow
+echo  ----------
+
+call :ensure_node
 if errorlevel 1 exit /b 1
 
 set "NEED_INSTALL=0"
-if not exist "backend\node_modules\" set "NEED_INSTALL=1"
-if not exist "frontend\node_modules\" set "NEED_INSTALL=1"
+if not exist "node_modules\" set "NEED_INSTALL=1"
+if not exist "package-lock.json" set "NEED_INSTALL=1"
 
 if "%NEED_INSTALL%"=="1" (
-  echo Instalando dependencias ^(pode demorar na primeira vez^)...
-  call npm install --prefix backend
-  if errorlevel 1 goto :FailInstall
-  call npm install --prefix frontend
-  if errorlevel 1 goto :FailInstall
-  echo.
-  echo Dependencias instaladas.
-  echo.
+  echo [1/3] Instalando dependencias (npm workspaces^)...
+  call npm install
+  if errorlevel 1 (
+    echo ERRO: npm install falhou. Verifique a internet e tente de novo.
+    pause
+    exit /b 1
+  )
+) else (
+  echo [1/3] Dependencias OK
 )
 
-set "NEED_BUILD=%FORCE_BUILD%"
-if not exist "backend\dist\server.js" set "NEED_BUILD=1"
+set "NEED_BUILD=0"
+if "%FORCE_REBUILD%"=="1" set "NEED_BUILD=1"
 if not exist "frontend\dist\index.html" set "NEED_BUILD=1"
+if not exist "backend\dist\server.js" set "NEED_BUILD=1"
 
-REM Rebuild se o source estiver mais novo que o dist (evita servir codigo antigo)
 if "%NEED_BUILD%"=="0" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$be=(Get-ChildItem 'backend\src' -Recurse -Filter '*.ts' -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1); " ^
-    "$bd=Get-Item 'backend\dist\server.js' -EA SilentlyContinue; " ^
-    "$fe=(Get-ChildItem 'frontend\src' -Recurse -Include '*.ts','*.tsx','*.css' -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1); " ^
-    "$fd=Get-Item 'frontend\dist\index.html' -EA SilentlyContinue; " ^
-    "if (($be -and $bd -and $be.LastWriteTime -gt $bd.LastWriteTime) -or ($fe -and $fd -and $fe.LastWriteTime -gt $fd.LastWriteTime)) { exit 1 }; exit 0" >nul 2>&1
-  if errorlevel 1 (
-    echo Source mais novo que o dist — rebuild automatico.
-    set "NEED_BUILD=1"
-  )
+  call :source_newer_than_build
+  if errorlevel 1 set "NEED_BUILD=1"
 )
 
 if "%NEED_BUILD%"=="1" (
-  echo Gerando build de producao...
-  call npm run build --prefix frontend
-  if errorlevel 1 goto :FailBuild
-  call npm run build --prefix backend
-  if errorlevel 1 goto :FailBuild
-  echo.
-  echo Build concluido.
-  echo.
+  echo [2/3] Gerando build...
+  call npm run build
+  if errorlevel 1 (
+    echo ERRO: build falhou.
+    pause
+    exit /b 1
+  )
 ) else (
-  echo Build ja existe. Para forcar: start.bat /rebuild
-  echo.
+  echo [2/3] Build OK
 )
 
-if not exist "frontend\dist\index.html" (
-  echo [ERRO] frontend\dist\index.html nao encontrado apos o build.
-  goto :FailBuild
-)
-if not exist "backend\dist\server.js" (
-  echo [ERRO] backend\dist\server.js nao encontrado apos o build.
-  goto :FailBuild
-)
-
-echo Iniciando ImportFlow em http://localhost:%PORT%
-echo Feche esta janela para encerrar o servidor.
+echo [3/3] Iniciando em %URL%
+echo      (feche esta janela para encerrar)
 echo.
 
-REM Abre o navegador quando /api/health responder
-start "" /B powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\client-wait-open.ps1" -Port %PORT%
+start "" /b cmd /c "timeout /t 2 /nobreak >nul & powershell -NoProfile -Command \"try { for($i=0;$i -lt 45;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing '%URL%/api/health' -TimeoutSec 2; if($r.StatusCode -eq 200){ Start-Process '%URL%'; break } } catch {} Start-Sleep -Seconds 1 } } catch {}\""
 
-set "PORT=%PORT%"
-call npm run start --prefix backend
-set "EXITCODE=!ERRORLEVEL!"
-
+call npm start
 echo.
-if not "!EXITCODE!"=="0" (
-  echo O servidor encerrou com erro !EXITCODE!.
-  echo Se a porta %PORT% estiver bloqueada, feche outras janelas do ImportFlow e tente de novo.
-)
+echo Servidor encerrado.
 pause
-exit /b !EXITCODE!
+exit /b 0
 
-:EnsureNode
-REM Garante Node >= 20: PATH ok, ou baixa .runtime\node (portatil, sem admin)
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\ensure-node.ps1" -MinMajor 20
-if errorlevel 1 (
-  echo.
-  echo [ERRO] Nao foi possivel preparar o Node.js automaticamente.
-  echo Opcoes:
-  echo   1^) Instale Node 20 LTS em https://nodejs.org/ ^(marque Add to PATH^)
-  echo   2^) Verifique a internet e execute start.bat de novo
-  echo.
-  pause
-  exit /b 1
-)
-
-if exist "%~dp0.runtime\use-node.cmd" (
-  call "%~dp0.runtime\use-node.cmd"
-)
-
+:ensure_node
 where node >nul 2>&1
 if errorlevel 1 (
-  echo [ERRO] Node.js ainda nao esta disponivel no PATH desta sessao.
-  pause
-  exit /b 1
+  echo Node.js nao encontrado. Baixando runtime portatil...
+  call :install_portable_node
+  exit /b %errorlevel%
 )
 
-where npm >nul 2>&1
-if errorlevel 1 (
-  echo [ERRO] npm nao encontrado ^(deveria vir com o Node^).
-  pause
-  exit /b 1
+for /f "tokens=1 delims=v." %%A in ('node -v 2^>nul') do set "NODE_MAJOR=%%A"
+if not defined NODE_MAJOR (
+  echo Nao foi possivel ler a versao do Node. Baixando runtime portatil...
+  call :install_portable_node
+  exit /b %errorlevel%
 )
 
-node -e "const m=+process.versions.node.split('.')[0]; if(m<20){process.exit(1)}" >nul 2>&1
-if errorlevel 1 (
-  echo [ERRO] Node.js ainda abaixo da versao 20 apos a preparacao.
-  for /f "delims=" %%v in ('node -v 2^>nul') do echo Versao atual: %%v
-  pause
-  exit /b 1
+if %NODE_MAJOR% LSS %NODE_MAJOR_MIN% (
+  echo Node v%NODE_MAJOR% detectado; ImportFlow precisa de Node %NODE_MAJOR_MIN%+.
+  echo Baixando runtime portatil...
+  call :install_portable_node
+  exit /b %errorlevel%
 )
 
-for /f "delims=" %%v in ('node -v 2^>nul') do set "NODE_VER=%%v"
-for /f "delims=" %%v in ('npm -v 2^>nul') do set "NPM_VER=%%v"
-echo Ambiente OK: Node %NODE_VER% ^| npm %NPM_VER%
-echo.
 exit /b 0
 
-:FreePort
-REM Encerra o processo que estiver LISTENING na porta %1 (sem prompt)
-set "FREED=0"
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /C:":%1 " ^| findstr LISTENING') do (
-  if not "%%p"=="0" if not "%%p"=="" (
-    echo Liberando porta %1 ^(PID %%p^)...
-    taskkill /F /T /PID %%p >nul 2>&1
-    set "FREED=1"
+:install_portable_node
+set "RUNTIME_DIR=%~dp0.runtime\node"
+set "NODE_EXE=%RUNTIME_DIR%\node.exe"
+if exist "%NODE_EXE%" (
+  for /f "tokens=1 delims=v." %%A in ('"%NODE_EXE%" -v 2^>nul') do set "PORTABLE_MAJOR=%%A"
+  if defined PORTABLE_MAJOR if %PORTABLE_MAJOR% GEQ %NODE_MAJOR_MIN% (
+    set "PATH=%RUNTIME_DIR%;%PATH%"
+    echo Usando Node portatil em .runtime\node
+    exit /b 0
   )
 )
-if "!FREED!"=="1" (
-  ping -n 3 127.0.0.1 >nul
-)
 
-REM Confirma que a porta ficou livre
-netstat -ano 2>nul | findstr /C:":%1 " | findstr LISTENING >nul 2>&1
-if not errorlevel 1 (
-  echo.
-  echo [ERRO] A porta %1 continua em uso e nao foi possivel libera-la.
-  echo Feche outras janelas do ImportFlow / Node e execute start.bat de novo.
-  echo.
+set "TMP_ZIP=%TEMP%\importflow-node.zip"
+set "TMP_EXTRACT=%TEMP%\importflow-node-extract"
+set "NODE_DIST_URL=https://nodejs.org/dist/v20.18.1/node-v20.18.1-win-x64.zip"
+
+echo Baixando Node 20 LTS (pode levar 1–2 min^)...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference='Stop';" ^
+  "Invoke-WebRequest -Uri '%NODE_DIST_URL%' -OutFile '%TMP_ZIP%';" ^
+  "if (Test-Path '%TMP_EXTRACT%') { Remove-Item -Recurse -Force '%TMP_EXTRACT%' };" ^
+  "Expand-Archive -Path '%TMP_ZIP%' -DestinationPath '%TMP_EXTRACT%' -Force;" ^
+  "New-Item -ItemType Directory -Force -Path '%RUNTIME_DIR%' | Out-Null;" ^
+  "Get-ChildItem '%TMP_EXTRACT%' -Directory | Select-Object -First 1 | ForEach-Object {" ^
+  "  Copy-Item -Path (Join-Path $_.FullName '*') -Destination '%RUNTIME_DIR%' -Recurse -Force" ^
+  "}"
+
+if not exist "%NODE_EXE%" (
+  echo ERRO: falha ao instalar Node portatil.
+  echo Instale Node.js 20+ em https://nodejs.org e execute start.bat de novo.
   pause
   exit /b 1
 )
+
+set "PATH=%RUNTIME_DIR%;%PATH%"
+echo Node portatil pronto.
 exit /b 0
 
-:FailInstall
-echo.
-echo [ERRO] Falha ao instalar dependencias.
-echo Verifique conexao com a internet e permissoes da pasta.
-pause
-exit /b 1
-
-:FailBuild
-echo.
-echo [ERRO] Falha no build.
-echo Tente novamente com: start.bat /rebuild
-pause
-exit /b 1
+:source_newer_than_build
+powershell -NoProfile -Command ^
+  "$ErrorActionPreference='Stop';" ^
+  "$frontDist = Get-Item 'frontend\dist\index.html' -ErrorAction SilentlyContinue;" ^
+  "$backDist = Get-Item 'backend\dist\server.js' -ErrorAction SilentlyContinue;" ^
+  "if (-not $frontDist -or -not $backDist) { exit 1 };" ^
+  "$cutoff = if ($frontDist.LastWriteTime -lt $backDist.LastWriteTime) { $frontDist.LastWriteTime } else { $backDist.LastWriteTime };" ^
+  "$newer = Get-ChildItem -Path 'frontend\src','backend\src','frontend\index.html','frontend\vite.config.ts','backend\tsconfig.json' -Recurse -File -ErrorAction SilentlyContinue |" ^
+  "  Where-Object { $_.LastWriteTime -gt $cutoff } |" ^
+  "  Select-Object -First 1;" ^
+  "if ($newer) { exit 1 } else { exit 0 }"
+exit /b %errorlevel%

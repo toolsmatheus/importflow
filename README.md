@@ -63,7 +63,7 @@ Abre `http://localhost:3001` quando `/api/health` responder. Forçar rebuild: `s
 Setup completo e mapa “onde editar o quê”: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
-npm run install:all
+npm install
 npm run dev:backend
 npm run dev:frontend
 ```
