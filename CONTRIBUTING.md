@@ -40,7 +40,7 @@ Abre `http://localhost:3001` (API + frontend buildado).
 
 | Quero… | Vá em… |
 |--------|--------|
-| Nova regra de validação CSV | `backend/src/services/productValidationService.ts` (+ teste) |
+| Nova regra de validação CSV | `backend/src/services/validation/` (+ teste em `productValidationService.test.ts`) |
 | Lista de controle / enum TMS | `backend/src/services/listaControlado.ts` |
 | Payload do produto no TMS | `backend/src/services/productTmsMapper.ts` |
 | Lógica HTTP TMS (auth, bulk) | `backend/src/services/tms/` |

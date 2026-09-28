@@ -67,7 +67,8 @@ Não há pastas `database/`, `jobs/` ou `middleware/` — jobs ficam em `service
 | `csvService.ts` | Parse streaming, encoding, colunas |
 | `auxiliaryService.ts` | Auxiliar `id;nome`, preview, cache |
 | `folderCollectService.ts` | Coleta de pasta por nome de arquivo |
-| `productValidationService.ts` | Pipeline de validação (fiscal, DCB, EAN…) |
+| `productValidationService.ts` | Orquestra validação CSV / prévia |
+| `validation/` | Domínios: fiscal, controlados, auxiliares, checklist |
 | `listaControlado.ts` | Enum TMS `tlTipoListaControlado` |
 | `productTmsMapper.ts` | Linha CSV → payload TMS |
 | `sendJobService.ts` | Job de envio de produtos (lotes, pause/resume) |
