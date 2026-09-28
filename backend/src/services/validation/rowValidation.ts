@@ -4,13 +4,12 @@ import {
   isValidIntegerId,
   isValidMigrationCode,
   isValidProductName,
-  eanValidationFailureReason,
   parseBrazilianNumber,
-  parseCodigoAdicionalList,
 } from '../../utils/productFormats.js'
 import type { AuxiliaryCatalogs } from '../auxiliaryService.js'
 import type { TmsDcbRecord } from '../tmsService.js'
 import { validateAuxiliaryRefs } from './auxiliaryValidation.js'
+import { validateRowBarcodes } from './barcodeValidation.js'
 import {
   resolveOrClearControlado,
   validateControladoListaFields,
@@ -36,7 +35,7 @@ export function validateRow(
   counters: IssueCounters,
   tmsDcb: Map<string, TmsDcbRecord> | null = null,
   clientUf?: string
-) {
+): string[] {
   for (const field of REQUIRED_HEADERS) {
     if (!hasColumn(columns, field)) continue
     const value = cell(record, field)
@@ -86,38 +85,7 @@ export function validateRow(
 
   validateFiscalAndPricing(record, rowNumber, columns, issues, counters, clientUf)
 
-  if (hasColumn(columns, 'codigobarras')) {
-    const ean = cell(record, 'codigobarras').trim()
-    if (!isBlank(ean)) {
-      const reason = eanValidationFailureReason(ean)
-      if (reason) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field: 'codigobarras',
-          value: ean,
-          message: `Código de barras inválido (${reason}).`,
-          severity: 'warning',
-        })
-      }
-    }
-  }
-
-  if (hasColumn(columns, 'codigoadicional')) {
-    const primary = cell(record, 'codigobarras').trim()
-    const extras = parseCodigoAdicionalList(cell(record, 'codigoadicional'), primary)
-    for (const extra of extras) {
-      const reason = eanValidationFailureReason(extra)
-      if (reason) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field: 'codigoadicional',
-          value: extra,
-          message: `Código de barras adicional inválido (${reason}).`,
-          severity: 'warning',
-        })
-      }
-    }
-  }
+  const barcodeKeys = validateRowBarcodes(record, rowNumber, columns, issues, counters)
 
   for (const field of INTEGER_OPTIONAL_FIELDS) {
     if (!hasColumn(columns, field)) continue
@@ -236,4 +204,6 @@ export function validateRow(
   )
 
   validateAuxiliaryRefs(record, rowNumber, columns, catalogs, issues, counters, tmsDcb)
+
+  return barcodeKeys
 }

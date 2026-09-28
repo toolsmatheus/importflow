@@ -207,11 +207,60 @@ describe('validateProductRows — EAN', () => {
     ).toBe(true)
   })
 
-  it('aceita EAN vazio sem alerta', async () => {
+  it('aceita EAN vazio mas resume quantos ficaram sem barras', async () => {
     const result = await validateProductRows({
-      rows: [baseRow({ codigobarras: '' })],
+      rows: [
+        baseRow({ codigo: '1001', codigobarras: '' }),
+        baseRow({ codigo: '1002', codigobarras: '7894900011517' }),
+      ],
     })
-    expect(result.issues.some((i) => i.field === 'codigobarras')).toBe(false)
+    expect(
+      result.issues.some(
+        (i) =>
+          i.field === 'codigobarras' &&
+          i.severity === 'warning' &&
+          i.message.includes('sem código de barras')
+      )
+    ).toBe(true)
+  })
+
+  it('avisa codigoadicional igual ao EAN principal', async () => {
+    const result = await validateProductRows({
+      rows: [
+        baseRow({
+          codigobarras: '7894900011517',
+          codigoadicional: '7894900011517,7894900011524',
+        }),
+      ],
+    })
+    expect(
+      result.issues.some(
+        (i) =>
+          i.field === 'codigoadicional' &&
+          i.message.toLowerCase().includes('igual ao ean principal')
+      )
+    ).toBe(true)
+  })
+
+  it('erro quando codigoadicional repete EAN de outra linha', async () => {
+    const result = await validateProductRows({
+      rows: [
+        baseRow({ codigo: '1001', codigobarras: '7894900011517' }),
+        baseRow({
+          codigo: '1002',
+          codigobarras: '7894900011524',
+          codigoadicional: '7894900011517',
+        }),
+      ],
+    })
+    expect(
+      result.issues.some(
+        (i) =>
+          i.field === 'codigoadicional' &&
+          i.severity === 'error' &&
+          i.message.toLowerCase().includes('duplicado')
+      )
+    ).toBe(true)
   })
 })
 

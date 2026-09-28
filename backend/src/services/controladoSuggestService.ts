@@ -5,6 +5,7 @@ import {
   getControladosEanIndex,
 } from './controladosEanIndexService.js'
 import { lookupAnvisaDcbBySubstance } from './dcbIndexService.js'
+import { isValidListaControladoCsv } from './listaControlado.js'
 import { matchSubstanceToLista, normalizeSubstanceName } from './portaria344Service.js'
 
 export type ControladoSuggestKind = 'empty' | 'conflict' | 'confirm'
@@ -255,6 +256,12 @@ export function suggestControlados(
       reasonParts.push(`DCB auxiliar: ${suggestedDcb} (${suggestedDcbNome})`)
     } else if (dcbSource === 'anvisa') {
       reasonParts.push(`DCB Anvisa (princípio ativo): ${suggestedDcb} (${suggestedDcbNome})`)
+    }
+
+    if (suggestedLista && !isValidListaControladoCsv(suggestedLista)) {
+      reasonParts.push(
+        `Atenção: lista ${suggestedLista} não existe no enum TMS — a validação vai rejeitar (use A1–A3, B1–B2, C1–C2, C4–C5 ou T)`
+      )
     }
 
     suggestions.push({

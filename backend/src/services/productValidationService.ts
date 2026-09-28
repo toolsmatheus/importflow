@@ -9,6 +9,11 @@ import { isValidMigrationCode } from '../utils/productFormats.js'
 import { type StoredCsvFile } from './csvFileService.js'
 import { createRecordStream, normalizeRecord, resolveCsvOptions } from './csvService.js'
 import { resolveAuxiliaryCatalogs } from './validation/auxiliaryValidation.js'
+import {
+  countMissingPrimaryBarcodes,
+  pushMissingBarcodeSummary,
+  trackFileBarcodeKeys,
+} from './validation/barcodeValidation.js'
 import { buildCheckSummary, classifyIssue } from './validation/checkSummary.js'
 import { loadTmsDcbForValidation } from './validation/controladoValidation.js'
 import {
@@ -183,7 +188,7 @@ export async function validateProductCsv(
     else if (flagAtualiza === 'N') atualizaEstoqueN++
 
     if (missingRequiredHeaders.length === 0) {
-      validateRow(
+      const barcodeKeys = validateRow(
         record,
         rowNumber,
         columnSet,
@@ -192,6 +197,28 @@ export async function validateProductCsv(
         counters,
         tmsDcb,
         input.clientUf
+      )
+      const primaryRaw = cell(record, 'codigobarras').trim()
+      const primaryKey = primaryRaw.replace(/\D/g, '')
+      const primaryKeys = primaryKey.length >= 8 ? [primaryKey] : []
+      const additionalKeys = barcodeKeys.filter((k) => k !== primaryKey)
+      trackFileBarcodeKeys(
+        seenBarcodes,
+        primaryKeys,
+        rowNumber,
+        issues,
+        counters,
+        primaryRaw,
+        'codigobarras'
+      )
+      trackFileBarcodeKeys(
+        seenBarcodes,
+        additionalKeys,
+        rowNumber,
+        issues,
+        counters,
+        cell(record, 'codigoadicional').trim() || additionalKeys[0] || '',
+        'codigoadicional'
       )
       if (record.markup !== undefined && !columnSet.has('markup')) {
         columnSet.add('markup')
@@ -228,23 +255,6 @@ export async function validateProductCsv(
         seenCodes.set(codigo, rowNumber)
       }
     }
-
-    const barcodeRaw = cell(record, 'codigobarras').trim()
-    const barcodeKey = barcodeRaw.replace(/\D/g, '')
-    if (barcodeKey.length >= 8) {
-      const firstRow = seenBarcodes.get(barcodeKey)
-      if (firstRow !== undefined) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field: 'codigobarras',
-          value: barcodeRaw,
-          message: `Código de barras duplicado no arquivo (já apareceu na linha ${firstRow}).`,
-          severity: 'error',
-        })
-      } else {
-        seenBarcodes.set(barcodeKey, rowNumber)
-      }
-    }
   }
 
   if (totalRecords === 0 && missingRequiredHeaders.length === 0) {
@@ -256,6 +266,13 @@ export async function validateProductCsv(
       severity: 'error',
     })
   }
+
+  pushMissingBarcodeSummary(
+    countMissingPrimaryBarcodes(rows, columnSet),
+    totalRecords,
+    issues,
+    counters
+  )
 
   return finalizeResult({
     fileId: file.id,
@@ -297,13 +314,21 @@ export async function validateProductRows(
 
   let columns = input.rows[0] ? Object.keys(input.rows[0]) : [...REQUIRED_HEADERS]
   const columnSet = new Set(columns)
+  for (const row of input.rows) {
+    for (const key of Object.keys(row)) {
+      if (!columnSet.has(key)) {
+        columnSet.add(key)
+        columns = [...columns, key]
+      }
+    }
+  }
   const seenCodes = new Map<string, number>()
   const seenBarcodes = new Map<string, number>()
   const rows = input.rows.map((row) => ({ ...row }))
 
   rows.forEach((record, index) => {
     const rowNumber = index + 2
-    validateRow(
+    const barcodeKeys = validateRow(
       record,
       rowNumber,
       columnSet,
@@ -347,23 +372,36 @@ export async function validateProductRows(
       }
     }
 
-    const barcodeRaw = cell(record, 'codigobarras').trim()
-    const barcodeKey = barcodeRaw.replace(/\D/g, '')
-    if (barcodeKey.length >= 8) {
-      const firstRow = seenBarcodes.get(barcodeKey)
-      if (firstRow !== undefined) {
-        pushIssue(issues, counters, {
-          row: rowNumber,
-          field: 'codigobarras',
-          value: barcodeRaw,
-          message: `Código de barras duplicado (já aparece na linha ${firstRow}).`,
-          severity: 'error',
-        })
-      } else {
-        seenBarcodes.set(barcodeKey, rowNumber)
-      }
-    }
+    const primaryRaw = cell(record, 'codigobarras').trim()
+    const primaryKey = primaryRaw.replace(/\D/g, '')
+    const primaryKeys = primaryKey.length >= 8 ? [primaryKey] : []
+    const additionalKeys = barcodeKeys.filter((k) => k !== primaryKey)
+    trackFileBarcodeKeys(
+      seenBarcodes,
+      primaryKeys,
+      rowNumber,
+      issues,
+      counters,
+      primaryRaw,
+      'codigobarras'
+    )
+    trackFileBarcodeKeys(
+      seenBarcodes,
+      additionalKeys,
+      rowNumber,
+      issues,
+      counters,
+      cell(record, 'codigoadicional').trim() || additionalKeys[0] || '',
+      'codigoadicional'
+    )
   })
+
+  pushMissingBarcodeSummary(
+    countMissingPrimaryBarcodes(rows, columnSet),
+    rows.length,
+    issues,
+    counters
+  )
 
   return finalizeResult({
     fileId: '',

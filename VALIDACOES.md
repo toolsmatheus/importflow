@@ -146,20 +146,21 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `estoqueminimo`, `descontofi
 
 ### Código de barras
 
-- [ ] **EAN vazio** · permitido (produto entra sem `codigoBarras` no TMS)
+- [ ] **EAN vazio** · permitido no envio; **warning agregado** no arquivo  
+  *Ex.:* 3 de 10 produtos sem `codigobarras` → um aviso resumindo a quantidade.
 
 - [ ] **EAN inválido** (tamanho ou dígito verificador) · **warning**  
   *Tamanhos aceitos:* **8**, **12** (UPC-A), **13**, **14** dígitos.  
   *Ex.:* `codigobarras=123` (tamanho) ou EAN-13 com dígito final errado.  
   *Não bloqueia o envio.*
 
-- [ ] **EAN duplicado no arquivo** · **error**  
-  *Ex.:* duas linhas com o mesmo `codigobarras`.
+- [ ] **EAN duplicado no arquivo** (principal ou adicional) · **error**  
+  *Ex.:* duas linhas com o mesmo `codigobarras`, ou `codigoadicional` repetindo o EAN de outra linha.
 
 - [ ] **`codigoadicional`** (opcional, após `codigobarras`) — EANs extras separados por `,` (ou `;`)  
   *Ex.:* `789...,790...,791...`  
   *No envio:* cadastra cada EAN em `listacodigobarras` do produto.  
-  *Validação:* mesmo aviso de EAN inválido por item.
+  *Validação:* aviso de EAN inválido por item; **warning** se igual ao EAN principal ou repetido na mesma linha.
 
 ### IDs, flags e status
 

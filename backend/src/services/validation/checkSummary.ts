@@ -22,6 +22,15 @@ export const VALIDATION_CHECK_DEFS: Array<{
         i.message.toLowerCase().includes('código de barras inválido')),
   },
   {
+    id: 'missing_barcode',
+    label: 'Produtos sem código de barras',
+    severity: 'warning',
+    match: (i) =>
+      i.field === 'codigobarras' &&
+      i.severity === 'warning' &&
+      i.message.toLowerCase().includes('sem código de barras'),
+  },
+  {
     id: 'duplicate_codigo',
     label: 'Códigos duplicados no arquivo',
     severity: 'error',
@@ -32,7 +41,18 @@ export const VALIDATION_CHECK_DEFS: Array<{
     label: 'Códigos de barras duplicados no arquivo',
     severity: 'error',
     match: (i) =>
-      i.field === 'codigobarras' && i.message.toLowerCase().includes('duplicado'),
+      (i.field === 'codigobarras' || i.field === 'codigoadicional') &&
+      i.message.toLowerCase().includes('duplicado') &&
+      !i.message.toLowerCase().includes('mesma linha'),
+  },
+  {
+    id: 'barcode_adicional_conflict',
+    label: 'Código adicional conflita com EAN principal / repetido na linha',
+    severity: 'warning',
+    match: (i) =>
+      i.field === 'codigoadicional' &&
+      (i.message.toLowerCase().includes('igual ao ean principal') ||
+        i.message.toLowerCase().includes('mesma linha')),
   },
   {
     id: 'invalid_codigo',
