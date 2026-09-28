@@ -6,15 +6,18 @@ Importação de produtos via CSV para o banco de dados (ToolsPharma), com valida
 
 1. **Auxiliares** — upload de `grupo.csv` (obrigatório) e demais auxiliares (`id;nome`); prévia read-only por arquivo; download de modelos
 2. **Produtos** — upload manual **ou** coleta automática de pasta (`produtos.csv`, `grupo.csv`, …); identificação da filial e UF
-3. **Erros** — validação com checagens; sugestão de controlados (CMED/DCB); botão para ver erros; só segue sem erros bloqueantes
-4. **Envio** — lotes via `ImportarListaProdutos`, com progresso, pausa, retomar e reenvio de falhas (ou simulação sem gravar)
+3. **Erros** — validação com checagens; sugestão de controlados (CMED/DCB); pode seguir sem erros bloqueantes **ou** enviar só as linhas válidas (exclui as com erro)
+4. **Envio** — lotes via `ImportarListaProdutos`, com progresso, pausa, retomar e reenvio de falhas
 
 ### Regras automáticas (validação)
 
-- **CFOP** — não é coluna obrigatória: alíquota ICMS > 0 → 5102; alíquota 0 + ST → 5405; alíquota 0 exige exatamente ST ou isento
+- **CFOP** — não é coluna obrigatória: alíquota ICMS > 0 → 5102; alíquota 0 + ST → 5405
+- **Alíquota 0** — se não houver `st`/`isento`/`semincidencia`, `st` é definido como `S` com aviso; se houver conflito entre as três flags, erro bloqueante
 - **Flags S/N obrigatórias** — `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto` (mapeiam para o produto no TMS)
 - **Markup** — se vazio ou inconsistente com custo/venda, é recalculado com aviso
-- **EAN inválido** — alerta (não bloqueia o envio)
+- **EAN inválido** — alerta (não bloqueia); EAN duplicado (≥8 dígitos) — erro
+
+Detalhes e lista completa: [VALIDACOES.md](VALIDACOES.md).
 
 ## Distribuição para o cliente (AnyDesk)
 
@@ -57,6 +60,8 @@ Abre `http://localhost:3001` quando `/api/health` responder. Forçar rebuild: `s
 
 ## Desenvolvimento local
 
+Setup completo e mapa “onde editar o quê”: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```bash
 npm run install:all
 npm run dev:backend
@@ -82,7 +87,7 @@ Endpoints:
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `POST` | `/api/products/send/start` | Inicia job (`mode: live \| simulate`) |
+| `POST` | `/api/products/send/start` | Inicia job (`mode: live`; API ainda aceita `simulate`) |
 | `GET` | `/api/products/send/:jobId` | Progresso |
 | `GET` | `/api/products/send/:jobId/skipped.csv` | CSV de produtos ignorados |
 | `POST` | `/api/products/send/:jobId/pause` | Pausa |
@@ -90,7 +95,7 @@ Endpoints:
 | `POST` | `/api/products/send/:jobId/cancel` | Cancela |
 | `POST` | `/api/products/send/:jobId/retry-failures` | Reenvia só falhas |
 
-Enquanto o banco de destino não estiver disponível, use **Simular lotes** para testar 5k–20k produtos.
+O wizard de produtos envia em modo **live**. Simulação (`simulate`) permanece na API e nas importações opcionais.
 
 ## Outros endpoints
 
@@ -113,10 +118,13 @@ Enquanto o banco de destino não estiver disponível, use **Simular lotes** para
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `data/modelo-produtos.csv` | 12 produtos de exemplo (sem FP/controlados) |
+| `data/produtos.csv` | CSV de produtos de exemplo |
+| `data/modelo-produtos.sql` | Script SQL de modelo (referência) |
 | `data/modelo-auxiliar.csv` | Modelo `id;nome` |
 | `data/exemplos/*.csv` | Auxiliares de exemplo |
 | `data/produtos-invalid-example.csv` | Casos de erro/alerta |
+| `data/produtos-controlados-teste.csv` | Casos de controlados |
+| `data/reference/` | Índices CMED/DCB/Portaria 344 (JSON) |
 
 ## Scripts de benchmark
 
@@ -144,4 +152,6 @@ CI (`.github/workflows/ci.yml`): lint + build + test em push/PR para `master`/`m
 
 Ver `.env.example` para um template completo.
 
-Arquitetura detalhada (fluxo de dados, camadas, jobs, TMS): [ARCHITECTURE.md](ARCHITECTURE.md).
+- Arquitetura (fluxo, camadas, jobs, TMS): [ARCHITECTURE.md](ARCHITECTURE.md)
+- Como contribuir / primeiro setup: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Scripts (índices Anvisa + cliente): [scripts/README.md](scripts/README.md)

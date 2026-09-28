@@ -2,7 +2,10 @@
 
 Guia para onboarding: como o monorepo se organiza, como os dados fluem do CSV até o TMS, e onde encontrar cada responsabilidade.
 
-Documentação operacional (instalação, env vars, endpoints): [README.md](README.md).
+- Instalação e endpoints: [README.md](README.md)
+- Como contribuir / primeiro setup: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Regras de validação: [VALIDACOES.md](VALIDACOES.md)
+- Scripts utilitários: [scripts/README.md](scripts/README.md)
 
 ---
 
@@ -11,15 +14,16 @@ Documentação operacional (instalação, env vars, endpoints): [README.md](READ
 ```
 ImportFlow/
 ├── backend/          API Fastify (validação, jobs, integração TMS)
-├── frontend/         Wizard React (importação de produtos e opcionais)
-├── data/             CSVs de exemplo + índices JSON de referência (CMED, DCB, Portaria 344)
-├── scripts/          Python — gera índices offline a partir de planilhas Anvisa
-├── backend/scripts/  TypeScript — benchmarks e probes contra TMS local (dev only)
+├── frontend/         Wizard React (produtos + opcionais)
+├── data/             CSVs de exemplo + índices JSON (CMED, DCB, Portaria 344)
+├── scripts/          Índices Anvisa (Python) + helpers de cliente (PowerShell)
+├── backend/scripts/  Benchmarks/probes contra TMS local (dev only)
 ├── start.bat         Deploy one-click (build + serve :3001)
+├── CONTRIBUTING.md   Setup local e “onde editar o quê”
 └── .env.example      Variáveis de ambiente
 ```
 
-**Produção:** o backend na porta `3001` serve o frontend buildado (`frontend/dist`) e expõe `/api/*`. O TMS (ToolsPharma) roda separadamente (padrão `:2001`).
+**Produção / cliente:** o backend na porta `3001` serve o frontend buildado (`frontend/dist`) e expõe `/api/*`. O TMS (ToolsPharma) roda separado (padrão `:2001`).
 
 ---
 
@@ -29,19 +33,21 @@ ImportFlow/
 
 ```
 server.ts
-  └── routes/          Registro Fastify (/api)
-        └── controllers/   HTTP: parse request, chama service, responde JSON
-              └── services/   Lógica de negócio
-                    └── tms/      Integração HTTP com o TMS (refatorado de tmsService.ts)
+  └── routes/            Registro Fastify (/api)
+        └── controllers/ HTTP: parse request → service → JSON
+              └── services/  Lógica de negócio + jobs in-memory
+                    └── tms/   Integração HTTP com o TMS
 ```
+
+Não há pastas `database/`, `jobs/` ou `middleware/` — jobs ficam em `services/` (`sendJobService`, `optional*JobService`).
 
 | Camada | Pasta | Papel |
 |--------|-------|-------|
 | Rotas | `backend/src/routes/` | Agrupa endpoints por domínio |
-| Controllers | `backend/src/controllers/` | Validação de entrada, status HTTP, streaming NDJSON |
-| Services | `backend/src/services/` | Validação de produtos, jobs, CSV, índices locais |
-| TMS | `backend/src/services/tms/` | Auth, OData, insert/import bulk, estoque, lotes |
-| Schemas | `backend/src/schemas/` | Headers CSV, entidades auxiliares, templates Zod |
+| Controllers | `backend/src/controllers/` | Entrada HTTP, status, streaming NDJSON |
+| Services | `backend/src/services/` | Validação, CSV, envio, índices locais |
+| TMS | `backend/src/services/tms/` | Auth, OData, bulk insert, estoque, lotes |
+| Schemas | `backend/src/schemas/` | Headers CSV, entidades auxiliares, Zod |
 | Utils | `backend/src/utils/` | Formatos BR, ICMS por UF, detecção de CSV |
 
 ### Rotas principais
@@ -49,47 +55,48 @@ server.ts
 | Módulo | Prefixo | Responsabilidade |
 |--------|---------|------------------|
 | `health.routes.ts` | `/api/health` | Saúde da API |
-| `csv.routes.ts` | `/api/csv` | Upload genérico de CSV (fileId, análise de colunas) |
-| `product.routes.ts` | `/api/products` | Wizard de produtos: templates, auxiliares, validação, envio |
-| `optional.routes.ts` | `/api/opcionais` | Importações opcionais: barras, fornecedor, validade, estoque, lotes |
+| `csv.routes.ts` | `/api/csv` | Upload genérico de CSV (`fileId`) |
+| `product.routes.ts` | `/api/products` | Wizard: templates, auxiliares, validação, envio |
+| `optional.routes.ts` | `/api/opcionais` | Fornecedor, validade, estoque, lotes |
 
 ### Services — mapa de responsabilidades
 
 | Service | Função |
 |---------|--------|
-| `csvFileService.ts` | Armazena uploads em `temp/uploads/` (TTL 2h) |
-| `csvService.ts` | Parse streaming, encoding, estatísticas de colunas |
-| `auxiliaryService.ts` | CSV auxiliar `id;nome`, preview, cache por entidade |
-| `folderCollectService.ts` | Coleta automática de pasta por nome de arquivo |
-| `productValidationService.ts` | Pipeline completo de validação (fiscal, DCB, EAN, auxiliares) |
-| `productTmsMapper.ts` | Linha CSV → payload TMS (`mapCsvRowToProductPayload`) |
-| `sendJobService.ts` | Job in-memory de envio de produtos (lotes, pause/resume) |
+| `csvFileService.ts` | Uploads em `temp/uploads/` (TTL 2h) |
+| `csvService.ts` | Parse streaming, encoding, colunas |
+| `auxiliaryService.ts` | Auxiliar `id;nome`, preview, cache |
+| `folderCollectService.ts` | Coleta de pasta por nome de arquivo |
+| `productValidationService.ts` | Pipeline de validação (fiscal, DCB, EAN…) |
+| `listaControlado.ts` | Enum TMS `tlTipoListaControlado` |
+| `productTmsMapper.ts` | Linha CSV → payload TMS |
+| `sendJobService.ts` | Job de envio de produtos (lotes, pause/resume) |
 | `controladoSuggestService.ts` | EAN → CMED → Portaria 344 |
-| `dcbIndexService.ts`, `cmedIndexService.ts`, etc. | Leitura de índices JSON locais (não HTTP) |
-| `optional*JobService.ts` (×5) | Jobs in-memory para importações opcionais |
+| `dcbIndexService.ts`, `cmedIndexService.ts`, … | Índices JSON locais |
+| `optionalSupplier\|Validity\|Stock\|LotJobService.ts` (×4) | Jobs das importações opcionais |
 
 ### Integração TMS (`backend/src/services/tms/`)
 
-Módulos extraídos de `tmsService.ts` (barrel de compatibilidade: `tmsService.ts` reexporta tudo):
+`tmsService.ts` é um **barrel** fino que reexporta `./tms`.
 
 | Módulo | Conteúdo |
 |--------|----------|
 | `tmsConfig.ts` | `TMS_BASE_URL`, `getDefaultTmsBaseUrl()` |
-| `tmsTypes.ts` | Tipos compartilhados (`BatchInsertResult`, `TmsAuth`, …) |
-| `tmsAuth.ts` | Basic Auth SHA-256 a partir da versão do servidor |
-| `tmsClient.ts` | `tmsJsonRequest`, paginação OData, parsers de resposta |
-| `tmsAuxiliary.ts` | Insert/list de grupos, subgrupos, DCB, similar, … |
-| `tmsProductImport.ts` | `insertProduct`, `importarListaProdutos` (bulk) |
-| `tmsProductCatalog.ts` | Catálogos de lookup e existência de produtos |
+| `tmsTypes.ts` | Tipos (`BatchInsertResult`, `TmsAuth`, …) |
+| `tmsAuth.ts` | Basic Auth SHA-256 a partir da versão |
+| `tmsClient.ts` | HTTP + paginação OData |
+| `tmsAuxiliary.ts` | Insert/list de grupos, DCB, similar… |
+| `tmsProductImport.ts` | `insertProduct`, `importarListaProdutos` |
+| `tmsProductCatalog.ts` | Catálogos e existência de produtos |
 | `tmsFiscal.ts` | `AliquotaICMS`, `ensureAliquotaPercent` |
-| `tmsProductExtras.ts` | Códigos de barras adicionais, código fornecedor |
+| `tmsProductExtras.ts` | Barras adicionais, código fornecedor |
 | `tmsStock.ts` | `SalvarListaEstoques` |
-| `tmsLots.ts` | `LoteMedicamento`, kardex, `ExecuteSQL` para quantidade |
-| `tmsValidity.ts` | `ValidadeSistemaAntigo` |
+| `tmsLots.ts` | Lotes / kardex |
+| `tmsValidity.ts` | Validade (sistema antigo) |
 
-**Auth:** `GET IdentificacaoServidor` → `versao` + `idFilial` → Basic Auth com SHA-256. Cache 30 min; retry automático em 401.
+**Auth:** `IdentificacaoServidor` → `versao` + `idFilial` → Basic Auth. Cache ~30 min; retry em 401.
 
-**Envio de produtos:** `sendJobService` chama `importarListaProdutos` (1 POST por lote de até 500 produtos), não insert unitário.
+**Envio:** `sendJobService` usa `importarListaProdutos` (1 POST por lote, padrão 500 itens).
 
 ---
 
@@ -101,13 +108,11 @@ Módulos extraídos de `tmsService.ts` (barrel de compatibilidade: `tmsService.t
 |------|--------|
 | `/import/produtos` | Wizard principal de produtos |
 | `/import/opcionais` | Fornecedor, validade, estoque, lotes |
-| `/import/favorecidos` | Placeholder |
-| `/import/financeiro` | Placeholder |
 | `/settings` | Configurações |
 
 ### Wizard de produtos
 
-Estado centralizado em `useImportWizard.tsx` (React Context + localStorage para TMS URL e UF).
+Estado em `useImportWizard.tsx` (Context + localStorage para URL TMS e UF).
 
 ```
 auxiliary → file → errors → send
@@ -115,16 +120,16 @@ auxiliary → file → errors → send
 
 | Step | Componente | Ação |
 |------|------------|------|
-| Auxiliares | `AuxiliaryStep.tsx` | Upload/preview de `grupo.csv` (obrig.) e demais |
-| Produtos | `FileDropzone`, `FolderCollectPanel` | Upload manual ou coleta de pasta |
-| Erros | `ErrorsStep`, `ControladoSuggestPanel` | Validação, ver erros, sugestão CMED/DCB |
-| Envio | `SendStep.tsx` | Job live/simulate, pause/resume/retry |
+| Auxiliares | `AuxiliaryStep.tsx` | `grupo.csv` (obrig.) + demais |
+| Produtos | `FileDropzone`, `FolderCollectPanel` | Upload ou pasta |
+| Erros | `ErrorsStep`, `ControladoSuggestPanel` | Validação; “enviar só válidos” |
+| Envio | `SendStep.tsx` | Job live, pause/resume/retry |
 
 ### Services frontend
 
 | Arquivo | API |
 |---------|-----|
-| `services/csvService.ts` | `/api/csv/upload` (NDJSON progress) |
+| `services/csvService.ts` | `/api/csv/upload` |
 | `services/productService.ts` | `/api/products/*` |
 | `services/optionalService.ts` | `/api/opcionais/*` |
 
@@ -133,39 +138,30 @@ auxiliary → file → errors → send
 ## Fluxo de dados (produtos)
 
 ```
-┌──────────────┐   POST /csv/upload    ┌─────────────────┐
-│ CSV produtos │ ────────────────────► │ csvFileService  │ → fileId
-└──────────────┘                       └────────┬────────┘
-                                                │
-┌──────────────┐   POST /auxiliary/:entity      │
-│ CSV auxiliar │ ───────────────────────────────┤
-└──────────────┘                                 │
-                                                 ▼
-                              POST /products/validate
-                              ┌──────────────────────────────┐
-                              │ productValidationService      │
-                              │  + auxiliaryService           │
-                              │  + índices CMED/DCB/344       │
-                              └──────────────┬───────────────┘
-                                             │ rows + issues
-                                             ▼
-                              ErrorsStep (controlados + Ver erros)
-                                             │ sem erros bloqueantes
-                                             ▼
-                              POST /products/send/start
-                              ┌──────────────────────────────┐
-                              │ sendJobService                │
-                              │  1. insert auxiliares (live)  │
-                              │  2. fetch catálogos TMS       │
-                              │  3. mapCsvRowToProductPayload │
-                              │  4. importarListaProdutos     │
-                              └──────────────────────────────┘
-                                             │
-                                             ▼ poll GET /send/:jobId
-                                        SendStep UI
+CSV produtos ──POST /csv/upload──► csvFileService → fileId
+CSV auxiliar ──POST /auxiliary/:entity──►
+                      │
+                      ▼
+             POST /products/validate
+             productValidationService
+             (+ auxiliares + índices CMED/DCB/344)
+                      │
+                      ▼
+             ErrorsStep (issues / enviar só válidos)
+                      │
+                      ▼
+             POST /products/send/start
+             sendJobService
+               1. auxiliares (live)
+               2. catálogos TMS
+               3. mapCsvRowToProductPayload
+               4. importarListaProdutos
+                      │
+                      ▼ poll GET /send/:jobId
+                   SendStep
 ```
 
-**Entrada alternativa:** `POST /products/collect-folder` lê pasta no servidor e carrega CSVs reconhecidos pelo nome.
+**Alternativa:** `POST /products/collect-folder` lê pasta no servidor e reconhece CSVs pelo nome.
 
 ---
 
@@ -174,45 +170,34 @@ auxiliary → file → errors → send
 | Job | Service | Controles |
 |-----|---------|-----------|
 | Envio produtos | `sendJobService` | start, pause, resume, cancel, retry-failures |
-| Opcionais (×5) | `optional*JobService` | start, get, cancel (sem pause) |
+| Opcionais (×4) | `optionalSupplier\|Validity\|Stock\|LotJobService` | start, get, cancel |
 
-Jobs ficam em `Map` na memória do processo; TTL 6h após conclusão. Reiniciar o backend cancela jobs ativos.
-
-**Simulação:** modo `simulate` no envio de produtos — latência fake + ~1% falhas aleatórias, sem chamadas TMS.
+Jobs em `Map` na memória do processo; TTL após conclusão. Reiniciar o backend perde jobs ativos.
 
 ---
 
 ## Índices de referência (offline)
 
-Gerados por scripts Python em `scripts/` a partir de planilhas Anvisa (não versionadas):
+Gerados por Python em `scripts/` (planilhas Anvisa não versionadas). Detalhes: [scripts/README.md](scripts/README.md).
 
-| Script | Saída |
-|--------|-------|
-| `build_cmed_index.py` | `data/reference/cmed-ean-index.json` |
-| `build_dcb_index.py` | `data/reference/dcb-index.json` |
-| `build_controlado_indexes.py` | `portaria344.json`, `antimicrobianos.json` |
-| `build_controlados_ean_index.py` | `controlados-ean-index.json` |
-
-Usados em validação e sugestão de controlados — **sem chamada HTTP à Anvisa em runtime**.
+Usados em validação/sugestão de controlados — **sem HTTP à Anvisa em runtime**.
 
 ---
 
 ## Convenções
 
-- **Idioma:** nomes de código em inglês; mensagens de usuário e regras de negócio em português.
+- **Idioma:** código em inglês; mensagens de usuário e regras em português.
 - **Imports backend:** extensão `.js` nos paths (ESM + TypeScript).
-- **API:** prefixo `/api`; frontend usa proxy Vite em dev.
-- **Arquivos grandes:** `productValidationService.ts` e `sendJobService.ts` concentram lógica de domínio; TMS isolado em `tms/`.
+- **API:** prefixo `/api`; Vite proxy em dev.
+- **Arquivos grandes:** `productValidationService.ts` e `sendJobService.ts` concentram domínio; TMS isolado em `tms/`.
 
 ---
 
 ## Testes e CI
 
-| Área | Status |
-|------|--------|
-| Testes automatizados | Vitest no backend (`npm run test`) |
-| CI (GitHub Actions) | Build + lint + test em push/PR |
-| Lint | Oxlint no frontend (`npm run lint`) |
-| Dev manual | Modo simulate, scripts `backend/scripts/` |
-
-**Fase 3:** Vitest no backend — ver `src/**/*.test.ts` e `npm run test`.
+| Área | Comando / local |
+|------|-----------------|
+| Unitários backend | `npm run test` (Vitest, `backend/src/**/*.test.ts`) |
+| Lint frontend | `npm run lint` (Oxlint) |
+| Build | `npm run build` |
+| CI | `.github/workflows/ci.yml` em push/PR |
