@@ -72,8 +72,8 @@ Não há pastas `database/`, `jobs/` ou `middleware/` — jobs ficam em `service
 | `validation/` | Domínios: fiscal, controlados, auxiliares, checklist |
 | `listaControlado.ts` | Enum TMS `tlTipoListaControlado` |
 | `productTmsMapper.ts` | Linha CSV → payload TMS |
-| `sendJobService.ts` | Orquestra envio de produtos (lotes, pause/resume) |
-| `send/` | Tipos, existence keys e snapshot do job de envio |
+| `sendJobService.ts` | Orquestra envio (create/pause/resume/run) |
+| `send/` | Tipos, existence, snapshot, auxiliares, lotes (`processOneBatch`) |
 | `controladoSuggestService.ts` | EAN → CMED → Portaria 344 |
 | `dcbIndexService.ts`, `cmedIndexService.ts`, … | Índices JSON locais |
 | `optionalJobRuntime.ts` | Store/CSV/snapshot compartilhado dos jobs opcionais |
