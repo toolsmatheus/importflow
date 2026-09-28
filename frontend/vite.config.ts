@@ -8,6 +8,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Fonte única da tabela ICMS (backend); evita drift FE↔BE.
+      '@importflow/icms': path.resolve(__dirname, '../backend/src/utils/icmsByUf.ts'),
     },
   },
   server: {

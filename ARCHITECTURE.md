@@ -201,7 +201,8 @@ Usados em validação/sugestão de controlados — **sem HTTP à Anvisa em runti
 - **Idioma:** código em inglês; mensagens de usuário e regras em português.
 - **Imports backend:** extensão `.js` nos paths (ESM + TypeScript).
 - **API:** prefixo `/api`; Vite proxy em dev.
-- **Arquivos grandes:** `productValidationService.ts` e `sendJobService.ts` concentram domínio; TMS isolado em `tms/`.
+- **Arquivos grandes:** `sendJobService.ts` concentra domínio de envio; validação em `validation/`; TMS isolado em `tms/`.
+- **ICMS por UF:** fonte única em `backend/src/utils/icmsByUf.ts`; frontend importa via alias `@importflow/icms`.
 
 ---
 

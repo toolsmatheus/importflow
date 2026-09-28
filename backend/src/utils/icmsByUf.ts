@@ -1,4 +1,7 @@
-/** Alíquota ICMS interna padrão por UF (percentual total, incl. FECP/FECOEP quando aplicável). */
+/**
+ * Alíquota ICMS interna padrão por UF (percentual total, incl. FECP/FECOEP quando aplicável).
+ * Fonte única — frontend importa via alias Vite `@importflow/icms`.
+ */
 export type BrazilianUf =
   | 'AC'
   | 'AL'
@@ -31,6 +34,7 @@ export type BrazilianUf =
 export interface UfIcmsEntry {
   uf: BrazilianUf
   name: string
+  /** Percentual ICMS interno (ex.: 18, 19.5, 21.5). */
   aliquota: number
   note?: string
 }
@@ -71,6 +75,7 @@ export function getUfIcms(uf: string): UfIcmsEntry | null {
   return byUf.get(uf.toUpperCase() as BrazilianUf) ?? null
 }
 
+/** Formata percentual no padrão BR do CSV (18 ou 19,50). */
 export function formatAliquotaCsv(value: number): string {
   if (!Number.isFinite(value)) return ''
   if (Number.isInteger(value)) return String(value)

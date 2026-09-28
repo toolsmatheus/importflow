@@ -25,7 +25,8 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@importflow/icms": ["../backend/src/utils/icmsByUf.ts"]
     }
   },
   "include": ["src"]
