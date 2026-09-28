@@ -6,7 +6,7 @@ import {
   Layers,
   Warehouse,
 } from 'lucide-react'
-import { OptionalImportPanel } from '@/components/OptionalImportPanel'
+import { OptionalImportPanel } from '@/components/optional/OptionalImportPanel'
 import { OPTIONAL_IMPORT_META } from '@/lib/optionalImportMeta'
 import { OPTIONAL_THEMES, type OptionalThemeId } from '@/lib/optionalImportThemes'
 import { cn } from '@/lib/utils'

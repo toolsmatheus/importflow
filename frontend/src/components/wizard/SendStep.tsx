@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { InconsistencyChecksPanel } from '@/components/InconsistencyChecksPanel'
+import { InconsistencyChecksPanel } from '@/components/wizard/InconsistencyChecksPanel'
 import { productService } from '@/services/productService'
 import { cn, formatNumber } from '@/lib/utils'
 import type {

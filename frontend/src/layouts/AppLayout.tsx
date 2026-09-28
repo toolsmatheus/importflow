@@ -1,8 +1,8 @@
 import { Link, Outlet } from 'react-router-dom'
 import { Package, Settings } from 'lucide-react'
 import { Toaster } from 'sonner'
-import { ModelsMenu } from '@/components/ModelsMenu'
-import { ThemeToggle } from '@/components/ThemeToggle'
+import { ModelsMenu } from '@/components/shared/ModelsMenu'
+import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { useTheme } from '@/hooks/useTheme'
 
 export function AppLayout() {

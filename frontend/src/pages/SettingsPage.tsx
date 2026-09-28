@@ -1,6 +1,6 @@
-import { Header } from '@/components/Header'
+import { Header } from '@/components/shared/Header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ThemeToggle } from '@/components/ThemeToggle'
+import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { Input } from '@/components/ui/input'
 import { useImportWizard } from '@/hooks/useImportWizard'
 

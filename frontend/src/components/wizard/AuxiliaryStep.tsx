@@ -19,7 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { productService } from '@/services/productService'
-import { FolderCollectPanel } from '@/components/FolderCollectPanel'
+import { FolderCollectPanel } from '@/components/wizard/FolderCollectPanel'
 import { formatNumber } from '@/lib/utils'
 import type { AuxiliaryEntity, AuxiliaryUploadResult, FolderCollectResult } from '@/types'
 

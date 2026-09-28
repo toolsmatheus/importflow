@@ -73,7 +73,8 @@ Não há pastas `database/`, `jobs/` ou `middleware/` — jobs ficam em `service
 | `sendJobService.ts` | Job de envio de produtos (lotes, pause/resume) |
 | `controladoSuggestService.ts` | EAN → CMED → Portaria 344 |
 | `dcbIndexService.ts`, `cmedIndexService.ts`, … | Índices JSON locais |
-| `optionalSupplier\|Validity\|Stock\|LotJobService.ts` (×4) | Jobs das importações opcionais |
+| `optionalJobRuntime.ts` | Store/CSV/snapshot compartilhado dos jobs opcionais |
+| `optionalSupplier\|Validity\|Stock\|LotJobService.ts` (×4) | Domínio de cada importação opcional |
 
 ### Integração TMS (`backend/src/services/tms/`)
 
@@ -110,6 +111,16 @@ Não há pastas `database/`, `jobs/` ou `middleware/` — jobs ficam em `service
 | `/import/opcionais` | Fornecedor, validade, estoque, lotes |
 | `/settings` | Configurações |
 
+### Organização dos componentes
+
+```
+frontend/src/components/
+├── wizard/     Etapas e painéis do import de produtos
+├── optional/   Painel das importações opcionais
+├── shared/     Header, tema, menu de modelos
+└── ui/         Primitivos (button, card, table…)
+```
+
 ### Wizard de produtos
 
 Estado em `useImportWizard.tsx` (Context + localStorage para URL TMS e UF).
@@ -120,10 +131,10 @@ auxiliary → file → errors → send
 
 | Step | Componente | Ação |
 |------|------------|------|
-| Auxiliares | `AuxiliaryStep.tsx` | `grupo.csv` (obrig.) + demais |
-| Produtos | `FileDropzone`, `FolderCollectPanel` | Upload ou pasta |
-| Erros | `ErrorsStep`, `ControladoSuggestPanel` | Validação; “enviar só válidos” |
-| Envio | `SendStep.tsx` | Job live, pause/resume/retry |
+| Auxiliares | `wizard/AuxiliaryStep.tsx` | `grupo.csv` (obrig.) + demais |
+| Produtos | `wizard/FileDropzone`, `FolderCollectPanel` | Upload ou pasta |
+| Erros | `wizard/ErrorsStep`, `ControladoSuggestPanel` | Validação; “enviar só válidos” |
+| Envio | `wizard/SendStep.tsx` | Job live, pause/resume/retry |
 
 ### Services frontend
 

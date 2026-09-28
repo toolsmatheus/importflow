@@ -47,10 +47,10 @@ Abre `http://localhost:3001` (API + frontend buildado).
 | Job de envio (lotes, skip) | `backend/src/services/sendJobService.ts` |
 | Endpoint HTTP | `backend/src/routes/` + `controllers/` |
 | Colunas do modelo CSV | `backend/src/schemas/product.schema.ts` |
-| Tela do wizard / erros / envio | `frontend/src/components/` + `pages/ProductImportPage.tsx` |
+| Tela do wizard / erros / envio | `frontend/src/components/wizard/` + `pages/ProductImportPage.tsx` |
 | Estado do wizard | `frontend/src/hooks/useImportWizard.tsx` |
 | Chamadas à API no browser | `frontend/src/services/` |
-| Opcionais (fornecedor/estoque/…) | `optional*JobService.ts` + `OptionalImportPanel.tsx` |
+| Opcionais (fornecedor/estoque/…) | `optional*JobService.ts` + `components/optional/OptionalImportPanel.tsx` |
 | Índices CMED/DCB/Portaria | `data/reference/` + `scripts/*.py` |
 
 Documentação de regras (com exemplos): [VALIDACOES.md](VALIDACOES.md).  

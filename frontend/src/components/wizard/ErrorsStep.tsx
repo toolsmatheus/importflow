@@ -9,9 +9,9 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { InconsistencyChecksPanel } from '@/components/InconsistencyChecksPanel'
-import { ControladoSuggestPanel } from '@/components/ControladoSuggestPanel'
-import { AliquotaUfReviewPanel } from '@/components/AliquotaUfReviewPanel'
+import { InconsistencyChecksPanel } from '@/components/wizard/InconsistencyChecksPanel'
+import { ControladoSuggestPanel } from '@/components/wizard/ControladoSuggestPanel'
+import { AliquotaUfReviewPanel } from '@/components/wizard/AliquotaUfReviewPanel'
 import { findAliquotaMismatches } from '@/lib/icmsByUf'
 import { filterRowsWithoutErrors } from '@/lib/sendRows'
 import { cn, formatNumber } from '@/lib/utils'

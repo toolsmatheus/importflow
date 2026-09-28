@@ -1,28 +1,26 @@
-import { randomUUID } from 'crypto'
-import { parse } from 'csv-parse/sync'
+import {
+  cell,
+  createOptionalJobRuntime,
+  parseOptionalCsvText,
+  type OptionalJobInternal,
+  type OptionalJobSnapshot,
+  type OptionalJobStatus,
+  type OptionalSendMode,
+} from './optionalJobRuntime.js'
 import {
   favorecidoMigracaoExists,
   fetchFavorecidoMigracaoKeys,
   fetchProductCodigoFornecedorKeys,
   fetchProductExistenceCatalogs,
-  fetchServerIdentification,
-  getDefaultTmsBaseUrl,
   insertCodigoFornecedor,
   parseFavorecidoMigracao,
   resolveProdutoIdFromCsv,
   usableMigracaoCodigo,
 } from './tmsService.js'
 import { parseBrazilianNumber } from '../utils/productFormats.js'
-import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
 
-export type SupplierJobStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-
-export type SupplierSendMode = 'live' | 'simulate'
+export type SupplierJobStatus = OptionalJobStatus
+export type SupplierSendMode = OptionalSendMode
 
 export interface SupplierJobError {
   index: number
@@ -38,116 +36,25 @@ export interface SupplierJobSkipped {
   message: string
 }
 
-export interface SupplierJobSnapshot {
-  id: string
-  status: SupplierJobStatus
-  mode: SupplierSendMode
-  tmsBaseUrl: string
-  idFilial: number
-  total: number
-  processed: number
-  successCount: number
-  errorCount: number
-  skippedCount: number
-  percent: number
-  errors: SupplierJobError[]
-  errorsTruncated: boolean
-  skipped: SupplierJobSkipped[]
-  skippedTruncated: boolean
-  startedAt: string | null
-  finishedAt: string | null
-  message?: string
-}
+export type SupplierJobSnapshot = OptionalJobSnapshot<
+  SupplierJobError,
+  SupplierJobSkipped
+>
 
-interface SupplierJobInternal {
-  id: string
-  status: SupplierJobStatus
-  mode: SupplierSendMode
-  tmsBaseUrl: string
-  idFilial: number
-  rows: Record<string, string>[]
-  processed: number
-  successCount: number
-  errorCount: number
-  skippedCount: number
-  errors: SupplierJobError[]
-  skipped: SupplierJobSkipped[]
-  cancelRequested: boolean
-  startedAt: number | null
-  finishedAt: number | null
-  runPromise?: Promise<void>
-}
+type SupplierJobInternal = OptionalJobInternal<SupplierJobError, SupplierJobSkipped>
 
-const jobs = new Map<string, SupplierJobInternal>()
-const MAX_STORED_ERRORS = 200
-const MAX_STORED_SKIPPED = 200
-
-function stripAccents(value: string): string {
-  return value.normalize('NFD').replace(/\p{M}/gu, '')
-}
-
-function cell(row: Record<string, string>, ...keys: string[]): string {
-  for (const key of keys) {
-    const want = stripAccents(key).toLowerCase()
-    const direct = row[key] ?? row[want]
-    if (direct !== undefined && String(direct).trim()) return String(direct).trim()
-    const found = Object.entries(row).find(
-      ([k]) => stripAccents(k).toLowerCase() === want
-    )
-    if (found && String(found[1]).trim()) return String(found[1]).trim()
-  }
-  return ''
-}
+const runtime = createOptionalJobRuntime<SupplierJobError, SupplierJobSkipped>()
 
 function supplierKey(favorecidoMigracao: number, codigoOriginal: string): string {
   return `${favorecidoMigracao}|${codigoOriginal}`
 }
 
-function snapshot(job: SupplierJobInternal): SupplierJobSnapshot {
-  const total = job.rows.length
-  const percent = total === 0 ? 100 : Math.min(100, Math.round((job.processed / total) * 100))
-  return {
-    id: job.id,
-    status: job.status,
-    mode: job.mode,
-    tmsBaseUrl: job.tmsBaseUrl,
-    idFilial: job.idFilial,
-    total,
-    processed: job.processed,
-    successCount: job.successCount,
-    errorCount: job.errorCount,
-    skippedCount: job.skippedCount,
-    percent,
-    errors: job.errors,
-    errorsTruncated: job.errors.length >= MAX_STORED_ERRORS,
-    skipped: job.skipped,
-    skippedTruncated: job.skipped.length >= MAX_STORED_SKIPPED,
-    startedAt: job.startedAt ? new Date(job.startedAt).toISOString() : null,
-    finishedAt: job.finishedAt ? new Date(job.finishedAt).toISOString() : null,
-  }
-}
-
 export function getSupplierJob(jobId: string): SupplierJobSnapshot | null {
-  const job = jobs.get(jobId)
-  return job ? snapshot(job) : null
+  return runtime.getJob(jobId)
 }
 
 export function parseSupplierCsvText(text: string): Record<string, string>[] {
-  const records = parse(text, {
-    columns: true,
-    delimiter: TEMPLATE_DELIMITER,
-    relax_column_count: true,
-    skip_empty_lines: true,
-    trim: true,
-    bom: true,
-  }) as Record<string, string>[]
-  return records.map((row) => {
-    const normalized: Record<string, string> = {}
-    for (const [k, v] of Object.entries(row)) {
-      normalized[stripAccents(k).trim().toLowerCase()] = v == null ? '' : String(v)
-    }
-    return normalized
-  })
+  return parseOptionalCsvText(text)
 }
 
 export async function startSupplierJob(input: {
@@ -155,44 +62,11 @@ export async function startSupplierJob(input: {
   tmsBaseUrl?: string
   mode?: SupplierSendMode
 }): Promise<SupplierJobSnapshot> {
-  if (!input.rows.length) {
-    throw new Error('Nenhuma linha para importar')
-  }
-
-  const tmsBaseUrl = (input.tmsBaseUrl || getDefaultTmsBaseUrl()).replace(/\/$/, '')
-  const identification = await fetchServerIdentification(tmsBaseUrl)
-  const id = randomUUID()
-  const job: SupplierJobInternal = {
-    id,
-    status: 'queued',
-    mode: input.mode ?? 'live',
-    tmsBaseUrl,
-    idFilial: identification.idFilial,
-    rows: input.rows,
-    processed: 0,
-    successCount: 0,
-    errorCount: 0,
-    skippedCount: 0,
-    errors: [],
-    skipped: [],
-    cancelRequested: false,
-    startedAt: null,
-    finishedAt: null,
-  }
-  jobs.set(id, job)
-  job.runPromise = runSupplierJob(job)
-  return snapshot(job)
+  return runtime.startJob(input, runSupplierJob)
 }
 
 export function cancelSupplierJob(jobId: string): SupplierJobSnapshot | null {
-  const job = jobs.get(jobId)
-  if (!job) return null
-  job.cancelRequested = true
-  if (job.status === 'queued' || job.status === 'running') {
-    job.status = 'cancelled'
-    job.finishedAt = Date.now()
-  }
-  return snapshot(job)
+  return runtime.cancelJob(jobId)
 }
 
 function parseFatorCompra(raw: string): number | null {
@@ -230,7 +104,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (!codigooriginal) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -242,7 +116,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (!codigofornecedor) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor: '',
@@ -255,7 +129,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
       const favorecidoMigracao = parseFavorecidoMigracao(codigofornecedor)
       if (favorecidoMigracao === null) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -267,7 +141,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (!favorecidoMigracaoExists(favorecidoMigracaoKeys, codigofornecedor)) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -279,7 +153,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (!codigo && !codigobarras) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -292,7 +166,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (fatorCompra === null) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -307,7 +181,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (produtoId === undefined) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -329,7 +203,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
       const dedupeKey = supplierKey(favorecidoMigracao, codigooriginal)
 
       if (existingForProduct.has(dedupeKey)) {
-        pushSkipped(job, {
+        runtime.pushSkipped(job, {
           index,
           codigo: migracao || codigobarras || codigo,
           codigofornecedor: String(favorecidoMigracao),
@@ -358,7 +232,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (!result.ok) {
         job.errorCount++
-        pushError(job, {
+        runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
@@ -378,7 +252,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
   } catch (error) {
     job.status = 'failed'
     job.finishedAt = Date.now()
-    pushError(job, {
+    runtime.pushError(job, {
       index: -1,
       codigo: '',
       codigofornecedor: '',
@@ -386,13 +260,4 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
         error instanceof Error ? error.message : 'Falha interna no job de códigos de fornecedor',
     })
   }
-}
-
-function pushError(job: SupplierJobInternal, error: SupplierJobError) {
-  if (job.errors.length < MAX_STORED_ERRORS) job.errors.push(error)
-}
-
-function pushSkipped(job: SupplierJobInternal, skip: SupplierJobSkipped) {
-  job.skippedCount++
-  if (job.skipped.length < MAX_STORED_SKIPPED) job.skipped.push(skip)
 }
