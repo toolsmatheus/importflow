@@ -22,15 +22,51 @@ function baseRow(overrides: Record<string, string> = {}): Record<string, string>
 }
 
 describe('validateProductRows — alíquota zero', () => {
-  it('exige exatamente uma de st/isento/semincidencia quando alíquota=0', async () => {
+  it('quando nenhuma flag, define st=S e gera alerta', async () => {
     const result = await validateProductRows({
       rows: [baseRow({ aliquota: '0', st: 'N', isento: 'N', semincidencia: 'N' })],
     })
 
-    const aliquotaErrors = result.issues.filter(
-      (i) => i.field === 'aliquota' && i.severity === 'error'
+    expect(result.rows[0]?.st).toBe('S')
+    const autoSt = result.issues.filter(
+      (i) =>
+        i.severity === 'warning' &&
+        i.message.includes('definido automaticamente como ST')
     )
-    expect(aliquotaErrors.some((i) => i.message.includes('exatamente uma'))).toBe(true)
+    expect(autoSt).toHaveLength(1)
+    expect(
+      result.issues.some(
+        (i) => i.severity === 'error' && i.message.includes('exatamente uma')
+      )
+    ).toBe(false)
+  })
+
+  it('quando aliquota=0 sem colunas st/isento/semincidencia, define st=S', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ aliquota: '0' })],
+    })
+
+    expect(result.rows[0]?.st).toBe('S')
+    expect(result.columns).toContain('st')
+    expect(
+      result.issues.some(
+        (i) =>
+          i.severity === 'warning' &&
+          i.message.includes('definido automaticamente como ST')
+      )
+    ).toBe(true)
+  })
+
+  it('bloqueia quando mais de uma flag S com aliquota=0', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ aliquota: '0', st: 'S', isento: 'S', semincidencia: 'N' })],
+    })
+
+    expect(
+      result.issues.some(
+        (i) => i.severity === 'error' && i.message.includes('exatamente uma')
+      )
+    ).toBe(true)
   })
 
   it('aceita st=S quando alíquota=0', async () => {
@@ -42,6 +78,9 @@ describe('validateProductRows — alíquota zero', () => {
       (i) => i.field === 'aliquota' && i.severity === 'error'
     )
     expect(aliquotaErrors.some((i) => i.message.includes('exatamente uma'))).toBe(false)
+    expect(
+      result.issues.some((i) => i.message.includes('definido automaticamente como ST'))
+    ).toBe(false)
   })
 
   it('aceita semincidencia=S quando alíquota=0', async () => {
@@ -149,6 +188,30 @@ describe('validateProductRows — EAN', () => {
       (i) => i.field === 'codigobarras' && i.severity === 'warning'
     )
     expect(eanWarnings.length).toBeGreaterThan(0)
+  })
+
+  it('erro quando o mesmo EAN aparece em duas linhas', async () => {
+    const result = await validateProductRows({
+      rows: [
+        baseRow({ codigo: '1001', codigobarras: '7894900011517' }),
+        baseRow({ codigo: '1002', codigobarras: '7894900011517' }),
+      ],
+    })
+    expect(
+      result.issues.some(
+        (i) =>
+          i.field === 'codigobarras' &&
+          i.severity === 'error' &&
+          i.message.toLowerCase().includes('duplicado')
+      )
+    ).toBe(true)
+  })
+
+  it('aceita EAN vazio sem alerta', async () => {
+    const result = await validateProductRows({
+      rows: [baseRow({ codigobarras: '' })],
+    })
+    expect(result.issues.some((i) => i.field === 'codigobarras')).toBe(false)
   })
 })
 

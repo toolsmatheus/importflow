@@ -30,6 +30,10 @@ import {
   UF_ICMS_TABLE,
 } from '../utils/icmsByUf.js'
 import {
+  isValidListaControladoCsv,
+  TMS_LISTA_CONTROLADO_HINT,
+} from './listaControlado.js'
+import {
   FIELD_TO_AUXILIARY,
   loadAuxiliaryCatalog,
   type AuxiliaryCatalogs,
@@ -74,6 +78,11 @@ export interface ProductValidationResult {
   checkSummary: ValidationCheckSummaryItem[]
   /** Contagem de atualizaestoque = S / N em todo o arquivo. */
   atualizaEstoqueSummary: { s: number; n: number }
+  /**
+   * Números de linha do CSV (com cabeçalho = linha 1) que têm erro.
+   * Completo mesmo quando `issues` está truncado.
+   */
+  errorRows: number[]
   truncated: boolean
   columns: string[]
   rows: Record<string, string>[]
@@ -107,10 +116,25 @@ const VALIDATION_CHECK_DEFS: Array<{
     match: (i) => i.field === 'codigo' && i.message.toLowerCase().includes('duplicado'),
   },
   {
+    id: 'duplicate_barcode',
+    label: 'Códigos de barras duplicados no arquivo',
+    severity: 'error',
+    match: (i) =>
+      i.field === 'codigobarras' && i.message.toLowerCase().includes('duplicado'),
+  },
+  {
     id: 'invalid_codigo',
     label: 'Códigos com letras (migração)',
     severity: 'error',
     match: (i) => i.field === 'codigo' && i.message.toLowerCase().includes('letras'),
+  },
+  {
+    id: 'lista_controlado_invalid',
+    label: 'Lista de controle inválida no TMS',
+    severity: 'error',
+    match: (i) =>
+      i.field === 'listacontrole' &&
+      i.message.toLowerCase().includes('lista de controle inválida'),
   },
   {
     id: 'controlado_incomplete',
@@ -183,12 +207,22 @@ const VALIDATION_CHECK_DEFS: Array<{
     label: 'Regras de alíquota / ST / isento / sem incidência',
     severity: 'error',
     match: (i) =>
-      (i.field === 'aliquota' && !i.message.includes('padrão da UF')) ||
-      i.field === 'st' ||
-      i.field === 'isento' ||
-      i.field === 'semincidencia' ||
-      i.message.includes('st e isento') ||
-      i.message.includes('semincidencia'),
+      i.severity === 'error' &&
+      ((i.field === 'aliquota' && !i.message.includes('padrão da UF')) ||
+        i.field === 'st' ||
+        i.field === 'isento' ||
+        i.field === 'semincidencia' ||
+        i.message.includes('st e isento') ||
+        i.message.includes('semincidencia')),
+  },
+  {
+    id: 'aliquota_st_default',
+    label: 'Alíquota 0 sem flag — ST definido automaticamente',
+    severity: 'warning',
+    match: (i) =>
+      i.severity === 'warning' &&
+      (i.field === 'st' || i.field === 'aliquota') &&
+      i.message.includes('definido automaticamente como ST'),
   },
   {
     id: 'aliquota_uf',
@@ -335,6 +369,8 @@ type IssueCounters = {
   categories: Map<string, number>
   /** Quantos detalhes foram guardados por checagem (para lista expansível). */
   storedPerCheck: Map<string, number>
+  /** Linhas (nº no CSV, com cabeçalho) que têm ao menos um erro — completo mesmo se issues truncadas. */
+  errorRows: Set<number>
 }
 
 function createCounters(seed: ValidationIssue[] = []): IssueCounters {
@@ -344,11 +380,16 @@ function createCounters(seed: ValidationIssue[] = []): IssueCounters {
     total: 0,
     categories: new Map(),
     storedPerCheck: new Map(),
+    errorRows: new Set(),
   }
   for (const issue of seed) {
     counters.total++
-    if (issue.severity === 'error') counters.errors++
-    else counters.warnings++
+    if (issue.severity === 'error') {
+      counters.errors++
+      if (issue.row > 0) counters.errorRows.add(issue.row)
+    } else {
+      counters.warnings++
+    }
     const id = issue.checkId ?? classifyIssue(issue)
     counters.categories.set(id, (counters.categories.get(id) ?? 0) + 1)
     counters.storedPerCheck.set(id, (counters.storedPerCheck.get(id) ?? 0) + 1)
@@ -362,8 +403,12 @@ function pushIssue(
   issue: ValidationIssue
 ) {
   counters.total++
-  if (issue.severity === 'error') counters.errors++
-  else counters.warnings++
+  if (issue.severity === 'error') {
+    counters.errors++
+    if (issue.row > 0) counters.errorRows.add(issue.row)
+  } else {
+    counters.warnings++
+  }
   const checkId = classifyIssue(issue)
   counters.categories.set(checkId, (counters.categories.get(checkId) ?? 0) + 1)
   const storedForCheck = counters.storedPerCheck.get(checkId) ?? 0
@@ -751,17 +796,28 @@ function validateRow(
 
   const aliquotaNum = !isBlank(aliquotaRaw) ? parseBrazilianNumber(aliquotaRaw) : null
   if (aliquotaNum === 0) {
-    const stOn = hasColumn(columns, 'st')
-      ? cell(record, 'st').trim().toUpperCase() === 'S'
-      : false
-    const isentoOn = hasColumn(columns, 'isento')
-      ? cell(record, 'isento').trim().toUpperCase() === 'S'
-      : false
-    const semIncidenciaOn = hasColumn(columns, 'semincidencia')
-      ? cell(record, 'semincidencia').trim().toUpperCase() === 'S'
-      : false
+    const stOn = cell(record, 'st').trim().toUpperCase() === 'S'
+    const isentoOn = cell(record, 'isento').trim().toUpperCase() === 'S'
+    const semIncidenciaOn = cell(record, 'semincidencia').trim().toUpperCase() === 'S'
     const zeroFlagsOn = [stOn, isentoOn, semIncidenciaOn].filter(Boolean).length
-    if (zeroFlagsOn !== 1) {
+    if (zeroFlagsOn === 0) {
+      const previousSt = cell(record, 'st')
+      record.st = 'S'
+      if (hasColumn(columns, 'isento') && isBlank(cell(record, 'isento'))) {
+        record.isento = 'N'
+      }
+      if (hasColumn(columns, 'semincidencia') && isBlank(cell(record, 'semincidencia'))) {
+        record.semincidencia = 'N'
+      }
+      pushIssue(issues, counters, {
+        row: rowNumber,
+        field: 'st',
+        value: previousSt,
+        message:
+          'Quando aliquota=0 sem st/isento/semincidencia, st foi definido automaticamente como ST (S).',
+        severity: 'warning',
+      })
+    } else if (zeroFlagsOn > 1) {
       pushIssue(issues, counters, {
         row: rowNumber,
         field: 'aliquota',
@@ -980,6 +1036,15 @@ function validateRow(
   if (!controladoCleared && hasColumn(columns, 'listacontrole')) {
     const listaControle = cell(record, 'listacontrole').trim()
     if (!isBlank(listaControle)) {
+      if (!isValidListaControladoCsv(listaControle)) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'listacontrole',
+          value: listaControle,
+          message: `Lista de controle inválida no TMS. Use: ${TMS_LISTA_CONTROLADO_HINT} ou T (antimicrobiano).`,
+          severity: 'error',
+        })
+      }
       const dcb = cell(record, 'dcb').trim()
       const registroms = hasColumn(columns, 'registroms')
         ? cell(record, 'registroms').trim()
@@ -1023,6 +1088,7 @@ function finalizeResult(
     | 'truncated'
     | 'checkSummary'
     | 'atualizaEstoqueSummary'
+    | 'errorRows'
   > & {
     counters: IssueCounters
     atualizaEstoqueSummary?: { s: number; n: number }
@@ -1041,6 +1107,7 @@ function finalizeResult(
     issues: base.issues,
     checkSummary: buildCheckSummary(base.counters.categories),
     atualizaEstoqueSummary: base.atualizaEstoqueSummary ?? { s: 0, n: 0 },
+    errorRows: [...base.counters.errorRows].sort((a, b) => a - b),
     truncated: isIssueListTruncated(base.counters),
     columns: base.columns,
     rows: base.rows,
@@ -1069,6 +1136,7 @@ export async function validateProductCsv(
   let columns: string[] = []
   let totalRecords = 0
   const seenCodes = new Map<string, number>()
+  const seenBarcodes = new Map<string, number>()
   let headersChecked = false
   let missingRequiredHeaders: string[] = []
   let unknownHeaders: string[] = []
@@ -1157,6 +1225,10 @@ export async function validateProductCsv(
         const markupIdx = columns.indexOf('markup')
         columns.splice(markupIdx >= 0 ? markupIdx + 1 : columns.length, 0, 'fator')
       }
+      if (record.st !== undefined && !columnSet.has('st')) {
+        columnSet.add('st')
+        columns.push('st')
+      }
     }
 
     if (rows.length < MAX_PREVIEW_ROWS) {
@@ -1176,6 +1248,23 @@ export async function validateProductCsv(
         })
       } else {
         seenCodes.set(codigo, rowNumber)
+      }
+    }
+
+    const barcodeRaw = cell(record, 'codigobarras').trim()
+    const barcodeKey = barcodeRaw.replace(/\D/g, '')
+    if (barcodeKey.length >= 8) {
+      const firstRow = seenBarcodes.get(barcodeKey)
+      if (firstRow !== undefined) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'codigobarras',
+          value: barcodeRaw,
+          message: `Código de barras duplicado no arquivo (já apareceu na linha ${firstRow}).`,
+          severity: 'error',
+        })
+      } else {
+        seenBarcodes.set(barcodeKey, rowNumber)
       }
     }
   }
@@ -1231,6 +1320,7 @@ export async function validateProductRows(
   let columns = input.rows[0] ? Object.keys(input.rows[0]) : [...REQUIRED_HEADERS]
   const columnSet = new Set(columns)
   const seenCodes = new Map<string, number>()
+  const seenBarcodes = new Map<string, number>()
   const rows = input.rows.map((row) => ({ ...row }))
 
   rows.forEach((record, index) => {
@@ -1258,6 +1348,10 @@ export async function validateProductRows(
       columns = [...columns]
       columns.splice(markupIdx >= 0 ? markupIdx + 1 : columns.length, 0, 'fator')
     }
+    if (record.st !== undefined && !columnSet.has('st')) {
+      columnSet.add('st')
+      columns = [...columns, 'st']
+    }
 
     const codigo = cell(record, 'codigo').trim()
     if (codigo && isValidMigrationCode(codigo)) {
@@ -1272,6 +1366,23 @@ export async function validateProductRows(
         })
       } else {
         seenCodes.set(codigo, rowNumber)
+      }
+    }
+
+    const barcodeRaw = cell(record, 'codigobarras').trim()
+    const barcodeKey = barcodeRaw.replace(/\D/g, '')
+    if (barcodeKey.length >= 8) {
+      const firstRow = seenBarcodes.get(barcodeKey)
+      if (firstRow !== undefined) {
+        pushIssue(issues, counters, {
+          row: rowNumber,
+          field: 'codigobarras',
+          value: barcodeRaw,
+          message: `Código de barras duplicado (já aparece na linha ${firstRow}).`,
+          severity: 'error',
+        })
+      } else {
+        seenBarcodes.set(barcodeKey, rowNumber)
       }
     }
   })

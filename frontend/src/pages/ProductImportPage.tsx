@@ -394,7 +394,19 @@ export function ProductImportPage() {
               wizard.setPreviewRows(wizard.validationResult.rows)
               wizard.setPreviewColumns(wizard.validationResult.columns)
             }
+            wizard.setSendJob(null)
             wizard.setCurrentStep('send')
+          }}
+          onContinueSkipErrors={(validRows, skippedCount) => {
+            wizard.setPreviewRows(validRows)
+            if (wizard.validationResult?.columns?.length) {
+              wizard.setPreviewColumns(wizard.validationResult.columns)
+            }
+            wizard.setSendJob(null)
+            wizard.setCurrentStep('send')
+            toast.message(
+              `Pronto para enviar ${formatNumber(validRows.length)} produto(s); ${formatNumber(skippedCount)} com erro foram excluídos`
+            )
           }}
         />
       )}

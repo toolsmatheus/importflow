@@ -181,6 +181,8 @@ export function OptionalImportPanel({
             Opcionais
           </button>
           <span aria-hidden>/</span>
+          <span className="text-muted-foreground">{themeLabel}</span>
+          <span aria-hidden>/</span>
           <span className="font-medium text-foreground">{meta.shortLabel}</span>
         </nav>
 

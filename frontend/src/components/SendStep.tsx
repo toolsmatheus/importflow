@@ -20,10 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import {
-  buildSendCheckSummary,
-  InconsistencyChecksPanel,
-} from '@/components/InconsistencyChecksPanel'
+import { InconsistencyChecksPanel } from '@/components/InconsistencyChecksPanel'
 import { productService } from '@/services/productService'
 import { cn, formatNumber } from '@/lib/utils'
 import type {
@@ -158,11 +155,6 @@ export function SendStep({
   const active =
     job?.status === 'running' || job?.status === 'queued' || job?.status === 'paused'
 
-  const sendChecks = useMemo(
-    () => (job ? buildSendCheckSummary(job) : []),
-    [job]
-  )
-
   const dcbWarnings = useMemo(
     () =>
       (job?.errors ?? []).filter((e) =>
@@ -180,8 +172,20 @@ export function SendStep({
   )
 
   const fileTotal = validationResult?.totalRecords
+  const skippedDueToErrors = Boolean(
+    validationResult &&
+      (validationResult.errorCount ?? 0) > 0 &&
+      (validationResult.errorRows?.length ??
+        validationResult.issues.filter((i) => i.severity === 'error' && i.row > 0)
+          .length) > 0 &&
+      typeof fileTotal === 'number' &&
+      fileTotal > rows.length
+  )
   const rowsMismatch =
-    typeof fileTotal === 'number' && fileTotal > 0 && fileTotal !== rows.length
+    typeof fileTotal === 'number' &&
+    fileTotal > 0 &&
+    fileTotal !== rows.length &&
+    !skippedDueToErrors
 
   useEffect(() => {
     if (!job || !['running', 'queued', 'paused'].includes(job.status)) return
@@ -393,16 +397,6 @@ export function SendStep({
           </Badge>
         </div>
 
-        {job.processed > 0 && (
-          <SoftExpand label="Checagens do envio">
-            <InconsistencyChecksPanel
-              checks={sendChecks}
-              embedded
-              defaultExpandWithIssues={false}
-            />
-          </SoftExpand>
-        )}
-
         {(job.skipped?.length ?? 0) > 0 && (
           <SoftExpand
             label="Produtos ignorados"
@@ -554,6 +548,14 @@ export function SendStep({
             Envia {formatNumber(rows.length)} produto(s) validado(s). Auxiliares são
             inseridos primeiro.
           </p>
+
+          {skippedDueToErrors && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                Modo parcial: {formatNumber(rows.length)} produto(s) sem erro serão
+                enviados; {formatNumber(fileTotal! - rows.length)} com erro de
+                validação ficaram de fora.
+              </p>
+            )}
 
           {rowsMismatch && (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">

@@ -53,6 +53,11 @@ export interface ProductValidationResult {
   checkSummary?: ValidationCheckSummaryItem[]
   /** Contagem de atualizaestoque = S / N em todo o arquivo. */
   atualizaEstoqueSummary?: { s: number; n: number }
+  /**
+   * Números de linha do CSV (cabeçalho = 1) com erro.
+   * Completo mesmo quando a lista de issues está truncada.
+   */
+  errorRows?: number[]
   truncated: boolean
   columns: string[]
   rows: Record<string, string>[]

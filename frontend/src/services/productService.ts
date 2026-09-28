@@ -10,6 +10,39 @@ import type {
   SendMode,
 } from '@/types'
 
+async function readJsonResponse<T>(
+  response: Response,
+  fallbackError: string
+): Promise<T> {
+  const text = await response.text()
+  if (!text.trim()) {
+    throw new Error(
+      response.ok
+        ? fallbackError
+        : `Servidor indisponível (HTTP ${response.status}). Verifique se o backend está no ar.`
+    )
+  }
+  let data: unknown
+  try {
+    data = JSON.parse(text) as unknown
+  } catch {
+    throw new Error(
+      `Resposta inválida do servidor (HTTP ${response.status}). Verifique se o backend está no ar.`
+    )
+  }
+  if (!response.ok) {
+    const message =
+      data &&
+      typeof data === 'object' &&
+      'message' in data &&
+      typeof (data as { message: unknown }).message === 'string'
+        ? (data as { message: string }).message
+        : fallbackError
+    throw new Error(message)
+  }
+  return data as T
+}
+
 export const productService = {
   templateUrl: '/api/products/template',
 
@@ -19,9 +52,7 @@ export const productService = {
 
   async getCatalog(): Promise<ProductFieldCatalog> {
     const response = await fetch('/api/products/catalog')
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao carregar o catálogo de campos')
-    return data as ProductFieldCatalog
+    return readJsonResponse<ProductFieldCatalog>(response, 'Erro ao carregar o catálogo de campos')
   },
 
   async uploadAuxiliary(entity: AuxiliaryEntity, file: File): Promise<AuxiliaryUploadResult> {
@@ -31,18 +62,20 @@ export const productService = {
       method: 'POST',
       body: formData,
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? `Erro ao enviar ${entity}.csv`)
-    return data as AuxiliaryUploadResult
+    return readJsonResponse<AuxiliaryUploadResult>(
+      response,
+      `Erro ao enviar ${entity}.csv`
+    )
   },
 
   async previewAuxiliary(fileId: string, limit = 100): Promise<AuxiliaryCsvPreview> {
     const response = await fetch(
       `/api/products/auxiliary/preview/${encodeURIComponent(fileId)}?limit=${limit}`
     )
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao pré-visualizar o auxiliar')
-    return data as AuxiliaryCsvPreview
+    return readJsonResponse<AuxiliaryCsvPreview>(
+      response,
+      'Erro ao pré-visualizar o auxiliar'
+    )
   },
 
   async validate(
@@ -65,9 +98,10 @@ export const productService = {
         auxiliary: options?.auxiliary,
       }),
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao validar o arquivo')
-    return data as ProductValidationResult
+    return readJsonResponse<ProductValidationResult>(
+      response,
+      'Erro ao validar o arquivo'
+    )
   },
 
   async validateRows(
@@ -80,9 +114,10 @@ export const productService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows, auxiliary, clientUf }),
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao revalidar as linhas')
-    return data as ProductValidationResult
+    return readJsonResponse<ProductValidationResult>(
+      response,
+      'Erro ao revalidar as linhas'
+    )
   },
 
   async suggestControlados(
@@ -97,9 +132,10 @@ export const productService = {
         auxiliary: auxiliary?.dcb ? { dcb: auxiliary.dcb } : undefined,
       }),
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao sugerir controlados')
-    return data as ControladoSuggestResult
+    return readJsonResponse<ControladoSuggestResult>(
+      response,
+      'Erro ao sugerir controlados'
+    )
   },
 
   async identifyServer(
@@ -107,9 +143,10 @@ export const productService = {
   ): Promise<{ idFilial: number; versao?: string; tmsBaseUrl: string }> {
     const query = tmsBaseUrl ? `?tmsBaseUrl=${encodeURIComponent(tmsBaseUrl)}` : ''
     const response = await fetch(`/api/products/identify-server${query}`)
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao identificar o servidor')
-    return data as { idFilial: number; versao?: string; tmsBaseUrl: string }
+    return readJsonResponse<{ idFilial: number; versao?: string; tmsBaseUrl: string }>(
+      response,
+      'Erro ao identificar o servidor'
+    )
   },
 
   async startSend(options: {
@@ -132,46 +169,34 @@ export const productService = {
         auxiliary: options.auxiliary,
       }),
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao iniciar o envio')
-    return data as SendJobSnapshot
+    return readJsonResponse<SendJobSnapshot>(response, 'Erro ao iniciar o envio')
   },
 
   async getSendJob(jobId: string): Promise<SendJobSnapshot> {
     const response = await fetch(`/api/products/send/${jobId}`)
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Job de envio não encontrado')
-    return data as SendJobSnapshot
+    return readJsonResponse<SendJobSnapshot>(response, 'Job de envio não encontrado')
   },
 
   async pauseSend(jobId: string): Promise<SendJobSnapshot> {
     const response = await fetch(`/api/products/send/${jobId}/pause`, { method: 'POST' })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao pausar')
-    return data as SendJobSnapshot
+    return readJsonResponse<SendJobSnapshot>(response, 'Erro ao pausar')
   },
 
   async resumeSend(jobId: string): Promise<SendJobSnapshot> {
     const response = await fetch(`/api/products/send/${jobId}/resume`, { method: 'POST' })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao retomar')
-    return data as SendJobSnapshot
+    return readJsonResponse<SendJobSnapshot>(response, 'Erro ao retomar')
   },
 
   async cancelSend(jobId: string): Promise<SendJobSnapshot> {
     const response = await fetch(`/api/products/send/${jobId}/cancel`, { method: 'POST' })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao cancelar')
-    return data as SendJobSnapshot
+    return readJsonResponse<SendJobSnapshot>(response, 'Erro ao cancelar')
   },
 
   async retryFailedSend(jobId: string): Promise<SendJobSnapshot> {
     const response = await fetch(`/api/products/send/${jobId}/retry-failures`, {
       method: 'POST',
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao reenviar falhas')
-    return data as SendJobSnapshot
+    return readJsonResponse<SendJobSnapshot>(response, 'Erro ao reenviar falhas')
   },
 
   downloadSkippedProducts(jobId: string) {
@@ -187,16 +212,18 @@ export const productService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folderPath }),
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao coletar arquivos da pasta')
-    return data as FolderCollectResult
+    return readJsonResponse<FolderCollectResult>(
+      response,
+      'Erro ao coletar arquivos da pasta'
+    )
   },
 
   async getFolderExpect(): Promise<{ expected: { role: string; names: string[] }[]; tip: string }> {
     const response = await fetch('/api/products/folder-expect')
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Erro ao carregar nomes esperados')
-    return data as { expected: { role: string; names: string[] }[]; tip: string }
+    return readJsonResponse<{ expected: { role: string; names: string[] }[]; tip: string }>(
+      response,
+      'Erro ao carregar nomes esperados'
+    )
   },
 
   downloadTemplate() {

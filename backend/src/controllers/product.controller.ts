@@ -91,7 +91,7 @@ export async function getProductFieldCatalogHandler(
       markupInconsistente:
         'alerta + recalcula markup = ((venda/custo)-1)*100 quando vazio ou inconsistente',
       aliquotaZeroStIsento:
-        'bloqueia (exatamente uma de st/isento/semincidencia = S)',
+        'aliquota=0 sem flag → alerta e define st=S; mais de uma flag S → bloqueia',
       cfopAuto:
         'CFOP opcional no CSV; no envio: alíquota>0→5102; alíquota 0 + ST→5405; alíquota 0 + isento→CST 40; alíquota 0 + semincidencia→CST 41',
       aliquotaPercent: 'se não existir em AliquotaICMS, cria tipICMS/alSAIDA',

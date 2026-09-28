@@ -13,6 +13,7 @@ import { InconsistencyChecksPanel } from '@/components/InconsistencyChecksPanel'
 import { ControladoSuggestPanel } from '@/components/ControladoSuggestPanel'
 import { AliquotaUfReviewPanel } from '@/components/AliquotaUfReviewPanel'
 import { findAliquotaMismatches } from '@/lib/icmsByUf'
+import { filterRowsWithoutErrors } from '@/lib/sendRows'
 import { cn, formatNumber } from '@/lib/utils'
 import type {
   AuxiliaryEntity,
@@ -32,6 +33,8 @@ interface ErrorsStepProps {
   onRevalidate: () => void
   onApplyAliquotaUf?: (mismatches: AliquotaMismatch[]) => void
   onContinue: () => void
+  /** Continua para envio excluindo linhas com erro. */
+  onContinueSkipErrors: (validRows: Record<string, string>[], skippedCount: number) => void
   isRevalidating?: boolean
 }
 
@@ -172,6 +175,7 @@ export function ErrorsStep({
   onRevalidate,
   onApplyAliquotaUf,
   onContinue,
+  onContinueSkipErrors,
   isRevalidating,
 }: ErrorsStepProps) {
   const errorIssues = useMemo(() => {
@@ -199,6 +203,21 @@ export function ErrorsStep({
     return findAliquotaMismatches(result.rows, clientUf)
   }, [result, clientUf, onApplyAliquotaUf])
 
+  const skipErrorsPlan = useMemo(() => {
+    if (!result) return null
+    const { validRows, skippedCount } = filterRowsWithoutErrors(result.rows, result)
+    const fileLevelErrors = result.issues.filter(
+      (i) => i.severity === 'error' && i.row === 0
+    )
+    const canSkip =
+      result.errorCount > 0 &&
+      result.missingRequiredHeaders.length === 0 &&
+      fileLevelErrors.length === 0 &&
+      validRows.length > 0 &&
+      skippedCount > 0
+    return { validRows, skippedCount, canSkip }
+  }, [result])
+
   if (!result) {
     return (
       <div className="space-y-4">
@@ -223,7 +242,10 @@ export function ErrorsStep({
       {!canContinue && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
           <p className="min-w-0 flex-1 text-destructive">
-            Corrija os erros antes de continuar.
+            Corrija os erros antes de continuar
+            {skipErrorsPlan?.canSkip
+              ? `, ou envie só os ${formatNumber(skipErrorsPlan.validRows.length)} produto(s) sem erro.`
+              : '.'}
           </p>
           <Button size="sm" variant="outline" onClick={onFixFile}>
             Trocar CSV
@@ -234,6 +256,20 @@ export function ErrorsStep({
           <Button size="sm" onClick={onRevalidate} disabled={isRevalidating}>
             Revalidar
           </Button>
+          {skipErrorsPlan?.canSkip ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                onContinueSkipErrors(
+                  skipErrorsPlan.validRows,
+                  skipErrorsPlan.skippedCount
+                )
+              }
+            >
+              Enviar só os válidos ({formatNumber(skipErrorsPlan.validRows.length)})
+            </Button>
+          ) : null}
         </div>
       )}
 
@@ -372,13 +408,28 @@ export function ErrorsStep({
         </div>
       )}
 
-      <div className="flex justify-between pt-1">
+      <div className="flex flex-wrap justify-between gap-2 pt-1">
         <Button variant="outline" onClick={onBack}>
           Voltar
         </Button>
-        <Button onClick={onContinue} disabled={!canContinue}>
-          Continuar para envio
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {skipErrorsPlan?.canSkip ? (
+            <Button
+              variant="secondary"
+              onClick={() =>
+                onContinueSkipErrors(
+                  skipErrorsPlan.validRows,
+                  skipErrorsPlan.skippedCount
+                )
+              }
+            >
+              Enviar só os válidos ({formatNumber(skipErrorsPlan.validRows.length)})
+            </Button>
+          ) : null}
+          <Button onClick={onContinue} disabled={!canContinue}>
+            Continuar para envio
+          </Button>
+        </div>
       </div>
     </div>
   )

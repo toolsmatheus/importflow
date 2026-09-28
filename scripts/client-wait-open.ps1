@@ -1,11 +1,11 @@
 # Aguarda o backend responder /api/health e abre o navegador na interface.
 param(
   [int]$Port = 3001,
-  [int]$TimeoutSec = 120
+  [int]$TimeoutSec = 180
 )
 
-$healthUrl = "http://localhost:$Port/api/health"
-$appUrl = "http://localhost:$Port/"
+$healthUrl = "http://127.0.0.1:$Port/api/health"
+$appUrl = "http://127.0.0.1:$Port/"
 
 for ($i = 0; $i -lt $TimeoutSec; $i++) {
   try {

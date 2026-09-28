@@ -121,16 +121,52 @@ describe('mapCsvRowToProductPayload — CFOP automático', () => {
     expect(result.payload['aliquotaicms@xdata.ref']).toBe('AliquotaICMS(500)')
   })
 
-  it('rejeita alíquota=0 sem exatamente uma de st/isento/semincidencia', () => {
-    const bothOff = mapCsvRowToProductPayload(
+  it('rejeita listacontrole C3 (inexistente no enum TMS)', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({
+        aliquota: '18',
+        listacontrole: 'C3',
+        dcb: '02300',
+        registroms: '1018105260035',
+      }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.message).toMatch(/listacontrole/i)
+  })
+
+  it('mapeia listacontrole A1 para tlA1', () => {
+    const result = mapCsvRowToProductPayload(
+      baseRow({
+        aliquota: '18',
+        listacontrole: 'A1',
+        dcb: '02300',
+        registroms: '1018105260035',
+      }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.payload.listaControlado).toBe('tlA1')
+  })
+
+  it('com alíquota=0 sem flags assume ST', () => {
+    const none = mapCsvRowToProductPayload(
       baseRow({ aliquota: '0', st: 'N', isento: 'N', semincidencia: 'N' }),
       1,
       baseCatalogs()
     )
-    expect(bothOff.ok).toBe(false)
-    if (bothOff.ok) return
-    expect(bothOff.message).toContain('aliquota=0')
+    expect(none.ok).toBe(true)
+    if (!none.ok) return
+    expect(none.payload['aliquotaicms@xdata.ref']).toBe('AliquotaICMS(100)')
+    expect(none.payload['cfopvenda@xdata.ref']).toBe('CFOP(2400)')
+    expect(none.payload.csticmsnormal).toBe('cic60')
+  })
 
+  it('rejeita alíquota=0 com mais de uma flag S', () => {
     const bothOn = mapCsvRowToProductPayload(
       baseRow({ aliquota: '0', st: 'S', isento: 'S', semincidencia: 'N' }),
       1,

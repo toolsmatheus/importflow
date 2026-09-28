@@ -119,10 +119,14 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `estoqueminimo`, `descontofi
 
 ### Fiscal (alíquota, ST, isento, PIS/COFINS, NCM, CFOP)
 
-- [ ] **`aliquota = 0`** → verifica `st` / `isento` / `semincidencia` (exatamente uma = `S`) · **error**  
-  *Ex. erro:* `aliquota=0`, `st=N`, `isento=N`, `semincidencia=N` (nenhuma).  
-  *Ex. erro:* `aliquota=0`, `st=S`, `isento=S` (mais de uma).  
-  *Ex. ok:* exatamente uma = `S` entre `st`, `isento` ou `semincidencia`.
+- [ ] **`aliquota = 0` sem nenhuma flag `S`** → define `st=S` · **warning**  
+  *Ex.:* `aliquota=0`, `st=N`, `isento=N`, `semincidencia=N` → grava `st=S` e alerta.
+
+- [ ] **`aliquota = 0` com mais de uma flag `S`** · **error**  
+  *Ex.:* `aliquota=0`, `st=S`, `isento=S`.
+
+- [ ] **`aliquota = 0` com exatamente uma flag `S`** · **ok**  
+  *Ex.:* `st=S` **ou** `isento=S` **ou** `semincidencia=S`.
 
 - [ ] **`aliquota > 0`** → **não** cruza `st`/`isento`/`semincidencia`; usa a alíquota (envio CFOP 5102)  
   *Ex.:* `aliquota=18`, `st=S` → ok na validação; no envio aplica alíquota/CFOP 5102.
@@ -142,10 +146,15 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `estoqueminimo`, `descontofi
 
 ### Código de barras
 
+- [ ] **EAN vazio** · permitido (produto entra sem `codigoBarras` no TMS)
+
 - [ ] **EAN inválido** (tamanho ou dígito verificador) · **warning**  
   *Tamanhos aceitos:* **8**, **12** (UPC-A), **13**, **14** dígitos.  
   *Ex.:* `codigobarras=123` (tamanho) ou EAN-13 com dígito final errado.  
   *Não bloqueia o envio.*
+
+- [ ] **EAN duplicado no arquivo** · **error**  
+  *Ex.:* duas linhas com o mesmo `codigobarras`.
 
 - [ ] **`codigoadicional`** (opcional, após `codigobarras`) — EANs extras separados por `,` (ou `;`)  
   *Ex.:* `789...,790...,791...`  
@@ -178,6 +187,10 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `estoqueminimo`, `descontofi
 
 ### Controlados
 
+- [ ] **`listacontrole`** ∈ `A1,A2,A3,B1,B2,C1,C2,C4,C5` ou `T` (antimicrobiano) · **error** se inválida  
+  *Ex.:* `listacontrole=C3` → erro (enum TMS não tem `tlC3`).  
+  *`T`* → no envio vira `tlNenhuma` + `tcAntimicrobiano`.
+
 - [ ] **DCB resolvível** (auxiliar **ou** banco TMS **ou** Anvisa); senão **anula controlado** · **warning**  
   *Ex.:* `listacontrole=A1`, `dcb=10021`, `registroms=…` e o `10021` não existe em nenhuma fonte → limpa lista/DCB/MS e avisa “controlado anulado”.
 
@@ -196,5 +209,12 @@ Além de reportar problemas, a validação pode **alterar a linha**:
 | Ajuste | Exemplo |
 |--------|---------|
 | Recalcula `markup` | `custo=10`, `venda=15`, markup vazio → `markup=50,00` + warning |
+| `fator` vazio → `1` | sem aviso |
+| `aliquota=0` sem flag → `st=S` | + warning |
 | Anula controlado | DCB `10021` não encontrado → limpa `listacontrole` / `dcb` / `registroms` + warning |
-| Cria coluna `markup` | CSV sem coluna markup, mas custo/venda permitem cálculo → coluna passa a existir nas linhas validadas |
+| Cria coluna `markup` / `fator` / `st` | quando o ajuste cria campo ausente no CSV |
+
+## Envio com erros
+
+- [ ] **Continuar para envio** só com `errorCount = 0` (`canProceed`)
+- [ ] **Enviar só os válidos** — exclui linhas em `errorRows`; erros estruturais (coluna obrigatória / auxiliar de arquivo) ainda bloqueiam

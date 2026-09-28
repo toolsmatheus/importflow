@@ -1,6 +1,7 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
+title ImportFlow
 
 echo ========================================
 echo   ImportFlow
@@ -16,7 +17,8 @@ set "FORCE_BUILD=0"
 if /I "%~1"=="/rebuild" set "FORCE_BUILD=1"
 if /I "%~1"=="--rebuild" set "FORCE_BUILD=1"
 
-call :CheckPort %PORT%
+REM Libera a porta (instancia anterior / processo zumbi) sem perguntar
+call :FreePort %PORT%
 if errorlevel 1 exit /b 1
 
 set "NEED_INSTALL=0"
@@ -79,18 +81,20 @@ echo Iniciando ImportFlow em http://localhost:%PORT%
 echo Feche esta janela para encerrar o servidor.
 echo.
 
-REM Abre o navegador quando /api/health responder (nao depende de timeout fixo)
+REM Abre o navegador quando /api/health responder
 start "" /B powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\client-wait-open.ps1" -Port %PORT%
 
+set "PORT=%PORT%"
 call npm run start --prefix backend
-set "EXITCODE=%ERRORLEVEL%"
+set "EXITCODE=!ERRORLEVEL!"
 
 echo.
-if not "%EXITCODE%"=="0" (
-  echo O servidor encerrou com erro %EXITCODE%.
+if not "!EXITCODE!"=="0" (
+  echo O servidor encerrou com erro !EXITCODE!.
+  echo Se a porta %PORT% estiver bloqueada, feche outras janelas do ImportFlow e tente de novo.
 )
 pause
-exit /b %EXITCODE%
+exit /b !EXITCODE!
 
 :EnsureNode
 REM Garante Node >= 20: PATH ok, ou baixa .runtime\node (portatil, sem admin)
@@ -138,16 +142,27 @@ echo Ambiente OK: Node %NODE_VER% ^| npm %NPM_VER%
 echo.
 exit /b 0
 
-:CheckPort
-netstat -ano | findstr /C:":%1 " | findstr LISTENING >nul 2>&1
-if errorlevel 1 exit /b 0
+:FreePort
+REM Encerra o processo que estiver LISTENING na porta %1 (sem prompt)
+set "FREED=0"
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /C:":%1 " ^| findstr LISTENING') do (
+  if not "%%p"=="0" if not "%%p"=="" (
+    echo Liberando porta %1 ^(PID %%p^)...
+    taskkill /F /T /PID %%p >nul 2>&1
+    set "FREED=1"
+  )
+)
+if "!FREED!"=="1" (
+  ping -n 3 127.0.0.1 >nul
+)
 
-echo [AVISO] A porta %1 ja esta em uso.
-echo         Pode ser outra instancia do ImportFlow ou outro programa.
-echo.
-set /p "CONTINUE=Deseja tentar iniciar mesmo assim? (S/N): "
-if /I not "%CONTINUE%"=="S" (
-  echo Cancelado.
+REM Confirma que a porta ficou livre
+netstat -ano 2>nul | findstr /C:":%1 " | findstr LISTENING >nul 2>&1
+if not errorlevel 1 (
+  echo.
+  echo [ERRO] A porta %1 continua em uso e nao foi possivel libera-la.
+  echo Feche outras janelas do ImportFlow / Node e execute start.bat de novo.
+  echo.
   pause
   exit /b 1
 )

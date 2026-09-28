@@ -1,5 +1,9 @@
 import { parseBrazilianNumber, isBlank, computeMarkupFromCustoVenda, markupMatchesSale } from '../utils/productFormats.js'
 import { lookupAnvisaDcbByDescricao, padDcbCode } from './dcbIndexService.js'
+import {
+  isAntimicrobianoLista,
+  mapListaControlado,
+} from './listaControlado.js'
 
 /** Catálogos TMS usados para montar refs `@xdata.ref` no insert de produto. */
 export interface ProductLookupCatalogs {
@@ -174,33 +178,6 @@ function mapCstPisCofins(
   return { cstpis: `cp${digits}`, cstcofins: `cc${digits}` }
 }
 
-function mapListaControlado(raw: string | undefined): string {
-  const v = str(raw)
-  if (!v) return 'tlNenhuma'
-  const u = v.toUpperCase()
-  if (u === 'NENHUMA' || u === 'NENHUM' || u === 'TLNENHUMA') return 'tlNenhuma'
-  // Antibiótico: no CSV usa-se "T", mas o enum XData não tem tlT —
-  // a classe SNGPC (tcAntimicrobiano) é que marca antimicrobiano.
-  if (isAntimicrobianoLista(u)) return 'tlNenhuma'
-  if (u.startsWith('TL')) return `tl${u.slice(2)}`
-  return `tl${u}`
-}
-
-function isAntimicrobianoLista(raw: string | undefined): boolean {
-  const u = (typeof raw === 'string' ? raw : str(raw))?.toUpperCase()
-  if (!u) return false
-  return (
-    u === 'T' ||
-    u === 'TLT' ||
-    u === 'ANTIMICROBIANO' ||
-    u === 'ANTIMICROBIANOS' ||
-    u === 'ANTIBIOTICO' ||
-    u === 'ANTIBIOTICOS' ||
-    u === 'ANTIBIÓTICO' ||
-    u === 'ANTIBIÓTICOS'
-  )
-}
-
 /** Extrai unid. por embalagem do nome (ex.: "30CP", "20 COMP"). */
 function parseUnidadesPorEmbalagemFromNome(nome: string): number | undefined {
   const m = nome.match(/\b(\d+)\s*(?:CP|CPS|COMP|COMPRIMIDOS?|CAPS?|CÁPSULAS?|CAPSULES?)\b/i)
@@ -256,13 +233,14 @@ function resolveAliquotaId(
 
   if (aliquota === 0) {
     const flagsOn = [st, isento, semIncidencia].filter(Boolean).length
-    if (flagsOn !== 1) {
+    if (flagsOn > 1) {
       return {
         error:
           'Quando aliquota=0, exatamente uma coluna (st, isento ou semincidencia) deve ser S',
       }
     }
-    if (st) return { id: catalogs.aliquotaStId }
+    // Nenhuma flag: assume ST (validação já preenche st=S com alerta)
+    if (st || flagsOn === 0) return { id: catalogs.aliquotaStId }
     if (isento) return { id: catalogs.aliquotaIsentoId }
     return { id: catalogs.aliquotaSemIncidenciaId }
   }
@@ -365,7 +343,8 @@ function resolveFiscalOverrides(row: Record<string, string>): {
   }
 
   // aliquota = 0: só então st / isento / semincidencia definem o fiscal
-  if (isSt) {
+  // Sem flag: assume ST (mesmo default da validação)
+  if (isSt || (!isIsento && !isSemIncidencia)) {
     return {
       cfopCode: '5405',
       csticmsnormal: 'cic60',
@@ -379,13 +358,9 @@ function resolveFiscalOverrides(row: Record<string, string>): {
     }
   }
 
-  if (isSemIncidencia) {
-    return {
-      csticmsnormal: 'cic41',
-    }
+  return {
+    csticmsnormal: 'cic41',
   }
-
-  return {}
 }
 
 /**
@@ -477,6 +452,11 @@ export function mapCsvRowToProductPayload(
     }
   }
 
+  const listaControladoMapped = mapListaControlado(row.listacontrole)
+  if (listaControladoMapped.error) {
+    return { ok: false, message: listaControladoMapped.error }
+  }
+
   const payload: Record<string, unknown> = {
     '@xdata.type': 'XData.Default.Produto',
     idFilial,
@@ -495,7 +475,7 @@ export function mapCsvRowToProductPayload(
     apresentacao: 'taCapCompDrag',
     tipopreco,
     tipoitemsped: 'tisMercadoriaRevenda',
-    listaControlado: mapListaControlado(row.listacontrole),
+    listaControlado: listaControladoMapped.value,
     listaControladoAdendo: 'tlNenhuma',
     'unidadeEstoque@xdata.ref': xdataRef('Unidade', catalogs.unidadeUnId),
     'grupo@xdata.ref': xdataRef('GrupoProdutoDrogaria', grupo.id),
