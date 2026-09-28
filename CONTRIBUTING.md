@@ -44,7 +44,7 @@ Abre `http://localhost:3001` (API + frontend buildado).
 | Lista de controle / enum TMS | `backend/src/services/listaControlado.ts` |
 | Payload do produto no TMS | `backend/src/services/productTmsMapper.ts` |
 | Lógica HTTP TMS (auth, bulk) | `backend/src/services/tms/` |
-| Job de envio (lotes, skip) | `backend/src/services/sendJobService.ts` |
+| Job de envio (lotes, skip) | `backend/src/services/sendJobService.ts` + `send/` |
 | Endpoint HTTP | `backend/src/routes/` + `controllers/` |
 | Colunas do modelo CSV | `backend/src/schemas/product.schema.ts` |
 | Tela do wizard / erros / envio | `frontend/src/components/wizard/` + `pages/ProductImportPage.tsx` |
@@ -54,7 +54,8 @@ Abre `http://localhost:3001` (API + frontend buildado).
 | Índices CMED/DCB/Portaria | `data/reference/` + `scripts/*.py` |
 
 Documentação de regras (com exemplos): [VALIDACOES.md](VALIDACOES.md).  
-Arquitetura e fluxo de dados: [ARCHITECTURE.md](ARCHITECTURE.md).
+Arquitetura e fluxo de dados: [ARCHITECTURE.md](ARCHITECTURE.md).  
+Para agentes de IA: [AGENTS.md](AGENTS.md).
 
 ## Convenções
 

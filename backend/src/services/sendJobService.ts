@@ -16,146 +16,46 @@ import {
   mapCsvRowToProductPayload,
   markAuxiliaryMigracaoExists,
   type AuxiliaryMigracaoEntity,
-  type ProductExistenceCatalogs,
-  type ProductLookupCatalogs,
   type TmsAuxiliaryEntity,
 } from './tmsService.js'
 import { lookupAnvisaDcb, lookupAnvisaDcbByDescricao, padDcbCode } from './dcbIndexService.js'
 import { TEMPLATE_DELIMITER } from '../schemas/product.schema.js'
 import { parseBrazilianNumber, parseCodigoAdicionalList } from '../utils/productFormats.js'
+import {
+  claimExistenceKey,
+  confirmExistenceKey,
+  lookupExistenceId,
+  releaseExistenceKey,
+} from './send/sendJobExistence.js'
+import { toSnapshot } from './send/sendJobSnapshot.js'
+import {
+  AUX_LABEL,
+  JOB_TTL_MS,
+  MAX_STORED_ERRORS,
+  type AuxiliarySendRow,
+  type PreparedProductSend,
+  type SendJobInternal,
+  type SendJobSnapshot,
+  type SendMode,
+} from './send/sendJobTypes.js'
 
-export type SendJobStatus =
-  | 'queued'
-  | 'running'
-  | 'paused'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
+export type {
+  AuxiliarySendRow,
+  ProductSkipReason,
+  SendJobError,
+  SendJobPhase,
+  SendJobSkippedProduct,
+  SendJobSnapshot,
+  SendJobStatus,
+  SendMode,
+} from './send/sendJobTypes.js'
 
-export type SendMode = 'live' | 'simulate'
+export { toSnapshot } from './send/sendJobSnapshot.js'
 
-/** Fase atual do job — usada na UI de progresso. */
-export type SendJobPhase = 'auxiliaries' | 'catalogs' | 'products' | 'done'
-
-export type ProductSkipReason = 'codigo_barras' | 'codigo_migracao'
-
-export interface SendJobError {
-  index: number
-  codigo: string
-  message: string
-  batch: number
-}
-
-export interface SendJobSkippedProduct {
-  index: number
-  codigo: string
-  nome: string
-  codigobarras: string
-  reason: ProductSkipReason
-  message: string
-  tmsProdutoId: number | null
-}
-
-export interface SendJobSnapshot {
-  id: string
-  status: SendJobStatus
-  mode: SendMode
-  phase: SendJobPhase
-  tmsBaseUrl: string
-  idFilial: number
-  batchSize: number
-  concurrency: number
-  total: number
-  processed: number
-  successCount: number
-  errorCount: number
-  productSkipped: number
-  currentBatch: number
-  totalBatches: number
-  errors: SendJobError[]
-  errorsTruncated: boolean
-  skipped: SendJobSkippedProduct[]
-  skippedTruncated: boolean
-  startedAt: string | null
-  finishedAt: string | null
-  elapsedMs: number
-  productsPerSecond: number
-  percent: number
-  remaining: number
-  gruposTotal: number
-  gruposInserted: number
-  gruposFailed: number
-  auxTotal: number
-  auxInserted: number
-  auxFailed: number
-  auxSkipped: number
-}
-
-export interface AuxiliarySendRow {
-  entity: TmsAuxiliaryEntity
-  codigo: string
-  descricao: string
-}
-
-const AUX_LABEL: Record<TmsAuxiliaryEntity, string> = {
-  grupo: 'Grupo',
-  subgrupo: 'Subgrupo',
-  categoria: 'Categoria',
-  laboratorio: 'Laboratório',
-  grupodepreco: 'Grupo de preço',
-  similar: 'Similar',
-  dcb: 'DCB',
-}
-
-interface SendJobInternal {
-  id: string
-  status: SendJobStatus
-  mode: SendMode
-  phase: SendJobPhase
-  tmsBaseUrl: string
-  idFilial: number
-  batchSize: number
-  concurrency: number
-  rows: Record<string, string>[]
-  pendingIndexes: number[]
-  failedIndexes: number[]
-  successCount: number
-  errorCount: number
-  processed: number
-  currentBatch: number
-  totalBatches: number
-  errors: SendJobError[]
-  startedAt: number | null
-  finishedAt: number | null
-  pauseRequested: boolean
-  cancelRequested: boolean
-  runner: Promise<void> | null
-  auxiliaries: AuxiliarySendRow[]
-  auxInserted: number
-  auxFailed: number
-  auxSkipped: number
-  auxDone: boolean
-  productCatalogs: ProductLookupCatalogs | null
-  productExistence: ProductExistenceCatalogs | null
-  skipped: SendJobSkippedProduct[]
-}
-
-const MAX_STORED_ERRORS = 500
-const MAX_SNAPSHOT_SKIPPED = 200
-const JOB_TTL_MS = 6 * 60 * 60 * 1000
 const jobs = new Map<string, SendJobInternal>()
 
 const DEFAULT_BATCH_SIZE = Number(process.env.SEND_BATCH_SIZE) || 500
 const DEFAULT_CONCURRENCY = Number(process.env.SEND_CONCURRENCY) || 1
-
-interface PreparedProductSend {
-  index: number
-  codigo: string
-  barcode: string
-  additionalBarcodes: string[]
-  payload: Record<string, unknown>
-  warnings: string[]
-}
 
 function cleanupJobs() {
   const now = Date.now()
@@ -167,103 +67,6 @@ function cleanupJobs() {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function lookupExistenceId(map: Map<string, number>, value: string): number | undefined {
-  const raw = value.trim()
-  if (!raw) return undefined
-  if (map.has(raw)) return map.get(raw)
-  const n = Number(raw)
-  if (Number.isInteger(n) && map.has(String(n))) return map.get(String(n))
-  return undefined
-}
-
-function claimExistenceKey(map: Map<string, number>, value: string, placeholderId = -1): boolean {
-  const raw = value.trim()
-  if (!raw) return true
-  if (lookupExistenceId(map, raw) !== undefined) return false
-  map.set(raw, placeholderId)
-  const n = Number(raw)
-  if (Number.isInteger(n)) map.set(String(n), placeholderId)
-  return true
-}
-
-function releaseExistenceKey(map: Map<string, number>, value: string) {
-  const raw = value.trim()
-  if (!raw) return
-  if (map.get(raw) === -1) map.delete(raw)
-  const n = Number(raw)
-  if (Number.isInteger(n) && map.get(String(n)) === -1) map.delete(String(n))
-}
-
-function confirmExistenceKey(map: Map<string, number>, value: string, id: number) {
-  const raw = value.trim()
-  if (!raw) return
-  map.set(raw, id)
-  const n = Number(raw)
-  if (Number.isInteger(n)) map.set(String(n), id)
-}
-
-export function toSnapshot(job: SendJobInternal): SendJobSnapshot {
-  const now = Date.now()
-  const started = job.startedAt ?? now
-  const ended = job.finishedAt ?? now
-  const elapsedMs = Math.max(0, ended - started)
-  const productsPerSecond =
-    elapsedMs > 0 ? Number(((job.processed * 1000) / elapsedMs).toFixed(1)) : 0
-
-  const auxHandled = job.auxInserted + job.auxFailed + job.auxSkipped
-  const auxTotal = job.auxiliaries.length
-  const productTotal = job.rows.length
-
-  let percent = 100
-  if (job.phase === 'auxiliaries' && auxTotal > 0) {
-    // Auxiliares ocupam até 8% do progresso geral (fase longa de catálogo/insert).
-    percent = Math.min(8, Math.round((auxHandled / auxTotal) * 8))
-  } else if (job.phase === 'catalogs') {
-    percent = 10
-  } else if (productTotal === 0) {
-    percent = 100
-  } else {
-    // Produtos: 10% → 100%
-    percent = 10 + Math.round((job.processed / productTotal) * 90)
-  }
-  if (job.status === 'completed') percent = 100
-
-  return {
-    id: job.id,
-    status: job.status,
-    mode: job.mode,
-    phase: job.phase,
-    tmsBaseUrl: job.tmsBaseUrl,
-    idFilial: job.idFilial,
-    batchSize: job.batchSize,
-    concurrency: job.concurrency,
-    total: job.rows.length,
-    processed: job.processed,
-    successCount: job.successCount,
-    errorCount: job.errorCount,
-    productSkipped: job.skipped.length,
-    currentBatch: job.currentBatch,
-    totalBatches: job.totalBatches,
-    errors: job.errors.slice(0, MAX_STORED_ERRORS),
-    errorsTruncated: job.errors.length > MAX_STORED_ERRORS,
-    skipped: job.skipped.slice(0, MAX_SNAPSHOT_SKIPPED),
-    skippedTruncated: job.skipped.length > MAX_SNAPSHOT_SKIPPED,
-    startedAt: job.startedAt ? new Date(job.startedAt).toISOString() : null,
-    finishedAt: job.finishedAt ? new Date(job.finishedAt).toISOString() : null,
-    elapsedMs,
-    productsPerSecond,
-    percent: Math.min(100, Math.max(0, percent)),
-    remaining: Math.max(0, job.rows.length - job.processed),
-    gruposTotal: job.auxiliaries.filter((a) => a.entity === 'grupo').length,
-    gruposInserted: job.auxInserted,
-    gruposFailed: job.auxFailed,
-    auxTotal: job.auxiliaries.length,
-    auxInserted: job.auxInserted,
-    auxFailed: job.auxFailed,
-    auxSkipped: job.auxSkipped,
-  }
 }
 
 function csvEscape(value: string): string {

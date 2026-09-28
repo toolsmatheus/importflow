@@ -4,6 +4,7 @@ Guia para onboarding: como o monorepo se organiza, como os dados fluem do CSV at
 
 - Instalação e endpoints: [README.md](README.md)
 - Como contribuir / primeiro setup: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Agentes / o que não inventar: [AGENTS.md](AGENTS.md)
 - Regras de validação: [VALIDACOES.md](VALIDACOES.md)
 - Scripts utilitários: [scripts/README.md](scripts/README.md)
 
@@ -71,7 +72,8 @@ Não há pastas `database/`, `jobs/` ou `middleware/` — jobs ficam em `service
 | `validation/` | Domínios: fiscal, controlados, auxiliares, checklist |
 | `listaControlado.ts` | Enum TMS `tlTipoListaControlado` |
 | `productTmsMapper.ts` | Linha CSV → payload TMS |
-| `sendJobService.ts` | Job de envio de produtos (lotes, pause/resume) |
+| `sendJobService.ts` | Orquestra envio de produtos (lotes, pause/resume) |
+| `send/` | Tipos, existence keys e snapshot do job de envio |
 | `controladoSuggestService.ts` | EAN → CMED → Portaria 344 |
 | `dcbIndexService.ts`, `cmedIndexService.ts`, … | Índices JSON locais |
 | `optionalJobRuntime.ts` | Store/CSV/snapshot compartilhado dos jobs opcionais |
