@@ -1,4 +1,4 @@
--- Modelo SQL → CSV ImportFlow (produtos)
+-- Modelo SQL → CSV ToolsDataWeb (produtos)
 -- Delimitador do CSV: ;  |  Decimais: 10,50  |  Flags: S/N  |  Ativo: A/I
 -- Substitua a tabela/colunas de origem e exporte com ; como separador.
 
@@ -19,7 +19,7 @@ SELECT
   CAST(COALESCE(p.permitedesconto, 'S') AS varchar(1)) AS permitedesconto,   -- S/N
 
   -- ===== OPCIONAIS =====
-  REPLACE(CAST(p.markup AS varchar(30)), '.', ',') AS markup, -- se vazio, recalcula no ImportFlow
+  REPLACE(CAST(p.markup AS varchar(30)), '.', ',') AS markup, -- se vazio, recalcula no ToolsDataWeb
   CAST(COALESCE(p.fator, 1) AS varchar(10)) AS fator,         -- opcional; vazio → 1
   '' AS cfop,                                                 -- deixe vazio: preenchido no envio
   REPLACE(CAST(p.valorpmc AS varchar(30)), '.', ',') AS valorpmc,

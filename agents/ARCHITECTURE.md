@@ -1,4 +1,4 @@
-# ImportFlow — Arquitetura
+# ToolsDataWeb — Arquitetura
 
 Guia alinhado às regras nesta pasta (padrão ToolsPharma), adaptado ao domínio CSV → TMS.
 
@@ -12,7 +12,7 @@ Guia alinhado às regras nesta pasta (padrão ToolsPharma), adaptado ao domínio
 ## Visão geral
 
 ```
-ImportFlow/
+ToolsDataWeb/
 ├── agents/           # Toda a documentação .md do projeto
 ├── design-system/    # Tokens/fonts/logo ToolsPharma
 ├── backend/

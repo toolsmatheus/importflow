@@ -61,7 +61,7 @@ def normalize_key(name: str) -> str:
 def fetch_text(url: str, timeout: int = 60) -> str:
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "ImportFlow/1.0 (controlado index builder)"},
+        headers={"User-Agent": "ToolsDataWeb/1.0 (controlado index builder)"},
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = resp.read()
@@ -335,7 +335,7 @@ def main() -> None:
     am.add("LEVOFLOXACINA")
     payload_am = {
         "source": "RDC 471/2021 + IN 244/2023 (lista antimicrobianos; IN 360/2025 a sucede)",
-        "note": "Lista T no ImportFlow (tcAntimicrobiano / tipoclassesngpc).",
+        "note": "Lista T no ToolsDataWeb (tcAntimicrobiano / tipoclassesngpc).",
         "count": len(am),
         "substances": sorted(am),
     }

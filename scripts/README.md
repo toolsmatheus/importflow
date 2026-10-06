@@ -1,4 +1,4 @@
-# Scripts — ImportFlow
+# Scripts — ToolsDataWeb
 
 Três lugares distintos. Não misturar papéis.
 
@@ -26,7 +26,7 @@ Detalhes dos índices: [data/reference/README.md](../data/reference/README.md).
 |--------|-----|
 | `ensure-node.ps1` | Garante Node ≥ 20 (PATH ou `.runtime\node`) — chamado pelo `start.bat` |
 | `client-wait-open.ps1` | Espera `/api/health` e abre o browser |
-| `pack-client.ps1` | Gera `dist-client\ImportFlow-cliente.zip` |
+| `pack-client.ps1` | Gera `dist-client\ToolsDataWeb-cliente.zip` |
 
 ```bat
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack-client.ps1

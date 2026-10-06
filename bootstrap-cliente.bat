@@ -2,19 +2,19 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-REM Bootstrap minimo (~2 KB): baixa o ImportFlow do GitHub e executa start.bat.
+REM Bootstrap minimo (~2 KB): baixa o ToolsDataWeb do GitHub e executa start.bat.
 REM Ideal para enviar so este arquivo via chat do AnyDesk (cliente precisa de internet).
 
 echo ========================================
-echo   ImportFlow - instalacao automatica
+echo   ToolsDataWeb - instalacao automatica
 echo ========================================
 echo.
 
 set "REPO_ZIP=https://github.com/toolsmatheus/importflow/archive/refs/heads/main.zip"
-set "TARGET=%~dp0ImportFlow"
+set "TARGET=%~dp0ToolsDataWeb"
 
 if exist "%TARGET%\start.bat" (
-  echo Pasta ImportFlow ja existe. Iniciando...
+  echo Pasta ToolsDataWeb ja existe. Iniciando...
   echo.
   call "%TARGET%\start.bat"
   exit /b %ERRORLEVEL%
@@ -27,7 +27,7 @@ echo.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop'; " ^
   "$zip=Join-Path $env:TEMP 'importflow-main.zip'; " ^
-  "$dest=Join-Path '%~dp0.' 'ImportFlow'; " ^
+  "$dest=Join-Path '%~dp0.' 'ToolsDataWeb'; " ^
   "$stage=Join-Path $env:TEMP 'importflow-extract'; " ^
   "Write-Host 'Download...'; " ^
   "Invoke-WebRequest -Uri '%REPO_ZIP%' -OutFile $zip -UseBasicParsing; " ^
@@ -45,7 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 if errorlevel 1 (
   echo.
   echo [ERRO] Falha ao baixar/extrair. Verifique a internet.
-  echo Ou peca o arquivo ImportFlow-cliente.zip e descompacte manualmente.
+  echo Ou peca o arquivo ToolsDataWeb-cliente.zip e descompacte manualmente.
   pause
   exit /b 1
 )
@@ -57,7 +57,7 @@ if not exist "%TARGET%\start.bat" (
 )
 
 echo.
-echo Download ok. Iniciando ImportFlow...
+echo Download ok. Iniciando ToolsDataWeb...
 echo.
 call "%TARGET%\start.bat"
 exit /b %ERRORLEVEL%

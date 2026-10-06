@@ -86,7 +86,7 @@ try {
   startFileCleanupTimer()
 
   await app.listen({ port: PORT, host: '0.0.0.0' })
-  app.log.info(`ImportFlow running on http://localhost:${PORT}`)
+  app.log.info(`ToolsDataWeb running on http://localhost:${PORT}`)
 } catch (err) {
   app.log.error(err)
   process.exit(1)

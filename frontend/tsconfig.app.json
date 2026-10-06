@@ -30,7 +30,7 @@
       "@models/*": ["../backend/src/models/*"],
       "@dto": ["../backend/src/dto"],
       "@dto/*": ["../backend/src/dto/*"],
-      "@importflow/icms": ["../backend/src/utils/icmsByUf.ts"]
+      "@toolsdataweb/icms": ["../backend/src/utils/icmsByUf.ts"]
     }
   },
   "include": ["src"],

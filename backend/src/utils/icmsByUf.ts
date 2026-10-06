@@ -1,6 +1,6 @@
 /**
  * Alíquota ICMS interna padrão por UF (percentual total, incl. FECP/FECOEP quando aplicável).
- * Fonte única — frontend importa via alias Vite `@importflow/icms`.
+ * Fonte única — frontend importa via alias Vite `@toolsdataweb/icms`.
  */
 export type BrazilianUf =
   | 'AC'

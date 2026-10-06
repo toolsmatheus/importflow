@@ -21,6 +21,6 @@ for ($i = 0; $i -lt $TimeoutSec; $i++) {
 }
 
 Write-Host ""
-Write-Host "ImportFlow: o servidor demorou mais que ${TimeoutSec}s para responder."
+Write-Host "ToolsDataWeb: o servidor demorou mais que ${TimeoutSec}s para responder."
 Write-Host "Abra manualmente no navegador: $appUrl"
 exit 1

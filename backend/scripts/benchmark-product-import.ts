@@ -215,7 +215,7 @@ async function benchLista(
   }
 }
 
-async function benchConcurrentLikeImportFlow(
+async function benchConcurrentLikeToolsDataWeb(
   payloads: Record<string, unknown>[],
   batchSize: number,
   concurrency: number
@@ -302,7 +302,7 @@ async function main() {
     )
 
     const payloads3 = buildPayloadsDirect(block + 200, size, idFilial, refs)
-    const concurrent = await benchConcurrentLikeImportFlow(payloads3, 100, 2)
+    const concurrent = await benchConcurrentLikeToolsDataWeb(payloads3, 100, 2)
     allResults.push(concurrent)
     console.log(
       `${concurrent.approach}: ${concurrent.elapsedMs.toFixed(0)}ms total | ${concurrent.msPerProduct.toFixed(1)}ms/prod | ${concurrent.requests} req`

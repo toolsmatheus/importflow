@@ -1,22 +1,22 @@
 {
-  "name": "importflow",
+  "name": "toolsdataweb",
   "private": true,
   "version": "1.0.0",
-  "description": "ImportFlow — monorepo (backend + frontend)",
+  "description": "ToolsDataWeb — monorepo (backend + frontend)",
   "workspaces": [
     "backend",
     "frontend"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w importflow-backend\" \"npm run dev -w importflow-frontend\"",
-    "dev:backend": "npm run dev -w importflow-backend",
-    "dev:frontend": "npm run dev -w importflow-frontend",
-    "build": "npm run build -w importflow-frontend && npm run build -w importflow-backend",
-    "build:frontend": "npm run build -w importflow-frontend",
-    "build:backend": "npm run build -w importflow-backend",
-    "start": "npm run start -w importflow-backend",
-    "test": "npm run test -w importflow-backend",
-    "lint": "npm run lint -w importflow-frontend",
+    "dev": "concurrently \"npm run dev -w toolsdataweb-backend\" \"npm run dev -w toolsdataweb-frontend\"",
+    "dev:backend": "npm run dev -w toolsdataweb-backend",
+    "dev:frontend": "npm run dev -w toolsdataweb-frontend",
+    "build": "npm run build -w toolsdataweb-frontend && npm run build -w toolsdataweb-backend",
+    "build:frontend": "npm run build -w toolsdataweb-frontend",
+    "build:backend": "npm run build -w toolsdataweb-backend",
+    "start": "npm run start -w toolsdataweb-backend",
+    "test": "npm run test -w toolsdataweb-backend",
+    "lint": "npm run lint -w toolsdataweb-frontend",
     "install:all": "npm install"
   },
   "devDependencies": {

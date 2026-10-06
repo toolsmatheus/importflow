@@ -1,4 +1,4 @@
-# Garante Node.js >= MinMajor para o ImportFlow.
+# Garante Node.js >= MinMajor para o ToolsDataWeb.
 # Preferencia: Node do PATH se OK; senao runtime portatil em .runtime\node (sem admin).
 # Escreve .runtime\use-node.cmd para o start.bat carregar no PATH da sessao.
 param(

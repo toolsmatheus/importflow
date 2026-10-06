@@ -1,4 +1,4 @@
-# ImportFlow
+# ToolsDataWeb
 
 Importação de produtos via CSV para o banco de dados (ToolsPharma), com validação e envio em lotes.
 
@@ -31,7 +31,7 @@ No PC de desenvolvimento:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack-client.ps1
 ```
 
-Gera `dist-client\ImportFlow-cliente.zip`. Envie esse zip pelo AnyDesk; o cliente descompacta e dá duplo clique em `start.bat`.
+Gera `dist-client\ToolsDataWeb-cliente.zip`. Envie esse zip pelo AnyDesk; o cliente descompacta e dá duplo clique em `start.bat`.
 
 ### Opção B — Só o bootstrap (~2 KB)
 
@@ -54,7 +54,7 @@ Abre `http://localhost:3001` quando `/api/health` responder. Forçar rebuild: `s
 | Sintoma | Solução |
 |---------|---------|
 | Falha ao baixar Node/projeto | Verificar internet; ou instalar [Node 20 LTS](https://nodejs.org/) e usar o zip (opção A) |
-| Porta 3001 em uso | Fechar outra janela do ImportFlow |
+| Porta 3001 em uso | Fechar outra janela do ToolsDataWeb |
 | Navegador não abriu | Abrir `http://localhost:3001` manualmente |
 | Falha no `npm install` | Internet + permissão de escrita na pasta |
 

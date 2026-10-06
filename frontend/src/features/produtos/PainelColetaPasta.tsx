@@ -6,7 +6,7 @@ import { produtoServico } from '@/api/produto'
 import { cn } from '@/lib/utils'
 import type { FolderCollectResult } from '@/types'
 import { Button, Input } from '@/components'
-const FOLDER_PATH_KEY = 'importflow.collectFolderPath'
+const FOLDER_PATH_KEY = 'toolsdataweb.collectFolderPath'
 export const DEFAULT_FOLDER_PATH = 'C:\\ToolsPharma\\Migracao'
 const LEGACY_FOLDER_PATHS = ['C:\\ToolsPharma\\Migração', 'C:\\ToolsPharma\\Migraçao']
 

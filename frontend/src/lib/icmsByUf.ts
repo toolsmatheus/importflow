@@ -1,6 +1,6 @@
 /**
  * Helpers de UI para revisão de alíquota.
- * Tabela e getters vêm da fonte única do backend (`@importflow/icms`).
+ * Tabela e getters vêm da fonte única do backend (`@toolsdataweb/icms`).
  */
 export {
   type BrazilianUf,
@@ -9,13 +9,13 @@ export {
   getUfIcms,
   formatAliquotaCsv,
   aliquotaMatchesUf,
-} from '@importflow/icms'
+} from '@toolsdataweb/icms'
 
 import {
   formatAliquotaCsv,
   getUfIcms,
   type UfIcmsEntry,
-} from '@importflow/icms'
+} from '@toolsdataweb/icms'
 
 function parseAliquotaCell(raw: string): number | null {
   const cleaned = raw.trim().replace(/\s/g, '').replace(/%/g, '')

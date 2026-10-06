@@ -15,8 +15,8 @@ import type {
   WizardStep,
 } from '@/types'
 
-const TMS_URL_KEY = 'importflow.tmsBaseUrl'
-const CLIENT_UF_KEY = 'importflow.clientUf'
+const TMS_URL_KEY = 'toolsdataweb.tmsBaseUrl'
+const CLIENT_UF_KEY = 'toolsdataweb.clientUf'
 const DEFAULT_TMS_URL = 'http://localhost:2001'
 
 type AuxiliaryMap = Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
