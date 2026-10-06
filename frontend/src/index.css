@@ -1,93 +1,19 @@
 @import "tailwindcss";
-
-@custom-variant dark (&:where(.dark, .dark *));
-
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --primary: #00b4ef;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #e6f7fd;
-  --accent-foreground: #0077a3;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #00b4ef;
-  --success: #22c55e;
-  --warning: #f59e0b;
-}
-
-.dark {
-  --background: #080b10;
-  --foreground: #e8edf2;
-  --card: #0f141b;
-  --card-foreground: #e8edf2;
-  --primary: #00b4ef;
-  --primary-foreground: #ffffff;
-  --secondary: #141a22;
-  --secondary-foreground: #e8edf2;
-  --muted: #141a22;
-  --muted-foreground: #94a3b8;
-  --accent: #0a3040;
-  --accent-foreground: #7dd8f5;
-  --destructive: #f87171;
-  --destructive-foreground: #080b10;
-  --border: #1a222c;
-  --input: #243040;
-  --ring: #00b4ef;
-  --success: #4ade80;
-  --warning: #fbbf24;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-}
+@import "../../design-system/tailwind-theme.css";
+@import "./components/tokens.css";
+@import "./components/grid.css";
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-line;
   }
 
   html {
     color-scheme: light;
   }
 
-  html.dark {
-    color-scheme: dark;
-  }
-
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: var(--font-sans);
+    @apply bg-surface-muted text-fg antialiased;
+    font-family: var(--font-body);
   }
 }

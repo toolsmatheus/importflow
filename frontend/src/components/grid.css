@@ -1,0 +1,91 @@
+/**
+ * Linhas do Grid de dados (ver Grid.tsx). Mantidas em CSS porque estilizam as células (td) descendentes.
+ *  - rubrica-row (+ expandable): linha de conta; subtotal-row: linha de destaque;
+ *  - detail-row (+ --compacto, nivel-2): detalhamento; grupo-row: agrupador expansível; dia-row: dia selecionável.
+ * Células de valor dentro dessas linhas usam td.valor.
+ */
+
+.rubrica-row td {
+  @apply border-b border-line py-2 px-3 text-sm text-fg;
+}
+.rubrica-row td.valor {
+  @apply text-right font-medium text-fg;
+  font-variant-numeric: tabular-nums;
+}
+
+.subtotal-row td {
+  @apply bg-surface-muted py-2.5 px-3 text-ds-sm font-bold text-fg-strong;
+}
+/* Sem linha entre a última linha acima e o subtotal */
+tr:has(+ .subtotal-row) td {
+  border-bottom-width: 0;
+}
+.subtotal-row td.valor {
+  @apply text-right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rubrica-row.expandable {
+  @apply cursor-pointer;
+}
+.rubrica-row.expandable:hover,
+.rubrica-row.expandable:focus-visible {
+  @apply bg-action-subtle outline-none;
+}
+.rubrica-row.expandable .glyph {
+  @apply inline-block w-3.5 text-fg-faint transition-colors;
+}
+.rubrica-row.expandable:hover .glyph,
+.rubrica-row.expandable:focus-visible .glyph {
+  @apply text-action;
+}
+
+/* Agrupador de segundo nível do detalhamento (ex.: MANIPULAÇÃO / DROGARIA), expansível como as rubricas. */
+.grupo-row {
+  @apply cursor-pointer;
+}
+.grupo-row:hover,
+.grupo-row:focus-visible {
+  @apply bg-action-subtle outline-none;
+}
+.grupo-row .glyph {
+  @apply inline-block w-3.5 text-fg-faint transition-colors;
+}
+.grupo-row:hover .glyph,
+.grupo-row:focus-visible .glyph {
+  @apply text-action;
+}
+
+.detail-row td {
+  @apply border-b border-line py-1 pl-12 pr-3 text-xs text-fg-muted;
+}
+/* Último nível do detalhamento em dois níveis: recuo maior que o do agrupador, formando a "escadinha". */
+.detail-row td.nivel-2 {
+  @apply pl-18;
+}
+/* Agrupamento por centro de custo (Manipulação/Drogaria): recuo menor */
+.detail-row--compacto td {
+  @apply pl-8;
+}
+.detail-row--compacto td.nivel-2 {
+  @apply pl-14;
+}
+.detail-row td.valor {
+  @apply text-right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Linha de dia selecionável na tabela do DFC Diário */
+.dia-row {
+  @apply cursor-pointer;
+}
+.dia-row:hover td,
+.dia-row:focus-visible td {
+  @apply bg-action-subtle;
+}
+.dia-row[data-state='active'] td {
+  @apply bg-action-subtle font-medium;
+}
+.dia-row:focus-visible {
+  @apply outline-none;
+}

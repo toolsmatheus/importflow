@@ -1,0 +1,56 @@
+/**
+ * Mapeamento dos tokens ToolsPharma para o formato @theme do Tailwind v4.
+ * Uso: @import "tailwindcss"; @import "<caminho>/design-system/tailwind-theme.css";
+ * Depois use normalmente: bg-primary-500, text-neutral-800, font-display, rounded-lg, etc.
+ * Requer tokens.css e fonts.css importados antes (ou os valores literais abaixo).
+ */
+@theme {
+  --color-primary-50: #EDFBFC;
+  --color-primary-100: #D1F5F7;
+  --color-primary-200: #A6EBF0;
+  --color-primary-300: #73E0E7;
+  --color-primary-400: #40D5DF;
+  --color-primary-500: #00C7D4;
+  --color-primary-600: #0A9EA3;
+  --color-primary-700: #157572;
+  --color-primary-800: #145556;
+  --color-primary-900: #12353B;
+
+  --color-success-50: #EAFCF2;
+  --color-success-100: #D1F8E1;
+  --color-success-200: #B4F4CE;
+  --color-success-300: #8CEEB4;
+  --color-success-400: #54D29A;
+  --color-success-500: #31C189;
+  --color-success-600: #00A972;
+  --color-success-700: #107C5D;
+  --color-success-800: #234544;
+  --color-success-900: #186352;
+
+  --color-neutral-0: #FFFFFF;
+  --color-neutral-50: #F8FAFA;
+  --color-neutral-100: #EDF2F2;
+  --color-neutral-200: #D8E2E1;
+  --color-neutral-300: #BCCCCC;
+  --color-neutral-400: #9EB6B5;
+  --color-neutral-500: #7A9B9A;
+  --color-neutral-600: #4E7A78;
+  --color-neutral-700: #2A5153;
+  --color-neutral-800: #12353B;
+  --color-neutral-900: #0F2D32;
+
+  --color-negative-50: #FBEAEA;
+  --color-negative-500: #D64545;
+  --color-negative-600: #B23333;
+  --color-warning-500: #C8933A;
+
+  --font-display: "Bebas Neue", sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-data: "Roboto", system-ui, sans-serif;
+  --font-editorial: "DM Serif Display", Georgia, serif;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}

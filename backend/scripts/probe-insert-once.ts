@@ -1,9 +1,9 @@
-import { fetchProductLookupCatalogs, getTmsAuth, insertProduct, fetchServerIdentification } from '../src/services/tmsService.js'
-import { mapCsvRowToProductPayload } from '../src/services/productTmsMapper.js'
+import { buscarCatalogosLookupProduto, obterAuthTms, insertProduto, buscarIdentificacaoServidor } from '../src/services/tms.service.js'
+import { mapearLinhaCsvParaPayloadProduto } from '../src/services/produto-tms.mapper.js'
 
 const BASE = 'http://localhost:2001'
-const { idFilial } = await fetchServerIdentification(BASE)
-const catalogs = await fetchProductLookupCatalogs(BASE)
+const { idFilial } = await buscarIdentificacaoServidor(BASE)
+const catalogs = await buscarCatalogosLookupProduto(BASE)
 const grupo = [...catalogs.grupoByMigracao.keys()].find((k) => k && k !== '0') ?? ''
 console.log('grupo migracao sample', grupo)
 console.log('cfop 5102 id', catalogs.cfopByCode.get('5102'))
@@ -29,11 +29,11 @@ const row = {
   isento: 'N',
   ativo: 'A',
 }
-const mapped = mapCsvRowToProductPayload(row, idFilial, catalogs)
+const mapped = mapearLinhaCsvParaPayloadProduto(row, idFilial, catalogs)
 if (!mapped.ok) {
   console.log('map fail', mapped.message)
   process.exit(1)
 }
 console.log('cfop ref', mapped.payload['cfopvenda@xdata.ref'])
-const ins = await insertProduct(mapped.payload, BASE)
+const ins = await insertProduto(mapped.payload, BASE)
 console.log('insert ok', ins.ok, ins.message?.slice(0, 400))

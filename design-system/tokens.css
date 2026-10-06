@@ -1,0 +1,95 @@
+/**
+ * ToolsPharma Design System — tokens agnósticos de framework.
+ * Fonte: MANUAL_DE_MARCA_-_TOOLSPHARMA.pdf. Ver README.md para regras de uso.
+ * Consumível em qualquer app: var(--tp-color-primary-500), var(--tp-font-body), etc.
+ */
+:root {
+  /* Cores de marca (nomes oficiais do manual) */
+  --tp-brand-firefly: #12353B;
+  --tp-brand-genoa: #157572;
+  --tp-brand-robins-egg-blue: #00C7D4;
+  --tp-brand-cutty-sark: #4E7A78;
+  --tp-brand-plantation: #234544;
+  --tp-brand-jade: #00A972;
+  --tp-brand-magic-mint: #8CEEB4;
+  --tp-gradient-brand: linear-gradient(60deg, #12353B, #009FA9);
+
+  /* Escala primária (ação/marca) — 500/700/900 = hex oficiais exatos */
+  --tp-color-primary-50: #EDFBFC;
+  --tp-color-primary-100: #D1F5F7;
+  --tp-color-primary-200: #A6EBF0;
+  --tp-color-primary-300: #73E0E7;
+  --tp-color-primary-400: #40D5DF;
+  --tp-color-primary-500: #00C7D4;
+  --tp-color-primary-600: #0A9EA3;
+  --tp-color-primary-700: #157572;
+  --tp-color-primary-800: #145556;
+  --tp-color-primary-900: #12353B;
+
+  /* Escala de sucesso/positivo — 300/600/800 = hex oficiais exatos */
+  --tp-color-success-50: #EAFCF2;
+  --tp-color-success-100: #D1F8E1;
+  --tp-color-success-200: #B4F4CE;
+  --tp-color-success-300: #8CEEB4;
+  --tp-color-success-400: #54D29A;
+  --tp-color-success-500: #31C189;
+  --tp-color-success-600: #00A972;
+  --tp-color-success-700: #107C5D;
+  --tp-color-success-800: #234544;
+  --tp-color-success-900: #186352;
+
+  /* Escala neutra (derivada do tom Firefly/Cutty Sark) — 0/600/800 = hex oficiais exatos */
+  --tp-color-neutral-0: #FFFFFF;
+  --tp-color-neutral-50: #F8FAFA;
+  --tp-color-neutral-100: #EDF2F2;
+  --tp-color-neutral-200: #D8E2E1;
+  --tp-color-neutral-300: #BCCCCC;
+  --tp-color-neutral-400: #9EB6B5;
+  --tp-color-neutral-500: #7A9B9A;
+  --tp-color-neutral-600: #4E7A78;
+  --tp-color-neutral-700: #2A5153;
+  --tp-color-neutral-800: #12353B;
+  --tp-color-neutral-900: #0F2D32;
+
+  /* Sistema técnico (não definido no manual) */
+  --tp-color-negative-50: #FBEAEA;
+  --tp-color-negative-500: #D64545;
+  --tp-color-negative-600: #B23333;
+  --tp-color-warning-500: #C8933A;
+
+  /* Tipografia */
+  --tp-font-display: "Bebas Neue", sans-serif;
+  --tp-font-body: "DM Sans", system-ui, sans-serif;
+  --tp-font-data: "Roboto", system-ui, sans-serif;
+  --tp-font-editorial: "DM Serif Display", Georgia, serif;
+
+  --tp-font-size-xs: 12px;
+  --tp-font-size-sm: 14px;
+  --tp-font-size-base: 16px;
+  --tp-font-size-md: 18px;
+  --tp-font-size-lg: 22px;
+  --tp-font-size-xl: 28px;
+  --tp-font-size-2xl: 36px;
+  --tp-font-size-3xl: 48px;
+  --tp-font-size-4xl: 64px;
+
+  /* Espaçamento */
+  --tp-space-1: 4px;
+  --tp-space-2: 8px;
+  --tp-space-3: 12px;
+  --tp-space-4: 16px;
+  --tp-space-5: 20px;
+  --tp-space-6: 24px;
+  --tp-space-8: 32px;
+  --tp-space-10: 40px;
+  --tp-space-12: 48px;
+  --tp-space-16: 64px;
+  --tp-space-20: 80px;
+
+  /* Raio */
+  --tp-radius-sm: 6px;
+  --tp-radius-md: 8px;
+  --tp-radius-lg: 12px;
+  --tp-radius-xl: 16px;
+  --tp-radius-full: 9999px;
+}

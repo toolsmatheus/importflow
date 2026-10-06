@@ -1,87 +1,41 @@
 import { z } from 'zod'
+import {
+  ALL_TEMPLATE_HEADERS,
+  AUXILIARY_ENTITIES,
+  CONTROLADOS_HEADERS,
+  FARMACIA_POPULAR_HEADERS,
+  LISTA_PIS_COFINS,
+  OPTIONAL_HEADERS,
+  REQUIRED_HEADERS,
+  TEMPLATE_DELIMITER,
+  type AuxiliaryEntity,
+  type OptionalHeader,
+  type ProductCsvHeader,
+  type ProductCsvRow,
+  type RequiredHeader,
+} from '../models/produto.model.js'
 
-/**
- * Valores possíveis de listapiscofins no ToolsPharma.
- */
-export const LISTA_PIS_COFINS = ['NEUTRA', 'POSITIVA', 'NEGATIVA'] as const
+export {
+  ALL_TEMPLATE_HEADERS,
+  AUXILIARY_ENTITIES,
+  CONTROLADOS_HEADERS,
+  FARMACIA_POPULAR_HEADERS,
+  LISTA_PIS_COFINS,
+  OPTIONAL_HEADERS,
+  REQUIRED_HEADERS,
+  TEMPLATE_DELIMITER,
+}
+export type {
+  AuxiliaryEntity,
+  OptionalHeader,
+  ProductCsvHeader,
+  ProductCsvRow,
+  RequiredHeader,
+}
 
 export const listaPisCofinsSchema = z.enum(LISTA_PIS_COFINS)
-
 export const snSchema = z.enum(['S', 'N'])
 export const ativoSchema = z.enum(['A', 'I'])
-
-/** Cabeçalhos fixos do CSV modelo — nomes exatos que o usuário deve usar. */
-export const REQUIRED_HEADERS = [
-  'codigo',
-  'nome',
-  'codigogrupo',
-  'custo',
-  'venda',
-  'listapiscofins',
-  'aliquota',
-  'ncm',
-  'cstpiscofins',
-  'atualizaestoque',
-  'atualizarpreco',
-  'pagarpremicao',
-  'permitedesconto',
-] as const
-
-export const OPTIONAL_HEADERS = [
-  'markup',
-  'fator',
-  'cfop',
-  'valorpmc',
-  'tipopreco',
-  'codigobarras',
-  'codigoadicional',
-  'subgrupo',
-  'categoria',
-  'laboratorio',
-  'grupodepreco',
-  'similar',
-  'estoque',
-  'estoqueminimo',
-  'descontofixo',
-  'comissao',
-  'demanda',
-  'ativo',
-  'st',
-  'isento',
-  'semincidencia',
-  'localizacao',
-  'usocontinuo',
-  'observacao',
-  'descontomax',
-  'cest',
-  'csosn',
-  'csticms',
-] as const
-
-export const FARMACIA_POPULAR_HEADERS = [
-  'medfciapop',
-  'qtdfciapop',
-  'valorfciapop',
-] as const
-
-export const CONTROLADOS_HEADERS = [
-  'listacontrole',
-  'dcb',
-  'registroms',
-  'unidemb',
-  'unidadesngpc',
-] as const
-
-export const ALL_TEMPLATE_HEADERS = [
-  ...REQUIRED_HEADERS,
-  ...OPTIONAL_HEADERS,
-  ...FARMACIA_POPULAR_HEADERS,
-  ...CONTROLADOS_HEADERS,
-] as const
-
-export type RequiredHeader = (typeof REQUIRED_HEADERS)[number]
-export type OptionalHeader = (typeof OPTIONAL_HEADERS)[number]
-export type ProductCsvHeader = (typeof ALL_TEMPLATE_HEADERS)[number]
 
 /**
  * Linha do CSV após parse (tudo string). A validação de negócio
@@ -139,29 +93,12 @@ export const productCsvRowSchema = z.object({
   unidadesngpc: z.string().optional(),
 })
 
-export type ProductCsvRow = z.infer<typeof productCsvRowSchema>
-
-/** Arquivo auxiliar por entidade: grupo.csv, categoria.csv, etc. */
-export const AUXILIARY_ENTITIES = [
-  'grupo',
-  'subgrupo',
-  'categoria',
-  'laboratorio',
-  'grupodepreco',
-  'similar',
-  'dcb',
-] as const
-
-export type AuxiliaryEntity = (typeof AUXILIARY_ENTITIES)[number]
-
 export const auxiliaryRowSchema = z.object({
   id: z.string().min(1),
   nome: z.string().min(1),
 })
 
 export type AuxiliaryRow = z.infer<typeof auxiliaryRowSchema>
-
-export const TEMPLATE_DELIMITER = ';'
 
 /** Linha de exemplo do modelo CSV (todas as colunas do template). */
 function buildExampleProductRow(values: {

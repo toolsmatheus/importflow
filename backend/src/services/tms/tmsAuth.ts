@@ -58,7 +58,7 @@ export function buildTmsBasicAuthorization(versao: string): string {
   return `Basic ${token}`
 }
 
-export async function fetchServerIdentification(
+export async function buscarIdentificacaoServidor(
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<ServerIdentification> {
   const url = `${baseUrl.replace(/\/$/, '')}/tms/xdata/ServerToolsService/IdentificacaoServidor`
@@ -107,14 +107,14 @@ export async function fetchServerIdentification(
 const authCache = new Map<string, { auth: TmsAuth; fetchedAt: number }>()
 const AUTH_TTL_MS = 30 * 60 * 1000
 
-export async function getTmsAuth(baseUrl = DEFAULT_TMS_BASE): Promise<TmsAuth> {
+export async function obterAuthTms(baseUrl = DEFAULT_TMS_BASE): Promise<TmsAuth> {
   const key = baseUrl.replace(/\/$/, '')
   const cached = authCache.get(key)
   if (cached && Date.now() - cached.fetchedAt < AUTH_TTL_MS) {
     return cached.auth
   }
 
-  const identification = await fetchServerIdentification(key)
+  const identification = await buscarIdentificacaoServidor(key)
   const auth: TmsAuth = {
     idFilial: identification.idFilial,
     versao: identification.versao,

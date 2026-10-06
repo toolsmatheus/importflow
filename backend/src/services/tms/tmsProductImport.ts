@@ -9,7 +9,7 @@ import type {
 /**
  * Insere um produto: tenta ProdutoService/insert; se falhar, tenta /save.
  */
-export async function insertProduct(
+export async function insertProduto(
   payload: Record<string, unknown>,
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<BatchInsertResult> {

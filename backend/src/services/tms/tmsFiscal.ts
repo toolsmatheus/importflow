@@ -1,4 +1,4 @@
-import type { ProductLookupCatalogs } from '../productTmsMapper.js'
+import type { CatalogosBuscaProduto } from '../../models/produto-tms.model.js'
 import { DEFAULT_TMS_BASE } from './tmsConfig.js'
 import {
   extractCreatedEntityId,
@@ -11,6 +11,29 @@ function formatAliquotaDescricao(aliquota: number): string {
     ? String(aliquota)
     : String(aliquota).replace('.', ',')
   return `ALIQUOTA ${label}%`
+}
+
+type ZeroRateKind = 'st' | 'isento' | 'semincidencia'
+
+const ZERO_RATE_SPECS: Record<
+  ZeroRateKind,
+  { descricao: string; aliquotaisento: number; catalogKey: keyof CatalogosBuscaProduto }
+> = {
+  st: {
+    descricao: 'SUBSTITUIÇÃO TRIBUTARIA',
+    aliquotaisento: 0,
+    catalogKey: 'aliquotaStId',
+  },
+  isento: {
+    descricao: 'ISENTO',
+    aliquotaisento: 1,
+    catalogKey: 'aliquotaIsentoId',
+  },
+  semincidencia: {
+    descricao: 'SEM INCIDENCIA',
+    aliquotaisento: 2,
+    catalogKey: 'aliquotaSemIncidenciaId',
+  },
 }
 
 /**
@@ -78,11 +101,74 @@ export async function insertAliquotaIcms(
   return { ok: true, id }
 }
 
+async function insertZeroRateAliquotaIcms(
+  kind: ZeroRateKind,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<{ ok: boolean; id?: number; message?: string }> {
+  const spec = ZERO_RATE_SPECS[kind]
+  const root = baseUrl.replace(/\/$/, '')
+  const body = JSON.stringify({
+    ativo: true,
+    descricao: spec.descricao,
+    tipoaliquota: 'alSAIDA',
+    tipoImposto: 'tipICMS',
+    aliquota: 0,
+    aliquotaisento: spec.aliquotaisento,
+    aliquotaNaoConsumidorFinal: 0,
+  })
+
+  const result = await tmsJsonRequest(
+    `${root}/tms/xdata/AliquotaICMS`,
+    { method: 'POST', body },
+    baseUrl
+  )
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.message || `Falha ao inserir AliquotaICMS ${spec.descricao}`,
+    }
+  }
+
+  let id = extractCreatedEntityId(result.message)
+  if (id === null) {
+    const filterUrl =
+      `${root}/tms/xdata/AliquotaICMS` +
+      `?$filter=aliquota eq 0 and tipoImposto eq 'tipICMS'&$top=20`
+    const lookup = await tmsJsonRequest(filterUrl, { method: 'GET' }, baseUrl)
+    if (lookup.ok && lookup.message) {
+      try {
+        const parsed = JSON.parse(lookup.message) as unknown
+        for (const row of extractODataRows(parsed)) {
+          if (Number(row.aliquota) !== 0) continue
+          if (String(row.tipoImposto ?? '') !== 'tipICMS') continue
+          if (Number(row.aliquotaisento) !== spec.aliquotaisento) continue
+          const found = Number(row.id)
+          if (Number.isFinite(found) && found > 0) {
+            id = found
+            break
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (id === null) {
+    return {
+      ok: false,
+      message: `AliquotaICMS ${spec.descricao} inserida, mas o id não foi retornado`,
+    }
+  }
+
+  return { ok: true, id }
+}
+
 /**
  * Garante que o percentual existe no catálogo (insere no TMS se faltar).
  */
-export async function ensureAliquotaPercent(
-  catalogs: ProductLookupCatalogs,
+export async function garantirAliquotaPercentual(
+  catalogs: CatalogosBuscaProduto,
   aliquota: number,
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<{ ok: boolean; id?: number; message?: string; inserted?: boolean }> {
@@ -118,4 +204,38 @@ export async function ensureAliquotaPercent(
 
   catalogs.aliquotaByPercent.set(aliquota, inserted.id)
   return { ok: true, id: inserted.id, inserted: true }
+}
+
+/**
+ * Garante AliquotaICMS de alíquota 0 (ST / Isento / Sem incidência).
+ * Sem isso o mapper usava ids fixos (ex.: 500) que podem não existir no banco.
+ */
+export async function garantirAliquotasTaxaZero(
+  catalogs: CatalogosBuscaProduto,
+  baseUrl = DEFAULT_TMS_BASE
+): Promise<{ ok: boolean; message?: string; inserted: ZeroRateKind[] }> {
+  const inserted: ZeroRateKind[] = []
+  const kinds: ZeroRateKind[] = ['st', 'isento', 'semincidencia']
+
+  for (const kind of kinds) {
+    const key = ZERO_RATE_SPECS[kind].catalogKey
+    const current = Number(catalogs[key])
+    if (Number.isFinite(current) && current > 0) continue
+
+    const created = await insertZeroRateAliquotaIcms(kind, baseUrl)
+    if (!created.ok || created.id === undefined) {
+      return {
+        ok: false,
+        message:
+          created.message ||
+          `Falha ao garantir AliquotaICMS ${ZERO_RATE_SPECS[kind].descricao}`,
+        inserted,
+      }
+    }
+
+    ;(catalogs[key] as number) = created.id
+    inserted.push(kind)
+  }
+
+  return { ok: true, inserted }
 }

@@ -26,8 +26,13 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
+      "@models": ["../backend/src/models"],
+      "@models/*": ["../backend/src/models/*"],
+      "@dto": ["../backend/src/dto"],
+      "@dto/*": ["../backend/src/dto/*"],
       "@importflow/icms": ["../backend/src/utils/icmsByUf.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.stories.tsx", "src/**/*.stories.ts"]
 }

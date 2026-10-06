@@ -1,5 +1,5 @@
-import { padDcbCode } from '../dcbIndexService.js'
-import type { ProductLookupCatalogs } from '../productTmsMapper.js'
+import { padDcbCode } from '../dcb-indice.service.js'
+import type { CatalogosBuscaProduto } from '../../models/produto-tms.model.js'
 import { DEFAULT_TMS_BASE } from './tmsConfig.js'
 import {
   buildMigracaoMap,
@@ -13,11 +13,11 @@ import type { ProductExistenceCatalogs, TmsDcbRecord } from './tmsTypes.js'
  * Carrega catálogos necessários para resolver refs do produto.
  * `similarAux` / `dcbAux` = linhas dos CSV auxiliares (codigo → descrição).
  */
-export async function fetchProductLookupCatalogs(
+export async function buscarCatalogosLookupProduto(
   baseUrl = DEFAULT_TMS_BASE,
   similarAux: Array<{ codigo: string; descricao: string }> = [],
   dcbAux: Array<{ codigo: string; descricao: string }> = []
-): Promise<ProductLookupCatalogs> {
+): Promise<CatalogosBuscaProduto> {
   const [
     grupos,
     subgrupos,
@@ -116,13 +116,14 @@ export async function fetchProductLookupCatalogs(
   }
 
   const aliquotaByPercent = new Map<number, number>()
-  let aliquotaStId = 100
-  let aliquotaIsentoId = 400
-  let aliquotaSemIncidenciaId = 500
+  /** 0 = ainda não resolvido no TMS (fallback hardcoded antigo 100/400/500 quebrava refs). */
+  let aliquotaStId = 0
+  let aliquotaIsentoId = 0
+  let aliquotaSemIncidenciaId = 0
 
   for (const row of aliquotas) {
     const id = Number(row.id)
-    if (!Number.isFinite(id)) continue
+    if (!Number.isFinite(id) || id <= 0) continue
     const tipoImposto = String(row.tipoImposto ?? '')
     const aliquota = Number(row.aliquota)
     const descricao = String(row.descricao ?? '').toUpperCase()
@@ -300,7 +301,7 @@ function addExistenceKey(map: Map<string, number>, key: unknown, id: number) {
   if (Number.isInteger(n) && !map.has(String(n))) map.set(String(n), id)
 }
 
-export async function fetchProductExistenceCatalogs(
+export async function buscarCatalogosExistenciaProduto(
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<ProductExistenceCatalogs> {
   const byBarcode = new Map<string, number>()

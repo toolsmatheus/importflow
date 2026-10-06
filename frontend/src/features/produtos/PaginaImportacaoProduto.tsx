@@ -1,0 +1,431 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Loader2, RotateCcw } from 'lucide-react'
+import { Stepper } from '@/features/produtos/Stepper'
+import { ZonaSoltarArquivo } from '@/features/produtos/ZonaSoltarArquivo'
+import { InfoArquivo } from '@/features/produtos/InfoArquivo'
+import { PainelColetaPasta } from '@/features/produtos/PainelColetaPasta'
+import { EtapaAuxiliar } from '@/features/produtos/EtapaAuxiliar'
+import { EtapaErros } from '@/features/produtos/EtapaErros'
+import { EtapaEnvio } from '@/features/produtos/EtapaEnvio'
+import { useAssistenteImportacao } from '@/features/produtos/useAssistenteImportacao'
+import { csvServico, type UploadAnalyzeProgress } from '@/api/csv'
+import { produtoServico } from '@/api/produto'
+import {
+  applyExpectedAliquota,
+  formatAliquotaCsv,
+  getUfIcms,
+  UF_ICMS_TABLE,
+  type AliquotaMismatch,
+} from '@/lib/icmsByUf'
+import { formatNumber } from '@/lib/utils'
+import type { FileInputMode, FolderCollectResult, ProductValidationResult } from '@/types'
+import { Button, Select } from '@/components'
+function isAliquotaUfWarning(issue: { field: string; message: string }) {
+  return issue.field === 'aliquota' && issue.message.includes('padrão da UF')
+}
+
+function applyAliquotaFixToResult(
+  result: ProductValidationResult,
+  uf: string,
+  mismatches: AliquotaMismatch[]
+): ProductValidationResult | null {
+  if (mismatches.length === 0) return null
+  const entry = getUfIcms(uf)
+  if (!entry) return null
+
+  const nextRows = applyExpectedAliquota(result.rows, mismatches, entry.aliquota)
+  const removed = result.issues.filter(isAliquotaUfWarning)
+  const kept = result.issues.filter((i) => !isAliquotaUfWarning(i))
+
+  return {
+    ...result,
+    rows: nextRows,
+    issues: kept,
+    warningCount: Math.max(
+      0,
+      result.warningCount - Math.max(removed.length, mismatches.length)
+    ),
+    checkSummary: result.checkSummary?.map((check) =>
+      check.id === 'aliquota_uf' ? { ...check, count: 0 } : check
+    ),
+  }
+}
+
+export function PaginaImportacaoProduto() {
+  const navigate = useNavigate()
+  const wizard = useAssistenteImportacao()
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [inputMode, setInputMode] = useState<FileInputMode>('manual')
+  const [showChangeSource, setShowChangeSource] = useState(false)
+  const [productFromFolder, setProductFromFolder] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<UploadAnalyzeProgress | null>(null)
+
+  const selectedUfEntry = getUfIcms(wizard.clientUf)
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (wizard.csvAnalysis?.fileId) {
+        await csvServico.discard(wizard.csvAnalysis.fileId).catch(() => undefined)
+      }
+      setUploadProgress({
+        phase: 'upload',
+        percent: 0,
+        loaded: 0,
+        total: file.size,
+        etaSeconds: null,
+        label: 'Enviando arquivo…',
+      })
+      return csvServico.uploadAndAnalyze(file, { delimiter: ';', hasHeader: true }, setUploadProgress)
+    },
+    onSuccess: (analysis) => {
+      setUploadProgress(null)
+      wizard.setCsvAnalysis(analysis)
+      wizard.setValidationResult(null)
+      wizard.setPreviewRows([])
+      wizard.setEnvioJob(null)
+      setProductFromFolder(false)
+      setShowChangeSource(false)
+      toast.success(
+        `Arquivo analisado: ${formatNumber(analysis.recordCount)} registro(s), ${analysis.columnCount} coluna(s)`
+      )
+    },
+    onError: (error: Error) => {
+      setUploadProgress(null)
+      toast.error(error.message || 'Erro ao enviar o arquivo')
+    },
+  })
+
+  const validateMutation = useMutation({
+    mutationFn: async () => {
+      if (!wizard.csvAnalysis) throw new Error('Envie o arquivo antes de validar')
+      if (!wizard.clientUf) throw new Error('Selecione o estado (UF) do cliente antes de validar')
+      return produtoServico.validate(wizard.csvAnalysis.fileId, {
+        delimiter: wizard.csvAnalysis.delimiter,
+        encoding: wizard.csvAnalysis.encoding,
+        clientUf: wizard.clientUf,
+        auxiliary: wizard.auxiliaryFileIds,
+      })
+    },
+    onSuccess: (result) => {
+      wizard.setValidationResult(result)
+      wizard.setPreviewRows(result.rows)
+      wizard.setPreviewColumns(
+        result.columns.length ? result.columns : wizard.csvAnalysis?.columns ?? []
+      )
+      wizard.setCurrentStep('errors')
+
+      if (result.errorCount > 0) {
+        toast.warning(
+          `${formatNumber(result.errorCount)} erro(s) e ${formatNumber(result.warningCount)} alerta(s)`
+        )
+      } else if (result.warningCount > 0) {
+        toast.success(`Validação ok com ${formatNumber(result.warningCount)} alerta(s)`)
+      } else {
+        toast.success('Validação concluída sem problemas')
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao validar o arquivo')
+    },
+  })
+
+  const revalidateRowsMutation = useMutation({
+    mutationFn: async (rows: Record<string, string>[]) => {
+      return produtoServico.validateRows(
+        rows,
+        wizard.auxiliaryFileIds,
+        wizard.clientUf || undefined
+      )
+    },
+    onSuccess: (result) => {
+      wizard.setValidationResult(result)
+      wizard.setPreviewRows(result.rows)
+      if (result.columns.length) {
+        wizard.setPreviewColumns(result.columns)
+      }
+
+      if (result.errorCount > 0) {
+        toast.warning(
+          `Revalidação: ${formatNumber(result.errorCount)} erro(s) e ${formatNumber(result.warningCount)} alerta(s) restantes`
+        )
+      } else if (result.warningCount > 0) {
+        toast.success(
+          `Revalidação ok — sem erros bloqueantes (${formatNumber(result.warningCount)} alerta(s))`
+        )
+      } else {
+        toast.success('Revalidação ok — sem inconsistências')
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao revalidar após controlados')
+    },
+  })
+
+  const isRevalidating = validateMutation.isPending || revalidateRowsMutation.isPending
+
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file)
+    uploadMutation.mutate(file)
+  }
+
+  const handleFolderCollected = (result: FolderCollectResult) => {
+    if (result.products) {
+      wizard.setCsvAnalysis(result.products)
+      setSelectedFile(null)
+      setProductFromFolder(true)
+      setShowChangeSource(false)
+    } else if (showChangeSource) {
+      wizard.setCsvAnalysis(null)
+      setProductFromFolder(false)
+    }
+
+    wizard.replaceAuxiliaries({
+      ...wizard.auxiliaries,
+      ...result.auxiliaries,
+    })
+    wizard.setValidationResult(null)
+    wizard.setPreviewRows([])
+    wizard.setEnvioJob(null)
+  }
+
+  const applyFolderFromAuxiliary = (result: FolderCollectResult) => {
+    wizard.replaceAuxiliaries({
+      ...wizard.auxiliaries,
+      ...result.auxiliaries,
+    })
+    if (result.products) {
+      wizard.setCsvAnalysis(result.products)
+      setProductFromFolder(true)
+      setShowChangeSource(false)
+      wizard.setValidationResult(null)
+      wizard.setPreviewRows([])
+      wizard.setEnvioJob(null)
+    }
+  }
+
+  const handleApplyAliquotaUf = (mismatches: AliquotaMismatch[]) => {
+    if (!wizard.validationResult || !wizard.clientUf) return
+    const next = applyAliquotaFixToResult(wizard.validationResult, wizard.clientUf, mismatches)
+    if (!next) {
+      toast.message('Nenhuma alíquota divergente para corrigir')
+      return
+    }
+    const expected = getUfIcms(wizard.clientUf)?.aliquota ?? 0
+    wizard.setValidationResult(next)
+    wizard.setPreviewRows(next.rows)
+    toast.success(
+      `${formatNumber(mismatches.length)} alíquota(s) ajustada(s) para ${formatAliquotaCsv(
+        expected
+      )}% (${wizard.clientUf})`
+    )
+  }
+
+  return (
+    <div>
+      <Stepper
+        currentStep={wizard.currentStep}
+        action={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-fg-muted"
+            onClick={() => {
+              wizard.resetWizard()
+              setSelectedFile(null)
+              setShowChangeSource(false)
+              setProductFromFolder(false)
+              toast.message('Importação reiniciada')
+            }}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reiniciar
+          </Button>
+        }
+      />
+
+      {wizard.currentStep === 'auxiliary' && (
+        <EtapaAuxiliar
+          auxiliaries={wizard.auxiliaries}
+          onUploaded={wizard.setAuxiliary}
+          onFolderCollected={applyFolderFromAuxiliary}
+          onContinue={() => wizard.setCurrentStep('file')}
+        />
+      )}
+
+      {wizard.currentStep === 'file' && (
+        <div className="space-y-4">
+          {wizard.csvAnalysis && !showChangeSource ? (
+            <InfoArquivo
+              analysis={wizard.csvAnalysis}
+              sourceHint={productFromFolder ? 'coletado da pasta' : undefined}
+              onChange={() => {
+                setShowChangeSource(true)
+                setInputMode(productFromFolder ? 'folder' : 'manual')
+              }}
+            />
+          ) : (
+            <>
+              <div className="inline-flex rounded-md border border-line p-0.5">
+                <Button
+                  size="sm"
+                  variant={inputMode === 'manual' ? 'secondary' : 'ghost'}
+                  className="h-8"
+                  onClick={() => setInputMode('manual')}
+                >
+                  Manual
+                </Button>
+                <Button
+                  size="sm"
+                  variant={inputMode === 'folder' ? 'secondary' : 'ghost'}
+                  className="h-8"
+                  onClick={() => setInputMode('folder')}
+                >
+                  Pasta
+                </Button>
+              </div>
+
+              {inputMode === 'manual' ? (
+                <ZonaSoltarArquivo
+                  onFileSelect={handleFileSelect}
+                  isLoading={uploadMutation.isPending}
+                  progress={uploadProgress}
+                  selectedFile={selectedFile}
+                />
+              ) : (
+                <PainelColetaPasta onCollected={handleFolderCollected} />
+              )}
+
+              {showChangeSource && wizard.csvAnalysis ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-fg-muted"
+                  onClick={() => setShowChangeSource(false)}
+                >
+                  Manter {wizard.csvAnalysis.fileName}
+                </Button>
+              ) : null}
+            </>
+          )}
+
+          <div className="flex flex-col gap-3 rounded-lg border border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium">UF do cliente</p>
+              <p className="text-xs text-fg-muted">
+                Alíquota ICMS esperada
+                {selectedUfEntry
+                  ? `: ${formatAliquotaCsv(selectedUfEntry.aliquota)}%`
+                  : ' — selecione antes de validar'}
+              </p>
+            </div>
+            <Select
+              id="client-uf"
+              className="w-full sm:w-52"
+              value={wizard.clientUf || ''}
+              onChange={(e) => wizard.setClientUf(e.target.value)}
+            >
+              <option value="" disabled>
+                Selecione a UF
+              </option>
+              {UF_ICMS_TABLE.map((entry) => (
+                <option key={entry.uf} value={entry.uf}>
+                  {entry.uf} — {entry.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="flex justify-between pt-1">
+            <Button
+              variant="secondary"
+              onClick={() => wizard.setCurrentStep('auxiliary')}
+              disabled={validateMutation.isPending}
+            >
+              Voltar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!wizard.clientUf) {
+                  toast.error('Selecione o estado (UF) do cliente antes de validar')
+                  return
+                }
+                validateMutation.mutate()
+              }}
+              disabled={
+                !wizard.csvAnalysis ||
+                !wizard.auxiliaries.grupo ||
+                !wizard.clientUf ||
+                validateMutation.isPending
+              }
+            >
+              {validateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Validar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {wizard.currentStep === 'errors' && (
+        <EtapaErros
+          result={wizard.validationResult}
+          clientUf={wizard.clientUf}
+          auxiliary={wizard.auxiliaryFileIds}
+          onApplyControlados={async (nextRows) => {
+            wizard.setPreviewRows(nextRows)
+            await revalidateRowsMutation.mutateAsync(nextRows)
+          }}
+          onBack={() => wizard.setCurrentStep('file')}
+          onFixFile={() => wizard.setCurrentStep('file')}
+          onFixAuxiliary={() => wizard.setCurrentStep('auxiliary')}
+          onRevalidate={() => validateMutation.mutate()}
+          isRevalidating={isRevalidating}
+          onApplyAliquotaUf={handleApplyAliquotaUf}
+          onContinue={() => {
+            if (wizard.validationResult?.rows?.length) {
+              wizard.setPreviewRows(wizard.validationResult.rows)
+              wizard.setPreviewColumns(wizard.validationResult.columns)
+            }
+            wizard.setEnvioJob(null)
+            wizard.setCurrentStep('send')
+          }}
+          onContinueSkipErrors={(validRows, skippedCount) => {
+            wizard.setPreviewRows(validRows)
+            if (wizard.validationResult?.columns?.length) {
+              wizard.setPreviewColumns(wizard.validationResult.columns)
+            }
+            wizard.setEnvioJob(null)
+            wizard.setCurrentStep('send')
+            toast.message(
+              `Pronto para enviar ${formatNumber(validRows.length)} produto(s); ${formatNumber(skippedCount)} com erro foram excluídos`
+            )
+          }}
+        />
+      )}
+
+      {wizard.currentStep === 'send' && (
+        <EtapaEnvio
+          rows={wizard.previewRows}
+          tmsBaseUrl={wizard.tmsBaseUrl}
+          onTmsBaseUrlChange={wizard.setTmsBaseUrl}
+          job={wizard.envioJob}
+          onJobChange={wizard.setEnvioJob}
+          auxiliary={wizard.auxiliaryFileIds}
+          validationResult={wizard.validationResult}
+          onBack={() => wizard.setCurrentStep('errors')}
+          onFinish={() => {
+            wizard.resetWizard()
+            setSelectedFile(null)
+            setShowChangeSource(false)
+            setProductFromFolder(false)
+            navigate('/import/produtos')
+            toast.success('Produtos concluídos. Opcionais ficam na aba Opcionais.')
+          }}
+        />
+      )}
+    </div>
+  )
+}

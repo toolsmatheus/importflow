@@ -3,12 +3,12 @@
  * Uso: npx tsx scripts/benchmark-product-import.ts [--sizes=10,25,50,100]
  */
 import {
-  fetchProductLookupCatalogs,
-  fetchServerIdentification,
-  getTmsAuth,
-  insertProduct,
-} from '../src/services/tmsService.js'
-import { mapCsvRowToProductPayload } from '../src/services/productTmsMapper.js'
+  buscarCatalogosLookupProduto,
+  buscarIdentificacaoServidor,
+  obterAuthTms,
+  insertProduto,
+} from '../src/services/tms.service.js'
+import { mapearLinhaCsvParaPayloadProduto } from '../src/services/produto-tms.mapper.js'
 
 const BASE = process.env.TMS_BASE_URL ?? 'http://localhost:2001'
 const RUN_ID = Number(process.env.BENCH_RUN_ID ?? Date.now() % 1_000_000)
@@ -147,7 +147,7 @@ function parseListaResponse(text: string, count: number): { businessOk: number; 
 }
 
 async function importarListaProdutos(payloads: Record<string, unknown>[]) {
-  const auth = await getTmsAuth(BASE)
+  const auth = await obterAuthTms(BASE)
   const url = `${BASE.replace(/\/$/, '')}/tms/xdata/ImportacaoProdutoService/ImportarListaProdutos`
   const response = await fetch(url, {
     method: 'POST',
@@ -169,7 +169,7 @@ async function benchSequential(payloads: Record<string, unknown>[]): Promise<Ben
   let sampleResponse: string | undefined
 
   for (const payload of payloads) {
-    const result = await insertProduct(payload, BASE)
+    const result = await insertProduto(payload, BASE)
     if (result.ok) httpOk++
     else {
       httpFail++
@@ -238,7 +238,7 @@ async function benchConcurrentLikeImportFlow(
       await Promise.all(
         batch.map(async (payload) => {
           requests++
-          const result = await insertProduct(payload, BASE)
+          const result = await insertProduto(payload, BASE)
           if (result.ok) httpOk++
           else {
             httpFail++
@@ -271,8 +271,8 @@ async function main() {
   console.log(`RUN_ID: ${RUN_ID}`)
   console.log(`Tamanhos: ${SIZES.join(', ')}`)
 
-  const { idFilial } = await fetchServerIdentification(BASE)
-  const catalogs = await fetchProductLookupCatalogs(BASE)
+  const { idFilial } = await buscarIdentificacaoServidor(BASE)
+  const catalogs = await buscarCatalogosLookupProduto(BASE)
   const refs = {
     grupoId: 11,
     aliquotaId: catalogs.aliquotaByPercent.get(17) ?? 200,

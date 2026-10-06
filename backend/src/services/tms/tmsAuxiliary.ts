@@ -2,7 +2,7 @@ import {
   lookupAnvisaDcb,
   lookupAnvisaDcbByDescricao,
   padDcbCode,
-} from '../dcbIndexService.js'
+} from '../dcb-indice.service.js'
 import { DEFAULT_TMS_BASE } from './tmsConfig.js'
 import { fetchTmsEntityRows, tmsJsonRequest } from './tmsClient.js'
 import type {

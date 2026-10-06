@@ -3,7 +3,7 @@ import {
   deleteCsvHandler,
   reanalyzeCsvHandler,
   uploadCsvHandler,
-} from '../controllers/csv.controller.js'
+} from '../controller/csv.controller.js'
 
 export async function csvRoutes(app: FastifyInstance) {
   app.post('/csv/upload', uploadCsvHandler)

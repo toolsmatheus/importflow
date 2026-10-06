@@ -19,8 +19,8 @@ export type {
 
 export {
   buildTmsBasicAuthorization,
-  fetchServerIdentification,
-  getTmsAuth,
+  buscarIdentificacaoServidor,
+  obterAuthTms,
   invalidateTmsAuth,
 } from './tmsAuth.js'
 
@@ -34,12 +34,12 @@ export {
 } from './tmsAuxiliary.js'
 
 export {
-  insertProduct,
+  insertProduto,
   parseImportarListaResponse,
   importarListaProdutos,
 } from './tmsProductImport.js'
 
-export { insertAliquotaIcms, ensureAliquotaPercent } from './tmsFiscal.js'
+export { insertAliquotaIcms, garantirAliquotaPercentual, garantirAliquotasTaxaZero } from './tmsFiscal.js'
 
 export {
   insertCodigoBarraProduto,
@@ -54,12 +54,12 @@ export {
 } from './tmsProductExtras.js'
 
 export {
-  fetchProductLookupCatalogs,
+  buscarCatalogosLookupProduto,
   fetchTmsDcbCatalog,
   usableMigracaoCodigo,
   resolveProdutoIdFromCsv,
   fetchProdutoIdByMigracaoOrBarcode,
-  fetchProductExistenceCatalogs,
+  buscarCatalogosExistenciaProduto,
 } from './tmsProductCatalog.js'
 
 export { insertValidadeSistemaAntigo } from './tmsValidity.js'

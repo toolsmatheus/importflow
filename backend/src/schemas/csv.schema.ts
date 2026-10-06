@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export type { CsvAnalysisResultDto as CsvAnalysisResult } from '../dto/csv.dto.js'
+
 export const csvAnalyzeOptionsSchema = z.object({
   delimiter: z.string().min(1).max(1).optional(),
   encoding: z.string().min(1).optional(),
@@ -14,15 +16,3 @@ export const csvReanalyzeSchema = z.object({
 })
 
 export type CsvAnalyzeOptions = z.infer<typeof csvAnalyzeOptionsSchema>
-
-export interface CsvAnalysisResult {
-  fileId: string
-  fileName: string
-  fileSize: number
-  recordCount: number
-  columnCount: number
-  encoding: string
-  delimiter: string
-  hasHeader: boolean
-  columns: string[]
-}

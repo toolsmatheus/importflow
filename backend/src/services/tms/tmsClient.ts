@@ -1,4 +1,4 @@
-import { getTmsAuth, invalidateTmsAuth } from './tmsAuth.js'
+import { obterAuthTms, invalidateTmsAuth } from './tmsAuth.js'
 import type { BatchInsertResult } from './tmsTypes.js'
 
 export async function tmsJsonRequest(
@@ -6,7 +6,7 @@ export async function tmsJsonRequest(
   init: { method: string; body?: string },
   baseUrl: string
 ): Promise<BatchInsertResult> {
-  const auth = await getTmsAuth(baseUrl)
+  const auth = await obterAuthTms(baseUrl)
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: auth.authorization,
@@ -26,7 +26,7 @@ export async function tmsJsonRequest(
 
   if (response.status === 401) {
     invalidateTmsAuth(baseUrl)
-    const retryAuth = await getTmsAuth(baseUrl)
+    const retryAuth = await obterAuthTms(baseUrl)
     try {
       response = await fetch(url, {
         method: init.method,

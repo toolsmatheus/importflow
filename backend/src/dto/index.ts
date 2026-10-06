@@ -1,0 +1,7 @@
+export * from './produto.dto.js'
+export * from './envio.dto.js'
+export * from './opcional.dto.js'
+export * from './controlado.dto.js'
+export * from './csv.dto.js'
+export * from './coleta-pasta.dto.js'
+export * from './tms.dto.js'

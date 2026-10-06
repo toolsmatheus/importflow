@@ -6,7 +6,7 @@ import cors from '@fastify/cors'
 import multipart from '@fastify/multipart'
 import fastifyStatic from '@fastify/static'
 import { registerRoutes } from './routes/index.js'
-import { discardOrphanedFiles, startFileCleanupTimer } from './services/csvFileService.js'
+import { discardOrphanedFiles, startFileCleanupTimer } from './services/csv-arquivo.service.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 

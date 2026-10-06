@@ -1,12 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AppLayout } from '@/layouts/AppLayout'
-import { ImportWizardProvider } from '@/hooks/useImportWizard'
-import { ThemeProvider } from '@/hooks/useTheme'
-import { ImportPage } from '@/pages/ImportPage'
-import { ProductImportPage } from '@/pages/ProductImportPage'
-import { OpcionaisImportPage } from '@/pages/OpcionaisImportPage'
-import { SettingsPage } from '@/pages/SettingsPage'
+import { LayoutApp } from '@/layouts/LayoutApp'
+import { ProvedorAssistenteImportacao } from '@/features/produtos/useAssistenteImportacao'
+import { PaginaImportacao } from '@/features/produtos/PaginaImportacao'
+import { PaginaImportacaoProduto } from '@/features/produtos/PaginaImportacaoProduto'
+import { OpcionaisImportPage } from '@/features/opcionais/OpcionaisImportPage'
+import { PaginaConfiguracoes } from '@/features/configuracoes/PaginaConfiguracoes'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,24 +16,22 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <ImportWizardProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<Navigate to="/import/produtos" replace />} />
-                <Route path="/import" element={<ImportPage />}>
-                  <Route index element={<Navigate to="produtos" replace />} />
-                  <Route path="produtos" element={<ProductImportPage />} />
-                  <Route path="opcionais" element={<OpcionaisImportPage />} />
-                </Route>
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<Navigate to="/import/produtos" replace />} />
+      <ProvedorAssistenteImportacao>
+        <BrowserRouter>
+          <Routes>
+            <Route element={<LayoutApp />}>
+              <Route path="/" element={<Navigate to="/import/produtos" replace />} />
+              <Route path="/import" element={<PaginaImportacao />}>
+                <Route index element={<Navigate to="produtos" replace />} />
+                <Route path="produtos" element={<PaginaImportacaoProduto />} />
+                <Route path="opcionais" element={<OpcionaisImportPage />} />
               </Route>
-            </Routes>
-          </BrowserRouter>
-        </ImportWizardProvider>
-      </ThemeProvider>
+              <Route path="/settings" element={<PaginaConfiguracoes />} />
+              <Route path="*" element={<Navigate to="/import/produtos" replace />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ProvedorAssistenteImportacao>
     </QueryClientProvider>
   )
 }

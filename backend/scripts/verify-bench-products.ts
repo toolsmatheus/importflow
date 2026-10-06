@@ -1,7 +1,7 @@
-import { getTmsAuth } from '../src/services/tmsService.js'
+import { obterAuthTms } from '../src/services/tms.service.js'
 
 const BASE = 'http://localhost:2001'
-const auth = await getTmsAuth(BASE)
+const auth = await obterAuthTms(BASE)
 const codes = [9900001, 13900001, 13900500, 18900001, 28900001, 28902000]
 for (const codigo of codes) {
   const filter = encodeURIComponent(`codigo_migracao eq ${codigo}`)

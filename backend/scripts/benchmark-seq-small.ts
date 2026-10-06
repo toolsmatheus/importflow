@@ -1,8 +1,8 @@
-import { insertProduct, fetchServerIdentification } from '../src/services/tmsService.js'
+import { insertProduto, buscarIdentificacaoServidor } from '../src/services/tms.service.js'
 
 const BASE = 'http://localhost:2001'
 const RUN = Date.now() % 100000
-const { idFilial } = await fetchServerIdentification(BASE)
+const { idFilial } = await buscarIdentificacaoServidor(BASE)
 
 function payload(i: number) {
   const codigo = 8_700_000 + i
@@ -31,7 +31,7 @@ const n = 5
 const t0 = performance.now()
 let ok = 0
 for (let i = 1; i <= n; i++) {
-  const r = await insertProduct(payload(i), BASE)
+  const r = await insertProduto(payload(i), BASE)
   if (r.ok) ok++
   else console.log('fail', i, r.message?.slice(0, 120))
 }

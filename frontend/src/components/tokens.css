@@ -1,0 +1,58 @@
+/**
+ * Tokens semânticos do design system. Duas camadas:
+ *  - primitivos: escalas da marca (--color-primary-*, --color-neutral-* ...) em design-system/tailwind-theme.css;
+ *  - semânticos (este arquivo): papéis de uso (texto, borda, ação...). Componentes e telas usam só estes,
+ *    para trocar tema ou marca mexendo apenas aqui.
+ * Gera utilitários Tailwind: bg-surface, text-fg-muted, border-line, bg-action, text-danger...
+ */
+@theme {
+  /* Superfícies */
+  --color-surface: var(--color-neutral-0);
+  --color-surface-muted: var(--color-neutral-50);
+  --color-surface-sunken: var(--color-neutral-100);
+
+  /* Texto (fg = foreground) */
+  --color-fg-strong: var(--color-neutral-900);
+  --color-fg: var(--color-neutral-800);
+  --color-fg-muted: var(--color-neutral-600);
+  --color-fg-subtle: var(--color-neutral-500);
+  --color-fg-faint: var(--color-neutral-400);
+
+  /* Bordas e divisórias */
+  --color-line: var(--color-neutral-200);
+  --color-line-strong: var(--color-neutral-300);
+  --color-line-subtle: var(--color-neutral-100);
+
+  /* Ação / marca */
+  --color-action: var(--color-primary-700);
+  --color-action-hover: var(--color-primary-800);
+  --color-action-subtle: var(--color-primary-50);
+  --color-action-soft: var(--color-primary-200);
+  --color-focus: var(--color-primary-700);
+
+  /* Estados */
+  --color-danger: var(--color-negative-600);
+  --color-danger-subtle: var(--color-negative-50);
+  --color-positive: var(--color-success-600);
+  --color-positive-subtle: var(--color-success-50);
+
+  /* Gráficos */
+  --color-chart-1: var(--color-primary-700);
+  --color-chart-2: var(--color-primary-400);
+  --color-chart-3: var(--color-primary-200);
+  --color-chart-4: var(--color-neutral-300);
+  --color-chart-line: var(--color-primary-600);
+
+  /* Tamanhos de fonte além da escala ds-* (legendas mínimas) */
+  --text-ds-2xs: 10px;
+  --text-ds-xs: 12px;
+  --text-ds-sm: 13px;
+  --text-ds-base: 14px;
+
+  /* Espaçamento entre letras de rótulos em caixa alta */
+  --tracking-label: 0.04em;
+
+  /* Altura única dos controles (botão, campo, select) */
+  --spacing-control: 2.25rem;
+  --spacing-control-sm: 2rem;
+}

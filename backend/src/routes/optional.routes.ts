@@ -16,7 +16,7 @@ import {
   stockTemplateHandler,
   supplierTemplateHandler,
   validityTemplateHandler,
-} from '../controllers/optional.controller.js'
+} from '../controller/opcional.controller.js'
 
 export async function optionalRoutes(app: FastifyInstance) {
   app.get('/opcionais/supplier-refs/template', supplierTemplateHandler)

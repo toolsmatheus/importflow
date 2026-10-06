@@ -1,4 +1,4 @@
-import type { ProductLookupCatalogs } from '../productTmsMapper.js'
+import type { CatalogosBuscaProduto } from '../../models/produto-tms.model.js'
 import { DEFAULT_TMS_BASE } from './tmsConfig.js'
 import {
   extractCreatedEntityId,
@@ -80,7 +80,7 @@ export async function insertLocalizacaoProduto(
  * No XData, Produto.localizacao é associação — string livre quebra o parser.
  */
 export async function ensureLocalizacaoProduto(
-  catalogs: ProductLookupCatalogs,
+  catalogs: CatalogosBuscaProduto,
   descricao: string,
   baseUrl = DEFAULT_TMS_BASE
 ): Promise<{ ok: boolean; id?: number; message?: string; inserted?: boolean }> {

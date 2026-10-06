@@ -17,7 +17,7 @@ Importação de produtos via CSV para o banco de dados (ToolsPharma), com valida
 - **Markup** — se vazio ou inconsistente com custo/venda, é recalculado com aviso
 - **EAN inválido** — alerta (não bloqueia); EAN duplicado (≥8 dígitos) — erro
 
-Detalhes e lista completa: [VALIDACOES.md](VALIDACOES.md).
+Detalhes e lista completa: [agents/VALIDACOES.md](agents/VALIDACOES.md).
 
 ## Distribuição para o cliente (AnyDesk)
 
@@ -60,7 +60,7 @@ Abre `http://localhost:3001` quando `/api/health` responder. Forçar rebuild: `s
 
 ## Desenvolvimento local
 
-Setup completo e mapa “onde editar o quê”: [CONTRIBUTING.md](CONTRIBUTING.md).
+Setup completo e mapa “onde editar o quê”: [agents/CONTRIBUTING.md](agents/CONTRIBUTING.md).
 
 ```bash
 npm install
@@ -152,6 +152,5 @@ CI (`.github/workflows/ci.yml`): lint + build + test em push/PR para `master`/`m
 
 Ver `.env.example` para um template completo.
 
-- Arquitetura (fluxo, camadas, jobs, TMS): [ARCHITECTURE.md](ARCHITECTURE.md)
-- Como contribuir / primeiro setup: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Documentação (arquitetura, agentes, validações): [agents/README.md](agents/README.md)
 - Scripts (índices Anvisa + cliente): [scripts/README.md](scripts/README.md)

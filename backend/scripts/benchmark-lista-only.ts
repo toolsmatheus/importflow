@@ -1,4 +1,4 @@
-import { fetchServerIdentification, getTmsAuth } from '../src/services/tmsService.js'
+import { buscarIdentificacaoServidor, obterAuthTms } from '../src/services/tms.service.js'
 
 const BASE = 'http://localhost:2001'
 const RUN = Date.now() % 100000
@@ -31,8 +31,8 @@ function payload(i: number, block: number) {
 }
 
 const sizes = [100, 500, 1000, 2000]
-const { idFilial } = await fetchServerIdentification(BASE)
-const auth = await getTmsAuth(BASE)
+const { idFilial } = await buscarIdentificacaoServidor(BASE)
+const auth = await obterAuthTms(BASE)
 
 for (const n of sizes) {
   const items = Array.from({ length: n }, (_, i) => payload(i + 1, n))

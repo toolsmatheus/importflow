@@ -1,0 +1,548 @@
+<title>ToolsPharma Design System</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&family=DM+Serif+Display:ital@0;1&display=swap");
+
+  :root {
+    --tp-firefly: #12353B;
+    --tp-genoa: #157572;
+    --tp-robins: #00C7D4;
+    --tp-cutty: #4E7A78;
+    --tp-plantation: #234544;
+    --tp-jade: #00A972;
+    --tp-mint: #8CEEB4;
+
+    --bg: #F7FAFA;
+    --surface: #FFFFFF;
+    --surface-2: #EDF2F2;
+    --border: #D8E2E1;
+    --text: #12353B;
+    --text-2: #4E7A78;
+    --accent: #157572;
+    --accent-strong: #12353B;
+    --code-bg: #EDF2F2;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0C2226;
+      --surface: #12353B;
+      --surface-2: #17403F;
+      --border: #2A5153;
+      --text: #EAF3F2;
+      --text-2: #9EB6B5;
+      --accent: #40D5DF;
+      --accent-strong: #8CEEB4;
+      --code-bg: #0F2D32;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C2226;
+    --surface: #12353B;
+    --surface-2: #17403F;
+    --border: #2A5153;
+    --text: #EAF3F2;
+    --text-2: #9EB6B5;
+    --accent: #40D5DF;
+    --accent-strong: #8CEEB4;
+    --code-bg: #0F2D32;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding-inline: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "DM Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+  p { margin: 0; }
+  a { color: inherit; }
+
+  .wrap { max-width: 1080px; margin-inline: auto; padding-inline: 20px; }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding-block: 12px;
+    flex-wrap: wrap;
+  }
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Bebas Neue", sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .nav-brand img { height: 28px; width: auto; display: block; }
+  .nav-links { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  .nav-links a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2);
+    padding: 6px 12px;
+    border-radius: 9999px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-links a:hover { background: var(--surface-2); color: var(--text); }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background: linear-gradient(60deg, #12353B, #009FA9);
+    color: #fff;
+    padding-block: 56px 64px;
+  }
+  .hero-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; }
+  .hero-logo { height: 84px; width: auto; }
+  .hero h1 { font-family: "Bebas Neue", sans-serif; font-size: clamp(32px, 6vw, 52px); letter-spacing: 0.02em; }
+  .hero p { max-width: 46ch; color: rgba(255,255,255,0.85); font-size: 15px; line-height: 1.6; }
+  .hero-tag {
+    font-family: "Roboto", sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 9999px;
+    padding: 4px 14px;
+  }
+
+  /* ---------- Sections ---------- */
+  section { padding-block: 56px; border-bottom: 1px solid var(--border); }
+  section:last-of-type { border-bottom: none; }
+  .section-head { margin-bottom: 32px; max-width: 62ch; }
+  .eyebrow {
+    font-family: "Roboto", sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .section-head h2 { font-family: "Bebas Neue", sans-serif; font-size: clamp(26px, 4vw, 36px); letter-spacing: 0.01em; }
+  .section-head p { margin-top: 10px; color: var(--text-2); font-size: 14.5px; line-height: 1.6; }
+
+  /* ---------- Color swatches ---------- */
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .swatch {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .swatch-color { height: 96px; }
+  .swatch-body { padding: 12px 14px 14px; }
+  .swatch-name { font-weight: 700; font-size: 14px; }
+  .swatch-meta {
+    margin-top: 6px;
+    font-family: "Roboto", sans-serif;
+    font-size: 11.5px;
+    color: var(--text-2);
+    line-height: 1.7;
+  }
+  .swatch-meta code {
+    font-family: "Roboto", sans-serif;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  .gradient-swatch {
+    margin-top: 20px;
+    height: 72px;
+    border-radius: 12px;
+    background: linear-gradient(60deg, #12353B, #009FA9);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 20px;
+    color: #fff;
+    font-family: "Roboto", sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .scale-block { margin-top: 28px; }
+  .scale-label { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; }
+  .scale-strip { display: flex; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .scale-strip > div {
+    flex: 1;
+    height: 46px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 4px;
+    font-family: "Roboto", sans-serif;
+    font-size: 9.5px;
+  }
+
+  /* ---------- Typography ---------- */
+  .type-specimen {
+    display: grid;
+    grid-template-columns: minmax(150px, 220px) 1fr;
+    gap: 24px;
+    padding-block: 24px;
+    border-top: 1px solid var(--border);
+    align-items: start;
+  }
+  .type-specimen:first-of-type { border-top: none; }
+  .type-role { font-family: "Roboto", sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
+  .type-role .fam { display: block; margin-top: 4px; font-size: 13px; color: var(--text); font-weight: 500; letter-spacing: normal; text-transform: none; }
+  .type-sample-display { font-family: "Bebas Neue", sans-serif; font-size: 40px; letter-spacing: 0.02em; }
+  .type-sample-body { font-family: "DM Sans", sans-serif; font-size: 20px; }
+  .type-sample-data { font-family: "Roboto", sans-serif; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .type-sample-editorial { font-family: "DM Serif Display", serif; font-size: 22px; font-style: italic; }
+  .type-weights { margin-top: 10px; font-family: "Roboto", sans-serif; font-size: 12px; color: var(--text-2); }
+
+  /* ---------- Logo ---------- */
+  .logo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .logo-card { border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .logo-stage { height: 140px; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .logo-stage img { max-height: 100%; max-width: 100%; width: auto; height: auto; object-fit: contain; }
+  .logo-stage.bg-light { background: #F4F8F8; }
+  .logo-stage.bg-dark { background: linear-gradient(60deg, #12353B, #009FA9); }
+  .logo-stage.bg-ink { background: #fff; }
+  .logo-caption { padding: 10px 14px; background: var(--surface); font-family: "Roboto", sans-serif; font-size: 12px; color: var(--text-2); display: flex; justify-content: space-between; }
+  .logo-caption strong { color: var(--text); font-weight: 700; }
+
+  .rules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 28px; }
+  .rule-card { border-radius: 12px; padding: 16px 18px; font-size: 13.5px; line-height: 1.6; }
+  .rule-card.do { background: color-mix(in srgb, var(--tp-jade) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--tp-jade) 35%, var(--border)); }
+  .rule-card.dont { background: color-mix(in srgb, #D64545 10%, var(--surface)); border: 1px solid color-mix(in srgb, #D64545 30%, var(--border)); }
+  .rule-card .rule-title { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+
+  /* ---------- Spacing / radius ---------- */
+  .space-row { display: flex; align-items: center; gap: 14px; padding-block: 10px; border-top: 1px solid var(--border); }
+  .space-row:first-of-type { border-top: none; }
+  .space-box { background: var(--accent); border-radius: 3px; height: 16px; }
+  .space-label { font-family: "Roboto", sans-serif; font-size: 12.5px; color: var(--text-2); width: 90px; flex-shrink: 0; }
+  .space-value { font-family: "Roboto", sans-serif; font-size: 12px; color: var(--text-2); margin-left: auto; }
+
+  .radius-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; }
+  .radius-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .radius-box { width: 72px; height: 72px; background: var(--accent); }
+  .radius-item span { font-family: "Roboto", sans-serif; font-size: 11.5px; color: var(--text-2); }
+
+  footer { padding-block: 32px; }
+  footer p { font-size: 12px; color: var(--text-2); text-align: center; font-family: "Roboto", sans-serif; }
+
+  @media (max-width: 560px) {
+    .type-specimen { grid-template-columns: 1fr; }
+    .nav-links { gap: 2px; }
+  }
+</style>
+
+<nav class="nav">
+  <div class="wrap nav-row">
+    <div class="nav-brand">
+      <img src="logo/symbol-color.png" alt="">
+      toolspharma
+    </div>
+    <div class="nav-links">
+      <a href="#cores">Cores</a>
+      <a href="#tipografia">Tipografia</a>
+      <a href="#logo">Logo</a>
+      <a href="#espacamento">Espaçamento</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <img class="hero-logo" src="logo/lockup-vertical-white.png" alt="ToolsPharma">
+    <span class="hero-tag">Manual de marca → design tokens</span>
+    <h1>Design System ToolsPharma</h1>
+    <p>Cores, tipografia e regras de logo extraídas do Brandbook oficial, prontas para reuso em
+      qualquer aplicação — via <code style="background:rgba(255,255,255,0.15); padding:1px 6px; border-radius:4px; font-family:'Roboto',sans-serif; font-size:13px;">tokens.css</code>,
+      <code style="background:rgba(255,255,255,0.15); padding:1px 6px; border-radius:4px; font-family:'Roboto',sans-serif; font-size:13px;">tokens.json</code> ou
+      <code style="background:rgba(255,255,255,0.15); padding:1px 6px; border-radius:4px; font-family:'Roboto',sans-serif; font-size:13px;">tailwind-theme.css</code>.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="cores">
+    <div class="section-head">
+      <span class="eyebrow">01 · Paleta</span>
+      <h2>Cores da marca</h2>
+      <p>Os sete tons oficiais do manual, com hex, RGB e Pantone exatos. As escalas abaixo (primária,
+        sucesso, neutra) são interpoladas a partir desses valores para uso em interface.</p>
+    </div>
+
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#12353B"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Firefly</div>
+          <div class="swatch-meta">HEX <code>#12353B</code><br>RGB 18, 53, 59 · Pantone 7477 C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#157572"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Genoa</div>
+          <div class="swatch-meta">HEX <code>#157572</code><br>RGB 21, 117, 114 · Pantone 7717 C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#00C7D4"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Robin's Egg Blue</div>
+          <div class="swatch-meta">HEX <code>#00C7D4</code><br>RGB 0, 199, 212 · Pantone 7466 C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#4E7A78"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Cutty Sark</div>
+          <div class="swatch-meta">HEX <code>#4E7A78</code><br>RGB 78, 122, 120 · Pantone 5483 C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#234544"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Plantation</div>
+          <div class="swatch-meta">HEX <code>#234544</code><br>RGB 35, 69, 68 · Pantone 626 C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#00A972"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Jade</div>
+          <div class="swatch-meta">HEX <code>#00A972</code><br>RGB 0, 169, 114 · Pantone 339 C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#8CEEB4"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Magic Mint</div>
+          <div class="swatch-meta">HEX <code>#8CEEB4</code><br>RGB 140, 238, 180 · Pantone 7478 C</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gradient-swatch">
+      <span>Gradiente da marca — sempre do escuro para o claro, 60°</span>
+      <span>#12353B → #009FA9</span>
+    </div>
+
+    <div class="scale-block">
+      <div class="scale-label">Escala primária (ação)</div>
+      <div class="scale-strip">
+        <div style="background:#EDFBFC;color:#12353B">50</div>
+        <div style="background:#D1F5F7;color:#12353B">100</div>
+        <div style="background:#A6EBF0;color:#12353B">200</div>
+        <div style="background:#73E0E7;color:#12353B">300</div>
+        <div style="background:#40D5DF;color:#12353B">400</div>
+        <div style="background:#00C7D4;color:#12353B">500</div>
+        <div style="background:#0A9EA3;color:#fff">600</div>
+        <div style="background:#157572;color:#fff">700</div>
+        <div style="background:#145556;color:#fff">800</div>
+        <div style="background:#12353B;color:#fff">900</div>
+      </div>
+    </div>
+
+    <div class="scale-block">
+      <div class="scale-label">Escala de sucesso</div>
+      <div class="scale-strip">
+        <div style="background:#EAFCF2;color:#12353B">50</div>
+        <div style="background:#D1F8E1;color:#12353B">100</div>
+        <div style="background:#B4F4CE;color:#12353B">200</div>
+        <div style="background:#8CEEB4;color:#12353B">300</div>
+        <div style="background:#54D29A;color:#12353B">400</div>
+        <div style="background:#31C189;color:#12353B">500</div>
+        <div style="background:#00A972;color:#fff">600</div>
+        <div style="background:#107C5D;color:#fff">700</div>
+        <div style="background:#234544;color:#fff">800</div>
+        <div style="background:#186352;color:#fff">900</div>
+      </div>
+    </div>
+
+    <div class="scale-block">
+      <div class="scale-label">Escala neutra</div>
+      <div class="scale-strip">
+        <div style="background:#FFFFFF;color:#12353B;border-right:1px solid #D8E2E1">0</div>
+        <div style="background:#F8FAFA;color:#12353B">50</div>
+        <div style="background:#EDF2F2;color:#12353B">100</div>
+        <div style="background:#D8E2E1;color:#12353B">200</div>
+        <div style="background:#BCCCCC;color:#12353B">300</div>
+        <div style="background:#9EB6B5;color:#12353B">400</div>
+        <div style="background:#7A9B9A;color:#fff">500</div>
+        <div style="background:#4E7A78;color:#fff">600</div>
+        <div style="background:#2A5153;color:#fff">700</div>
+        <div style="background:#12353B;color:#fff">800</div>
+        <div style="background:#0F2D32;color:#fff">900</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tipografia">
+    <div class="section-head">
+      <span class="eyebrow">02 · Tipos</span>
+      <h2>Hierarquia tipográfica</h2>
+      <p>Quatro famílias, cada uma com um papel definido pelo manual. Todas disponíveis no Google Fonts.</p>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-role">Display<span class="fam">Bebas Neue</span></div>
+      <div>
+        <div class="type-sample-display">Gestão de farmácia sem fricção</div>
+        <div class="type-weights">thin · light · book · regular · bold — uso: hero, H1, números de destaque</div>
+      </div>
+    </div>
+    <div class="type-specimen">
+      <div class="type-role">Corpo / UI<span class="fam">DM Sans</span></div>
+      <div>
+        <div class="type-sample-body">Tecnologia feita por pessoas, para pessoas.</div>
+        <div class="type-weights">regular · italic · medium · medium italic · bold · bold italic — uso: interface, botões, labels</div>
+      </div>
+    </div>
+    <div class="type-specimen">
+      <div class="type-role">Dados<span class="fam">Roboto</span></div>
+      <div>
+        <div class="type-sample-data">R$ 128.430,55 &nbsp;·&nbsp; 1.204 pedidos &nbsp;·&nbsp; 3,8%</div>
+        <div class="type-weights">thin → black + condensed — uso: tabelas densas, dados financeiros/tabulares</div>
+      </div>
+    </div>
+    <div class="type-specimen">
+      <div class="type-role">Editorial<span class="fam">DM Serif Display</span></div>
+      <div>
+        <div class="type-sample-editorial">"Amigável, confiável, eficiente."</div>
+        <div class="type-weights">regular · italic — uso: citações, títulos institucionais</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="logo">
+    <div class="section-head">
+      <span class="eyebrow">03 · Marca</span>
+      <h2>Símbolo e assinaturas</h2>
+      <p>Três variantes de cor (marca, negativo em branco, tinta única) para cada composição. Margem de
+        segurança: altura da letra "t" do símbolo. Tamanho mínimo: 1,5&nbsp;cm (símbolo) · 2&nbsp;cm (assinatura horizontal).</p>
+    </div>
+
+    <div class="logo-grid">
+      <div class="logo-card">
+        <div class="logo-stage bg-light"><img src="logo/lockup-vertical-color.png" alt="Assinatura vertical, cor"></div>
+        <div class="logo-caption"><strong>Vertical</strong><span>cor</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-dark"><img src="logo/lockup-vertical-white.png" alt="Assinatura vertical, negativo"></div>
+        <div class="logo-caption"><strong>Vertical</strong><span>negativo</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-ink"><img src="logo/lockup-vertical-blackink.png" alt="Assinatura vertical, tinta única"></div>
+        <div class="logo-caption"><strong>Vertical</strong><span>tinta única</span></div>
+      </div>
+
+      <div class="logo-card">
+        <div class="logo-stage bg-light"><img src="logo/lockup-horizontal-color.png" alt="Assinatura horizontal, cor"></div>
+        <div class="logo-caption"><strong>Horizontal</strong><span>cor</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-dark"><img src="logo/lockup-horizontal-white.png" alt="Assinatura horizontal, negativo"></div>
+        <div class="logo-caption"><strong>Horizontal</strong><span>negativo</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-ink"><img src="logo/lockup-horizontal-blackink.png" alt="Assinatura horizontal, tinta única"></div>
+        <div class="logo-caption"><strong>Horizontal</strong><span>tinta única</span></div>
+      </div>
+
+      <div class="logo-card">
+        <div class="logo-stage bg-light"><img src="logo/symbol-color.png" alt="Símbolo isolado, cor"></div>
+        <div class="logo-caption"><strong>Símbolo</strong><span>cor</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-dark"><img src="logo/symbol-white.png" alt="Símbolo isolado, negativo"></div>
+        <div class="logo-caption"><strong>Símbolo</strong><span>negativo</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-ink"><img src="logo/symbol-blackink.png" alt="Símbolo isolado, tinta única"></div>
+        <div class="logo-caption"><strong>Símbolo</strong><span>tinta única</span></div>
+      </div>
+
+      <div class="logo-card">
+        <div class="logo-stage bg-light"><img src="logo/wordmark-color.png" alt="Assinatura tipográfica, cor"></div>
+        <div class="logo-caption"><strong>Tipográfica</strong><span>cor</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-dark"><img src="logo/wordmark-white.png" alt="Assinatura tipográfica, negativo"></div>
+        <div class="logo-caption"><strong>Tipográfica</strong><span>negativo</span></div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-stage bg-ink"><img src="logo/wordmark-blackink.png" alt="Assinatura tipográfica, tinta única"></div>
+        <div class="logo-caption"><strong>Tipográfica</strong><span>tinta única</span></div>
+      </div>
+    </div>
+
+    <div class="rules-grid">
+      <div class="rule-card do">
+        <div class="rule-title">Faça</div>
+        Use a versão negativa (branca) sobre o gradiente ou fundos escuros. Respeite a margem de segurança.
+        Mantenha o contraste entre símbolo e fundo.
+      </div>
+      <div class="rule-card dont">
+        <div class="rule-title">Não faça</div>
+        Não recolorir fora da paleta, não distorcer/esticar, não aplicar sobre imagens de baixo contraste,
+        não usar abaixo do tamanho mínimo.
+      </div>
+    </div>
+  </section>
+
+  <section id="espacamento">
+    <div class="section-head">
+      <span class="eyebrow">04 · Layout</span>
+      <h2>Espaçamento &amp; raios</h2>
+      <p>Escala usada para gaps, paddings e cantos arredondados em qualquer componente.</p>
+    </div>
+
+    <div>
+      <div class="space-row"><span class="space-label">space-1</span><div class="space-box" style="width:4px"></div><span class="space-value">4px</span></div>
+      <div class="space-row"><span class="space-label">space-2</span><div class="space-box" style="width:8px"></div><span class="space-value">8px</span></div>
+      <div class="space-row"><span class="space-label">space-3</span><div class="space-box" style="width:12px"></div><span class="space-value">12px</span></div>
+      <div class="space-row"><span class="space-label">space-4</span><div class="space-box" style="width:16px"></div><span class="space-value">16px</span></div>
+      <div class="space-row"><span class="space-label">space-6</span><div class="space-box" style="width:24px"></div><span class="space-value">24px</span></div>
+      <div class="space-row"><span class="space-label">space-8</span><div class="space-box" style="width:32px"></div><span class="space-value">32px</span></div>
+      <div class="space-row"><span class="space-label">space-12</span><div class="space-box" style="width:48px"></div><span class="space-value">48px</span></div>
+      <div class="space-row"><span class="space-label">space-16</span><div class="space-box" style="width:64px"></div><span class="space-value">64px</span></div>
+    </div>
+
+    <div class="radius-grid">
+      <div class="radius-item"><div class="radius-box" style="border-radius:6px"></div><span>radius-sm · 6px</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius:8px"></div><span>radius-md · 8px</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius:12px"></div><span>radius-lg · 12px</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius:16px"></div><span>radius-xl · 16px</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius:9999px"></div><span>radius-full</span></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>Extraído de MANUAL_DE_MARCA_-_TOOLSPHARMA.pdf · pacote completo em <code style="font-family:'Roboto',sans-serif">design-system/</code> do repositório</p>
+</footer>

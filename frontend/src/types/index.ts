@@ -1,225 +1,59 @@
-export type WizardStep =
-  | 'file'
-  | 'auxiliary'
-  | 'errors'
-  | 'send'
+/**
+ * Tipos de UI + reexports dos contratos compartilhados (backend models/dto).
+ * Não redeclarar formatos de API aqui — use @dto / @models.
+ */
 
-/** Importações complementares (aba Opcionais), independentes do wizard de produtos. */
-export type OptionalImportKind =
-  | 'supplierRefs'
-  | 'validity'
-  | 'stock'
-  | 'lots'
+export type { AuxiliaryEntity } from '@models/produto.model'
 
-export type IssueSeverity = 'error' | 'warning'
+export type {
+  IssueSeverity,
+  IssueValidacao as ValidationIssue,
+  ValidationCheckSummaryItem,
+} from '@models/validacao.model'
 
-export type AuxiliaryEntity =
-  | 'grupo'
-  | 'subgrupo'
-  | 'categoria'
-  | 'laboratorio'
-  | 'grupodepreco'
-  | 'similar'
-  | 'dcb'
+export type {
+  ResultadoValidacaoProdutoDto as ProductValidationResult,
+  ProductFieldCatalogDto as ProductFieldCatalog,
+} from '@dto/produto.dto'
 
-export interface ValidationIssue {
-  row: number
-  field: string
-  value: string
-  message: string
-  severity: IssueSeverity
-  checkId?: string
-}
+export type {
+  StatusEnvioJob as EnvioJobStatus,
+  ModoEnvio,
+  FaseEnvioJob,
+  ErroEnvioJob as EnvioJobError,
+  ProdutoIgnoradoEnvioJob as EnvioJobProdutoIgnorado,
+  ProductSkipReason,
+} from '@models/envio.model'
 
-export interface ValidationCheckSummaryItem {
-  id: string
-  label: string
-  count: number
-  severity: IssueSeverity
-}
+export type { SnapshotEnvioJobDto as EnvioJobSnapshot } from '@dto/envio.dto'
 
-export interface ProductValidationResult {
-  fileId: string
-  fileName: string
-  totalRecords: number
-  errorCount: number
-  warningCount: number
-  missingRequiredHeaders: string[]
-  unknownHeaders: string[]
-  presentOptionalHeaders: string[]
-  canProceed: boolean
-  issues: ValidationIssue[]
-  /** Resumo do que foi pesquisado (inclui zeros → “nenhum”). */
-  checkSummary?: ValidationCheckSummaryItem[]
-  /** Contagem de atualizaestoque = S / N em todo o arquivo. */
-  atualizaEstoqueSummary?: { s: number; n: number }
-  /**
-   * Números de linha do CSV (cabeçalho = 1) com erro.
-   * Completo mesmo quando a lista de issues está truncada.
-   */
-  errorRows?: number[]
-  truncated: boolean
-  columns: string[]
-  rows: Record<string, string>[]
-}
+export type { CsvAnalysisResultDto as CsvAnalysis } from '@dto/csv.dto'
 
-export interface AuxiliaryUploadResult {
-  entity: AuxiliaryEntity
-  fileId: string
-  fileName: string
-  fileSize: number
-  recordCount: number
-  parseWarnings: string[]
-}
+export type {
+  FolderCollectResultDto as FolderCollectResult,
+  AuxiliaryCsvPreviewDto as AuxiliaryCsvPreview,
+  AuxiliaryUploadResultDto as AuxiliaryUploadResult,
+} from '@dto/coleta-pasta.dto'
 
-export interface AuxiliaryCsvPreview {
-  fileId: string
-  fileName: string
-  columns: string[]
-  rows: Record<string, string>[]
-  totalRecords: number
-  truncated: boolean
-}
+export type {
+  ControladoSuggestion,
+  ControladoSuggestKind,
+} from '@models/controlado.model'
 
-export interface ProductFieldCatalog {
-  required: string[]
-  optional: string[]
-  farmaciaPopular: string[]
-  controlados: string[]
-  auxiliaryEntities: AuxiliaryEntity[]
-  delimiter: string
-  markupFormula: string
-  tmsBaseUrl: string
-  rules: {
-    controladoSemDcb: string
-    controladoSemRegistroMs?: string
-    markupInconsistente: string
-    aliquotaZeroStIsento?: string
-    cfopAuto?: string
-    aliquotaPercent?: string
-    unidadeEstoque?: string
-  }
-}
+export type { ControladoSuggestResultDto as ControladoSuggestResult } from '@dto/controlado.dto'
 
-export interface CsvAnalysis {
-  fileId: string
-  fileName: string
-  fileSize: number
-  recordCount: number
-  columnCount: number
-  encoding: string
-  delimiter: string
-  hasHeader: boolean
-  columns: string[]
-}
+export type {
+  OptionalJobSnapshotDto as OptionalJobSnapshot,
+  StockJobSnapshotDto,
+  LotJobSnapshotDto,
+  ValidityJobSnapshotDto,
+  SupplierJobSnapshotDto,
+} from '@dto/opcional.dto'
 
-export type SendJobStatus =
-  | 'queued'
-  | 'running'
-  | 'paused'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
+/** Passos do wizard de produtos (estado de UI). */
+export type WizardStep = 'file' | 'auxiliary' | 'errors' | 'send'
 
-export type SendMode = 'live' | 'simulate'
-
-export interface SendJobError {
-  index: number
-  codigo: string
-  message: string
-  batch: number
-}
-
-export type ProductSkipReason = 'codigo_barras' | 'codigo_migracao'
-
-export interface SendJobSkippedProduct {
-  index: number
-  codigo: string
-  nome: string
-  codigobarras: string
-  reason: ProductSkipReason
-  message: string
-  tmsProdutoId: number | null
-}
-
-export interface SendJobSnapshot {
-  id: string
-  status: SendJobStatus
-  mode: SendMode
-  /** Fase atual: auxiliares → catálogos → produtos */
-  phase?: 'auxiliaries' | 'catalogs' | 'products' | 'done'
-  tmsBaseUrl: string
-  idFilial: number
-  batchSize: number
-  concurrency: number
-  total: number
-  processed: number
-  successCount: number
-  errorCount: number
-  productSkipped?: number
-  currentBatch: number
-  totalBatches: number
-  errors: SendJobError[]
-  errorsTruncated: boolean
-  skipped?: SendJobSkippedProduct[]
-  skippedTruncated?: boolean
-  startedAt: string | null
-  finishedAt: string | null
-  elapsedMs: number
-  productsPerSecond: number
-  percent: number
-  remaining: number
-  gruposTotal?: number
-  gruposInserted?: number
-  gruposFailed?: number
-  auxTotal?: number
-  auxInserted?: number
-  auxFailed?: number
-  auxSkipped?: number
-}
-
-export interface FolderCollectResult {
-  folderPath: string
-  products: CsvAnalysis | null
-  auxiliaries: Partial<Record<AuxiliaryEntity, AuxiliaryUploadResult>>
-  found: { role: string; fileName: string }[]
-  missing: string[]
-  ignored: string[]
-}
+/** Importações complementares (aba Opcionais). */
+export type OptionalImportKind = 'supplierRefs' | 'validity' | 'stock' | 'lots'
 
 export type FileInputMode = 'manual' | 'folder'
-
-export type ControladoSuggestKind = 'empty' | 'conflict' | 'confirm'
-
-export interface ControladoSuggestion {
-  rowIndex: number
-  row: number
-  ean: string
-  codigo: string
-  nome: string
-  substance: string
-  matchedName: string
-  suggestedLista: string
-  suggestedDcb: string
-  suggestedDcbNome: string
-  /** Registro MS from CMED — applied to registroms */
-  registro: string
-  currentLista: string
-  currentDcb: string
-  currentRegistro: string
-  kind: ControladoSuggestKind
-  tarja: string
-  produtoCmed: string
-  reason: string
-}
-
-export interface ControladoSuggestResult {
-  available: boolean
-  message?: string
-  cmedSource?: string
-  totalRows: number
-  withEan: number
-  foundInCmed: number
-  controlledCandidates: number
-  suggestions: ControladoSuggestion[]
-}

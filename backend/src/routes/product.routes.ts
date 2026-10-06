@@ -1,24 +1,24 @@
 import type { FastifyInstance } from 'fastify'
 import {
-  cancelSendJobHandler,
+  cancelarEnvioJobHandler,
   collectFolderHandler,
   downloadAuxiliaryTemplateHandler,
   downloadProductTemplateHandler,
   downloadSkippedProductsHandler,
   getFolderExpectHandler,
   getProductFieldCatalogHandler,
-  getSendJobHandler,
+  obterEnvioJobHandler,
   identifyServerHandler,
-  pauseSendJobHandler,
+  pausarEnvioJobHandler,
   previewAuxiliaryHandler,
-  resumeSendJobHandler,
-  retryFailedSendJobHandler,
+  retomarEnvioJobHandler,
+  reenviarFalhasEnvioJobHandler,
   startSendJobHandler,
-  suggestControladosHandler,
+  sugerirControladosHandler,
   uploadAuxiliaryHandler,
   validateProductHandler,
-  validateProductRowsHandler,
-} from '../controllers/product.controller.js'
+  validarLinhasProdutoHandler,
+} from '../controller/produto.controller.js'
 
 export async function productRoutes(app: FastifyInstance) {
   app.get('/products/template', downloadProductTemplateHandler)
@@ -29,14 +29,14 @@ export async function productRoutes(app: FastifyInstance) {
   app.get('/products/auxiliary/preview/:fileId', previewAuxiliaryHandler)
   app.post('/products/auxiliary/:entity', uploadAuxiliaryHandler)
   app.post('/products/validate', validateProductHandler)
-  app.post('/products/validate-rows', validateProductRowsHandler)
-  app.post('/products/suggest-controlados', suggestControladosHandler)
+  app.post('/products/validate-rows', validarLinhasProdutoHandler)
+  app.post('/products/suggest-controlados', sugerirControladosHandler)
   app.get('/products/identify-server', identifyServerHandler)
   app.post('/products/send/start', startSendJobHandler)
-  app.get('/products/send/:jobId', getSendJobHandler)
+  app.get('/products/send/:jobId', obterEnvioJobHandler)
   app.get('/products/send/:jobId/skipped.csv', downloadSkippedProductsHandler)
-  app.post('/products/send/:jobId/pause', pauseSendJobHandler)
-  app.post('/products/send/:jobId/resume', resumeSendJobHandler)
-  app.post('/products/send/:jobId/cancel', cancelSendJobHandler)
-  app.post('/products/send/:jobId/retry-failures', retryFailedSendJobHandler)
+  app.post('/products/send/:jobId/pause', pausarEnvioJobHandler)
+  app.post('/products/send/:jobId/resume', retomarEnvioJobHandler)
+  app.post('/products/send/:jobId/cancel', cancelarEnvioJobHandler)
+  app.post('/products/send/:jobId/retry-failures', reenviarFalhasEnvioJobHandler)
 }
