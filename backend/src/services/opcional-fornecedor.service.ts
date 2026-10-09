@@ -83,10 +83,15 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
       }
 
       const row = job.rows[index]
-      const codigo = cell(row, 'codigo')
-      const codigobarras = cell(row, 'codigobarras', 'codigobarra')
+      const codigo = cell(row, 'codigo_migracao', 'codigomigracao', 'codigo')
+      const codigobarras = cell(row, 'codigobarra', 'codigo_barra', 'codigobarras')
       const codigofornecedor = cell(row, 'codigofornecedor')
-      const codigooriginal = cell(row, 'codigooriginal')
+      const codigooriginal = cell(
+        row,
+        'codigoprodutofornecedor',
+        'codigo_produto_fornecedor',
+        'codigooriginal'
+      )
       const fatorRaw = cell(row, 'fator')
       const fatorCompra = parseFatorCompra(fatorRaw)
 
@@ -96,7 +101,8 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
           index,
           codigo,
           codigofornecedor,
-          message: 'codigooriginal obrigatório (código do produto no fornecedor)',
+          message:
+            'codigoprodutofornecedor obrigatório (código do produto no fornecedor)',
         })
         job.processed++
         continue
@@ -146,7 +152,7 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
           codigo,
           codigofornecedor,
           message:
-            'Informe codigobarras (EAN principal) ou codigo (migração do produto) para localizar o produto',
+            'Informe codigo_migracao ou codigobarra para localizar o produto',
         })
         job.processed++
         continue
@@ -169,13 +175,21 @@ async function runSupplierJob(job: SupplierJobInternal): Promise<void> {
 
       if (produtoId === undefined) {
         job.errorCount++
+        const triedMigracao = Boolean(migracao)
+        const triedBarcode = Boolean(codigobarras)
+        let message: string
+        if (triedMigracao && triedBarcode) {
+          message = `Produto não encontrado (codigo_migracao=${migracao}, codigobarra=${codigobarras})`
+        } else if (triedMigracao) {
+          message = `Produto codigo_migracao=${migracao} não encontrado no banco`
+        } else {
+          message = `Produto com código de barras ${codigobarras} não encontrado no banco`
+        }
         runtime.pushError(job, {
           index,
           codigo,
           codigofornecedor,
-          message: migracao
-            ? `Produto codigo_migracao=${migracao} não encontrado no banco`
-            : `Produto com código de barras ${codigobarras} não encontrado no banco`,
+          message,
         })
         job.processed++
         continue

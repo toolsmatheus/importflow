@@ -1,6 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
+  cancelarBarrasJob,
+  obterBarrasJob,
+  parseBarcodeExtraCsvText,
+  iniciarBarrasJob,
+} from '../services/opcional-barras.service.js'
+import {
   cancelarLoteJob,
   obterLoteJob,
   parseLotCsvText,
@@ -24,6 +30,10 @@ import {
   parseValidityCsvText,
   iniciarValidadeJob,
 } from '../services/opcional-validade.service.js'
+import {
+  coletarOpcionaisDaPasta,
+  collectFolderBodySchema,
+} from '../services/coleta-pasta.service.js'
 import { getDefaultTmsBaseUrl } from '../services/tms.service.js'
 
 const startBodySchema = z.object({
@@ -126,12 +136,72 @@ async function startOptionalSend(
   }
 }
 
+export async function startBarcodeExtraSendHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  return startOptionalSend(request, reply, {
+    parseRows: parseBarcodeExtraCsvText,
+    startJob: iniciarBarrasJob,
+    emptyMessage:
+      'CSV sem registros. Esperado: codigo_migracao;codigobarra;codigoadicional;fator (busca por codigo_migracao, senão codigobarra; fator opcional → 1)',
+    failMessage: 'Erro ao iniciar importação de códigos de barras adicionais',
+    logLabel: 'Barcode extra send start failed',
+  })
+}
+
+export async function getBarcodeExtraSendHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = obterBarrasJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function cancelBarcodeExtraSendHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const jobId = (request.params as { jobId?: string }).jobId
+  if (!jobId) {
+    return reply.status(400).send({ success: false, message: 'jobId obrigatório' })
+  }
+  const snapshot = cancelarBarrasJob(jobId)
+  if (!snapshot) {
+    return reply.status(404).send({ success: false, message: 'Job não encontrado' })
+  }
+  return reply.send(snapshot)
+}
+
+export async function barcodeExtraTemplateHandler(
+  _request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const csv =
+    'codigo_migracao;codigobarra;codigoadicional;fator\n' +
+    '1001;7891234567890;7891234567891;1\n' +
+    ';7891234567890;7891234567892;2\n'
+  reply.header('Content-Type', 'text/csv; charset=utf-8')
+  reply.header(
+    'Content-Disposition',
+    'attachment; filename="CodigosAdicionais.csv"'
+  )
+  return reply.send(csv)
+}
+
 export async function startSupplierSendHandler(request: FastifyRequest, reply: FastifyReply) {
   return startOptionalSend(request, reply, {
     parseRows: parseSupplierCsvText,
     startJob: iniciarFornecedorJob,
     emptyMessage:
-      'CSV sem registros. Esperado: codigo;codigobarras;codigofornecedor;codigooriginal;fator (codigo do produto opcional; codigofornecedor=codigo_migracao do fornecedor; codigooriginal=código do produto no fornecedor)',
+      'CSV sem registros. Esperado: codigo_migracao;codigobarra;codigoprodutofornecedor;codigofornecedor;fator (busca por codigo_migracao, senão codigobarra; codigofornecedor=codigo_migracao do favorecido; fator opcional → 1)',
     failMessage: 'Erro ao iniciar importação de códigos de fornecedor',
     logLabel: 'Supplier code send start failed',
   })
@@ -163,13 +233,13 @@ export async function cancelSupplierSendHandler(request: FastifyRequest, reply: 
 
 export async function supplierTemplateHandler(_request: FastifyRequest, reply: FastifyReply) {
   const csv =
-    'codigo;codigobarras;codigofornecedor;codigooriginal;fator\n' +
-    '1001;7891234567890;88001;CAT-12345;1\n' +
-    ';7891234567890;88002;CAT-67890;2\n'
+    'codigo_migracao;codigobarra;codigoprodutofornecedor;codigofornecedor;fator\n' +
+    '1001;7891234567890;CAT-12345;88001;1\n' +
+    ';7891234567890;CAT-67890;88002;2\n'
   reply.header('Content-Type', 'text/csv; charset=utf-8')
   reply.header(
     'Content-Disposition',
-    'attachment; filename="modelo-codigos-fornecedor.csv"'
+    'attachment; filename="CodigoFornecedor.csv"'
   )
   return reply.send(csv)
 }
@@ -316,4 +386,40 @@ export async function lotTemplateHandler(_request: FastifyRequest, reply: Fastif
     'attachment; filename="modelo-lotes-controlados.csv"'
   )
   return reply.send(csv)
+}
+
+export async function collectOptionalFolderHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const parsed = collectFolderBodySchema.safeParse(request.body)
+  if (!parsed.success) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Informe o caminho da pasta.',
+      errors: parsed.error.flatten().fieldErrors,
+    })
+  }
+
+  try {
+    const result = await coletarOpcionaisDaPasta(parsed.data.folderPath)
+    request.log.info(
+      {
+        folderPath: result.folderPath,
+        found: result.found.length,
+        missing: result.missing,
+      },
+      'Optional folder collected'
+    )
+    return reply.send(result)
+  } catch (error) {
+    request.log.error(
+      { err: error, folderPath: parsed.data.folderPath },
+      'Optional folder collect failed'
+    )
+    return reply.status(400).send({
+      success: false,
+      message: error instanceof Error ? error.message : 'Erro ao ler a pasta',
+    })
+  }
 }

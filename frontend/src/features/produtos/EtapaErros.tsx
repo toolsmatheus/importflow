@@ -37,12 +37,24 @@ interface EtapaErrosProps {
   isRevalidating?: boolean
 }
 
-function downloadIssuesCsv(issues: ValidationIssue[], fileName: string) {
-  const header = 'linha;tipo;campo;valor;mensagem'
+function barcodeByCsvRow(
+  rows: Record<string, string>[] | undefined,
+  csvRow: number
+): string {
+  if (!rows || csvRow < 2) return ''
+  return String(rows[csvRow - 2]?.codigobarras ?? '').trim()
+}
+
+function downloadIssuesCsv(
+  issues: ValidationIssue[],
+  fileName: string,
+  rows?: Record<string, string>[]
+) {
+  const header = 'linha;codigobarras;campo;valor;mensagem'
   const lines = issues.map((issue) =>
     [
       issue.row,
-      issue.severity,
+      barcodeByCsvRow(rows, issue.row),
       issue.field,
       `"${issue.value.replace(/"/g, '""')}"`,
       `"${issue.message.replace(/"/g, '""')}"`,
@@ -287,6 +299,7 @@ export function EtapaErros({
             <PainelChecagensInconsistencia
               checks={verifiedErrorChecks}
               issues={result.issues}
+              rows={result.rows}
               truncated={result.truncated}
               defaultExpandWithIssues={false}
               embedded
@@ -311,7 +324,7 @@ export function EtapaErros({
                 className="h-7 px-2 text-xs"
                 onClick={(e) => {
                   e.stopPropagation()
-                  downloadIssuesCsv(errorIssues, 'erros-validacao.csv')
+                  downloadIssuesCsv(errorIssues, 'erros-validacao.csv', result.rows)
                 }}
               >
                 <Download className="h-3.5 w-3.5" />
@@ -323,6 +336,7 @@ export function EtapaErros({
           <PainelChecagensInconsistencia
             checks={errorChecks}
             issues={result.issues}
+            rows={result.rows}
             truncated={result.truncated}
             defaultExpandWithIssues={false}
             embedded
@@ -340,6 +354,7 @@ export function EtapaErros({
           <PainelChecagensInconsistencia
             checks={warningChecks}
             issues={result.issues}
+            rows={result.rows}
             truncated={result.truncated}
             defaultExpandWithIssues={false}
             embedded

@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Download, Search } from 'lucide-react'
 import { cn, formatNumber } from '@/lib/utils'
 import type { EnvioJobSnapshot, ValidationCheckSummaryItem, ValidationIssue } from '@/types'
-import { Button, Badge, Card, GridTh, GridCell } from '@/components'
+import { Button, Card, GridTh, GridCell } from '@/components'
 interface PainelChecagensInconsistenciaProps {
   checks: ValidationCheckSummaryItem[]
   issues?: ValidationIssue[]
+  /** Linhas do CSV (para mostrar código de barras por nº de linha). */
+  rows?: Record<string, string>[]
   title?: string
   description?: string
   truncated?: boolean
@@ -14,6 +16,16 @@ interface PainelChecagensInconsistenciaProps {
   defaultExpandWithIssues?: boolean
   /** Lista sem Card — para embutir em seções recolhíveis. */
   embedded?: boolean
+}
+
+/** Linha do CSV (1 = cabeçalho) → código de barras da linha de dados. */
+function barcodeByCsvRow(
+  rows: Record<string, string>[] | undefined,
+  csvRow: number
+): string {
+  if (!rows || csvRow < 2) return '—'
+  const raw = String(rows[csvRow - 2]?.codigobarras ?? '').trim()
+  return raw || '—'
 }
 
 function groupIssuesByCheck(issues: ValidationIssue[]): Map<string, ValidationIssue[]> {
@@ -36,6 +48,7 @@ function groupIssuesByCheck(issues: ValidationIssue[]): Map<string, ValidationIs
 export function PainelChecagensInconsistencia({
   checks,
   issues = [],
+  rows,
   title = 'Checagens de inconsistência',
   description = 'O que o sistema pesquisou e validou — inclusive quando não encontrou nada.',
   truncated,
@@ -178,7 +191,9 @@ export function PainelChecagensInconsistencia({
                     <thead>
                       <tr>
                         <GridTh className="sticky top-0 z-10 w-16 bg-surface">Linha</GridTh>
-                        <GridTh className="sticky top-0 z-10 w-20 bg-surface">Tipo</GridTh>
+                        <GridTh className="sticky top-0 z-10 min-w-[7rem] bg-surface">
+                          Cód. barras
+                        </GridTh>
                         <GridTh className="sticky top-0 z-10 bg-surface">Campo</GridTh>
                         <GridTh className="sticky top-0 z-10 bg-surface">Valor</GridTh>
                         <GridTh className="sticky top-0 z-10 bg-surface">Mensagem</GridTh>
@@ -188,12 +203,8 @@ export function PainelChecagensInconsistencia({
                       {displayIssues.map((issue, index) => (
                         <tr key={`${issue.row}-${issue.field}-${index}`}>
                           <GridCell>{issue.row || '-'}</GridCell>
-                          <GridCell>
-                            <Badge
-                              variant={issue.severity === 'error' ? 'negative' : 'neutral'}
-                            >
-                              {issue.severity === 'error' ? 'Erro' : 'Alerta'}
-                            </Badge>
+                          <GridCell className="font-mono text-xs">
+                            {barcodeByCsvRow(rows, issue.row)}
                           </GridCell>
                           <GridCell className="font-mono text-xs">{issue.field || '-'}</GridCell>
                           <GridCell className="max-w-[120px] truncate font-mono text-xs">

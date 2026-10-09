@@ -2,6 +2,11 @@ import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactEl
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { produtoServico } from '@/api/produto'
+import { OPCIONAL_TEMPLATE_URL } from '@/api/opcional'
+import {
+  OPTIONAL_IMPORT_META,
+  OPTIONAL_IMPORT_READY_KINDS,
+} from '@/lib/optionalImportMeta'
 import type { AuxiliaryEntity } from '@/types'
 
 const AUXILIARY_MODELS: { entity: AuxiliaryEntity; label: string }[] = [
@@ -13,6 +18,12 @@ const AUXILIARY_MODELS: { entity: AuxiliaryEntity; label: string }[] = [
   { entity: 'similar', label: 'Similar' },
   { entity: 'dcb', label: 'DCB' },
 ]
+
+const OPCIONAL_MODELS = OPTIONAL_IMPORT_READY_KINDS.flatMap((kind) => {
+  const url = OPCIONAL_TEMPLATE_URL[kind]
+  if (!url) return []
+  return [{ kind, label: OPTIONAL_IMPORT_META[kind].shortLabel, url }]
+})
 
 interface MenuModelosProps {
   /** Substitui o botão padrão (ex.: item da Sidebar). */
@@ -68,7 +79,7 @@ export function MenuModelos({ trigger }: MenuModelosProps) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-lg"
+          className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-lg"
         >
           <button
             type="button"
@@ -104,6 +115,31 @@ export function MenuModelos({ trigger }: MenuModelosProps) {
               {label}
             </button>
           ))}
+
+          {OPCIONAL_MODELS.length > 0 ? (
+            <>
+              <div className="my-1 border-t border-line" />
+              <p className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-label text-fg-muted">
+                Etapa 2
+              </p>
+              {OPCIONAL_MODELS.map(({ kind, label, url }) => (
+                <a
+                  key={kind}
+                  role="menuitem"
+                  href={url}
+                  download
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-muted"
+                  onClick={() => {
+                    toast.success(`Download do modelo de ${label} iniciado`)
+                    setOpen(false)
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5 text-fg-muted" />
+                  {label}
+                </a>
+              ))}
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

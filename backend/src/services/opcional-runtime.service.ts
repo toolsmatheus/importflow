@@ -7,10 +7,6 @@ import type {
   OptionalJobStatus,
   OptionalModoEnvio,
 } from '../models/opcional.model.js'
-import {
-  MAX_STORED_OPTIONAL_ERRORS,
-  MAX_STORED_OPTIONAL_SKIPPED,
-} from '../models/opcional.model.js'
 import type { OptionalJobSnapshot } from '../dto/opcional.dto.js'
 import {
   buscarIdentificacaoServidor,
@@ -130,9 +126,9 @@ function paraSnapshot<TError, TSkipped>(
     skippedCount: job.skippedCount,
     percent,
     errors: job.errors,
-    errorsTruncated: job.errors.length >= MAX_STORED_OPTIONAL_ERRORS,
+    errorsTruncated: false,
     skipped: job.skipped,
-    skippedTruncated: job.skipped.length >= MAX_STORED_OPTIONAL_SKIPPED,
+    skippedTruncated: false,
     startedAt: job.startedAt ? new Date(job.startedAt).toISOString() : null,
     finishedAt: job.finishedAt ? new Date(job.finishedAt).toISOString() : null,
   }
@@ -199,12 +195,12 @@ export function criarRuntimeOpcionalJob<TError, TSkipped>() {
   }
 
   function pushError(job: OptionalJobInternal<TError, TSkipped>, error: TError) {
-    if (job.errors.length < MAX_STORED_OPTIONAL_ERRORS) job.errors.push(error)
+    job.errors.push(error)
   }
 
   function pushSkipped(job: OptionalJobInternal<TError, TSkipped>, skip: TSkipped) {
     job.skippedCount++
-    if (job.skipped.length < MAX_STORED_OPTIONAL_SKIPPED) job.skipped.push(skip)
+    job.skipped.push(skip)
   }
 
   return { getJob, startJob, cancelJob, pushError, pushSkipped }

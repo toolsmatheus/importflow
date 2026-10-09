@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 
-/** Junta classes condicionais. As variantes não geram utilitários conflitantes, então não há merge de Tailwind. */
+/** Junta classes condicionais e resolve conflitos de utilitários Tailwind. */
 export function cn(...entradas: ClassValue[]) {
-  return clsx(entradas)
+  return twMerge(clsx(entradas))
 }

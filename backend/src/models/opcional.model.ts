@@ -8,8 +8,79 @@ export type OptionalJobStatus =
 
 export type OptionalModoEnvio = 'live' | 'simulate'
 
-export const MAX_STORED_OPTIONAL_ERRORS = 200
-export const MAX_STORED_OPTIONAL_SKIPPED = 200
+/**
+ * Tipos de importação complementar (Etapa 2) — ordem fixa do fluxo.
+ * 1 barras · 2 fornecedor · 3 estoque · 4 lotes · 5 preço · 6 desconto · 7 validade
+ */
+export type OptionalImportKind =
+  | 'barcodeExtras'
+  | 'supplierRefs'
+  | 'stock'
+  | 'lots'
+  | 'priceUpdate'
+  | 'paymentDiscount'
+  | 'validity'
+
+export const OPTIONAL_IMPORT_KINDS: OptionalImportKind[] = [
+  'barcodeExtras',
+  'supplierRefs',
+  'stock',
+  'lots',
+  'priceUpdate',
+  'paymentDiscount',
+  'validity',
+]
+
+/** Quais tipos já têm envio implementado. */
+export const OPTIONAL_IMPORT_READY: Record<OptionalImportKind, boolean> = {
+  barcodeExtras: true,
+  supplierRefs: true,
+  stock: true,
+  lots: true,
+  priceUpdate: false,
+  paymentDiscount: false,
+  validity: true,
+}
+
+export const OPTIONAL_IMPORT_READY_KINDS: OptionalImportKind[] =
+  OPTIONAL_IMPORT_KINDS.filter((k) => OPTIONAL_IMPORT_READY[k])
+
+/** Nomes aceitos (case-insensitive) por tipo de CSV opcional — primeiro = padrão. */
+export const OPTIONAL_FILE_ALIASES: Record<OptionalImportKind, string[]> = {
+  barcodeExtras: [
+    'CodigosAdicionais.csv',
+    'codigosadicionais.csv',
+    'barras.csv',
+    'barras-adicionais.csv',
+    'modelo-barras-adicionais.csv',
+    'codigoadicional.csv',
+  ],
+  supplierRefs: [
+    'CodigoFornecedor.csv',
+    'codigofornecedor.csv',
+    'codigos-fornecedor.csv',
+    'modelo-codigos-fornecedor.csv',
+    'fornecedor.csv',
+  ],
+  stock: [
+    'estoque.csv',
+    'produtos.csv',
+    'produto.csv',
+    'modelo-estoque.csv',
+  ],
+  lots: ['lotes.csv', 'lotes-controlados.csv', 'modelo-lotes-controlados.csv'],
+  priceUpdate: ['preco.csv', 'precos.csv', 'atualizacao-preco.csv'],
+  paymentDiscount: [
+    'desconto.csv',
+    'descontos.csv',
+    'desconto-condicao-pagamento.csv',
+  ],
+  validity: ['validade.csv', 'validade-produtos.csv', 'modelo-validade-produtos.csv'],
+}
+
+/** Sem teto: Etapa 2 exibe erros/alertas completos na verificação. */
+export const MAX_STORED_OPTIONAL_ERRORS = Number.MAX_SAFE_INTEGER
+export const MAX_STORED_OPTIONAL_SKIPPED = Number.MAX_SAFE_INTEGER
 
 export interface OptionalJobInternal<TError, TSkipped> {
   id: string
@@ -50,6 +121,9 @@ export type LotJobSkipped = OpcionalJobIgnoradoBase
 
 export type ValidityJobError = OpcionalJobErroBase
 export type ValidityJobSkipped = OpcionalJobIgnoradoBase
+
+export type BarcodeExtraJobError = OpcionalJobErroBase
+export type BarcodeExtraJobSkipped = OpcionalJobIgnoradoBase
 
 export interface SupplierJobError {
   index: number

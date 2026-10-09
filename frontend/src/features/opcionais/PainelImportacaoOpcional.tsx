@@ -1,37 +1,43 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  CheckCircle2,
   ClipboardCopy,
   Download,
   Eye,
   EyeOff,
-  FileSpreadsheet,
+  FolderOpen,
   Loader2,
-  Sparkles,
   Upload,
-  X,
 } from 'lucide-react'
-import { cn, formatBytes, formatNumber } from '@/lib/utils'
-import { OPTIONAL_IMPORT_META } from '@/lib/optionalImportMeta'
+import { formatNumber } from '@/lib/utils'
+import {
+  OPTIONAL_IMPORT_META,
+  OPTIONAL_IMPORT_READY,
+} from '@/lib/optionalImportMeta'
 import { useAssistenteImportacao } from '@/features/produtos/useAssistenteImportacao'
+import { ZonaSoltarArquivo } from '@/features/produtos/ZonaSoltarArquivo'
+import { DEFAULT_FOLDER_PATH } from '@/features/produtos/PainelColetaPasta'
 import {
   opcionalServico,
   type OptionalJobSnapshot,
 } from '@/api/opcional'
-import type { OptionalImportKind } from '@/types'
-import { Button, Badge, Progress, GridTh, GridCell, buttonVariants } from '@/components'
+import type { FileInputMode, OptionalImportKind } from '@/types'
+import {
+  Button,
+  Badge,
+  Input,
+  Progress,
+  GridTh,
+  GridCell,
+  buttonVariants,
+} from '@/components'
+
 interface PainelImportacaoOpcionalProps {
   kind: OptionalImportKind
   onBack: () => void
-  onBackToThemes?: () => void
-  themeLabel?: string
-  icon?: ReactNode
 }
 
-function isCsvFile(file: File) {
-  return file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv'
-}
+const FOLDER_PATH_KEY = 'toolsdataweb.collectFolderPath'
 
 function errorDetail(err: OptionalJobSnapshot['errors'][number]): string {
   return err.codigofornecedor || err.codigo || '-'
@@ -43,30 +49,28 @@ function skippedDetail(
   return skip.codigofornecedor || skip.codigo || '-'
 }
 
-export function PainelImportacaoOpcional({
-  kind,
-  onBack,
-  onBackToThemes,
-  themeLabel = 'Produtos',
-  icon,
-}: PainelImportacaoOpcionalProps) {
+function readStoredFolder(): string {
+  try {
+    return localStorage.getItem(FOLDER_PATH_KEY)?.trim() || DEFAULT_FOLDER_PATH
+  } catch {
+    return DEFAULT_FOLDER_PATH
+  }
+}
+
+export function PainelImportacaoOpcional({ kind, onBack }: PainelImportacaoOpcionalProps) {
   const meta = OPTIONAL_IMPORT_META[kind]
+  const ready = OPTIONAL_IMPORT_READY[kind]
   const { tmsBaseUrl } = useAssistenteImportacao()
-  const inputId = useId()
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [inputMode, setInputMode] = useState<FileInputMode>('manual')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
+  const [folderPath, setFolderPath] = useState(DEFAULT_FOLDER_PATH)
+  const [collecting, setCollecting] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [job, setJob] = useState<OptionalJobSnapshot | null>(null)
   const [showSkipped, setShowSkipped] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
 
   const headerLine = meta.columns.join(';')
-  const importReady =
-    kind === 'supplierRefs' ||
-    kind === 'validity' ||
-    kind === 'stock' ||
-    kind === 'lots'
   const templateUrl =
     kind === 'supplierRefs'
       ? opcionalServico.supplierTemplateUrl
@@ -87,20 +91,25 @@ export function PainelImportacaoOpcional({
     setJob(null)
     setShowSkipped(false)
     setShowErrors(false)
+    setInputMode('manual')
+    setFolderPath(readStoredFolder())
   }, [kind])
+
+  useEffect(() => {
+    const trimmed = folderPath.trim()
+    if (!trimmed) return
+    try {
+      localStorage.setItem(FOLDER_PATH_KEY, trimmed)
+    } catch {
+      /* ignore */
+    }
+  }, [folderPath])
 
   useEffect(() => {
     if (!job || !['running', 'queued'].includes(job.status)) return
     const timer = setInterval(async () => {
       try {
-        const next =
-          kind === 'supplierRefs'
-            ? await opcionalServico.getSupplierJob(job.id)
-            : kind === 'validity'
-              ? await opcionalServico.getValidityJob(job.id)
-              : kind === 'stock'
-                ? await opcionalServico.getStockJob(job.id)
-                : await opcionalServico.getLotJob(job.id)
+        const next = await opcionalServico.getJob(kind, job.id)
         setJob(next)
       } catch {
         /* ignore poll errors */
@@ -109,12 +118,7 @@ export function PainelImportacaoOpcional({
     return () => clearInterval(timer)
   }, [job?.id, job?.status, kind])
 
-  const acceptFile = useCallback((file: File | undefined) => {
-    if (!file) return
-    if (!isCsvFile(file)) {
-      toast.error('Envie apenas arquivos .csv')
-      return
-    }
+  const acceptFile = useCallback((file: File) => {
     setSelectedFile(file)
     setJob(null)
     setShowSkipped(false)
@@ -130,31 +134,49 @@ export function PainelImportacaoOpcional({
     }
   }
 
-  const handleImport = async (mode: 'live' | 'simulate' = 'live') => {
+  const handleCollect = async () => {
+    const path = folderPath.trim() || DEFAULT_FOLDER_PATH
+    if (!folderPath.trim()) setFolderPath(DEFAULT_FOLDER_PATH)
+    setCollecting(true)
+    try {
+      const result = await opcionalServico.collectFolder(path)
+      const match = result.files.find((f) => f.kind === kind)
+      if (!match) {
+        toast.error(`Arquivo de ${meta.shortLabel} não encontrado na pasta`, {
+          description: `Esperado: ${meta.exampleFileName}`,
+        })
+        return
+      }
+      const file = new File([match.content], match.fileName, { type: 'text/csv' })
+      acceptFile(file)
+      toast.success(`Coletado: ${match.fileName}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao coletar pasta')
+    } finally {
+      setCollecting(false)
+    }
+  }
+
+  const handleImport = async () => {
     if (!selectedFile) {
       toast.error('Selecione um CSV antes de importar')
       return
     }
-
-    if (!importReady) {
+    if (!ready) {
       toast.message('Em breve', {
-        description: `${meta.shortLabel}: envio ainda não disponível.`,
+        description: `${meta.title}: envio ainda não disponível.`,
       })
       return
     }
 
     setIsSubmitting(true)
     try {
-      const snapshot =
-        kind === 'supplierRefs'
-          ? await opcionalServico.startSupplierSend(selectedFile, { tmsBaseUrl, mode })
-          : kind === 'validity'
-            ? await opcionalServico.startValiditySend(selectedFile, { tmsBaseUrl, mode })
-            : kind === 'stock'
-              ? await opcionalServico.startStockSend(selectedFile, { tmsBaseUrl, mode })
-              : await opcionalServico.startLotSend(selectedFile, { tmsBaseUrl, mode })
+      const snapshot = await opcionalServico.startSend(kind, selectedFile, {
+        tmsBaseUrl,
+        mode: 'live',
+      })
       setJob(snapshot)
-      toast.success(mode === 'simulate' ? 'Simulação iniciada' : 'Importação iniciada')
+      toast.success('Importação iniciada')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao iniciar importação')
     } finally {
@@ -163,40 +185,23 @@ export function PainelImportacaoOpcional({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div className="space-y-3">
-        <nav
-          aria-label="Navegação"
-          className="flex flex-wrap items-center gap-1.5 text-sm text-fg-muted"
-        >
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <nav aria-label="Navegação" className="flex flex-wrap items-center gap-1.5 text-sm text-fg-muted">
           <button
             type="button"
-            onClick={onBackToThemes ?? onBack}
+            onClick={onBack}
             className="rounded-md px-1.5 py-0.5 hover:bg-surface-muted hover:text-fg-strong"
           >
-            Opcionais
+            Etapa 2
           </button>
           <span aria-hidden>/</span>
-          <span className="text-fg-muted">{themeLabel}</span>
-          <span aria-hidden>/</span>
-          <span className="font-medium text-fg-strong">{meta.shortLabel}</span>
+          <span className="font-medium text-fg-strong">{meta.title}</span>
         </nav>
-
-        <div className="flex items-start gap-3">
-          {icon ? (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              {icon}
-            </div>
-          ) : null}
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight">{meta.title}</h2>
-            <p className="mt-0.5 text-sm text-fg-muted">{meta.description}</p>
-          </div>
-        </div>
+        <p className="text-sm text-fg-muted">{meta.description}</p>
       </div>
 
-      {/* Modelo compacto */}
-      <div className="rounded-xl border border-line bg-surface p-4">
+      <div className="rounded-lg border border-line bg-surface px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium">CSV · {headerLine}</p>
           <div className="flex flex-wrap gap-2">
@@ -206,8 +211,8 @@ export function PainelImportacaoOpcional({
                 download
                 className={buttonVariants({ variant: 'secondary', size: 'sm' })}
               >
-                  <Download className="h-3.5 w-3.5" />
-                  Modelo
+                <Download className="h-3.5 w-3.5" />
+                Modelo
               </a>
             ) : null}
             <Button type="button" variant="secondary" size="sm" onClick={() => void copyHeader()}>
@@ -216,233 +221,219 @@ export function PainelImportacaoOpcional({
             </Button>
           </div>
         </div>
-        <p className="mt-2 font-mono text-xs text-fg-muted">
-          Ex.: {meta.sampleRow.join(';')}
-        </p>
+        <p className="mt-2 font-mono text-xs text-fg-muted">Ex.: {meta.sampleRow.join(';')}</p>
         <p className="mt-1.5 text-xs text-fg-muted">{meta.sourceHint}</p>
       </div>
 
-      {/* Upload */}
-      <div className="rounded-xl border border-line bg-surface p-4">
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="file"
-          accept=".csv,text/csv"
-          className="sr-only"
-          onChange={(e) => {
-            acceptFile(e.target.files?.[0])
-            e.target.value = ''
-          }}
-        />
-
-        <div
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              inputRef.current?.click()
-            }
-          }}
-          onDragOver={(e) => {
-            e.preventDefault()
-            setIsDragging(true)
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setIsDragging(false)
-            acceptFile(e.dataTransfer.files[0])
-          }}
-          onClick={() => inputRef.current?.click()}
-          className={cn(
-            'relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-all outline-none',
-            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-            isDragging && 'border-action bg-accent/60',
-            !isDragging &&
-              !selectedFile &&
-              'border-line bg-surface-muted/20 hover:border-action/50 hover:bg-accent/30',
-            selectedFile && !isDragging && 'border-action/40 bg-accent/20'
-          )}
-        >
-          {selectedFile ? (
-            <>
-              <CheckCircle2 className="mb-2 h-7 w-7 text-action" />
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <FileSpreadsheet className="h-4 w-4 text-action" />
-                {selectedFile.name}
-              </p>
-              <p className="mt-0.5 text-xs text-fg-muted">
-                {formatBytes(selectedFile.size)}
-              </p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mt-3"
-                disabled={Boolean(active)}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedFile(null)
-                  setJob(null)
-                  setShowSkipped(false)
-                  setShowErrors(false)
-                }}
-              >
-                <X className="h-3.5 w-3.5" />
-                Remover
-              </Button>
-            </>
-          ) : (
-            <>
-              <Upload className="mb-2 h-6 w-6 text-fg-muted" />
-              <p className="text-sm font-medium">Solte o CSV ou clique para escolher</p>
-            </>
-          )}
+      {!ready ? (
+        <div className="rounded-lg border border-line bg-surface-muted/30 px-4 py-6 text-center text-sm text-fg-muted">
+          Envio em breve para este item.
         </div>
-
-        {job ? (
-          <div className="mt-4 space-y-3 rounded-lg border border-line p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="font-medium">
-                {job.mode === 'simulate' ? 'Simulação' : 'Envio'} · {job.status}
-              </span>
-              <span className="text-fg-muted">{job.percent}%</span>
-            </div>
-            <Progress value={job.percent} />
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="neutral" className="gap-1 font-normal">
-                Ok {formatNumber(job.successCount)}
-              </Badge>
-              <Badge variant="neutral" className="gap-1 font-normal">
-                Ignorados {formatNumber(job.skippedCount)}
-              </Badge>
-              <Badge
-                variant={job.errorCount > 0 ? 'negative' : 'neutral'}
-                className="gap-1 font-normal"
-              >
-                Falhas {formatNumber(job.errorCount)}
-              </Badge>
-            </div>
-
-            {job.skippedCount > 0 ? (
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2"
-                  onClick={() => setShowSkipped((v) => !v)}
-                >
-                  {showSkipped ? (
-                    <EyeOff className="h-3.5 w-3.5" />
-                  ) : (
-                    <Eye className="h-3.5 w-3.5" />
-                  )}
-                  {showSkipped ? 'Ocultar ignorados' : 'Ver ignorados'}
-                </Button>
-                {showSkipped && (job.skipped?.length ?? 0) > 0 ? (
-                  <div className="max-h-44 overflow-auto rounded-md border">
-                    <table className="w-full border-collapse font-data text-sm">
-                      <thead>
-                        <tr>
-                          <GridTh>Linha</GridTh>
-                          <GridTh>Código</GridTh>
-                          <GridTh>Motivo</GridTh>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {job.skipped!.map((skip) => (
-                          <tr key={`skip-${skip.index}-${skippedDetail(skip)}`}>
-                            <GridCell>{skip.index >= 0 ? skip.index + 2 : '-'}</GridCell>
-                            <GridCell className="font-mono text-xs">
-                              {skippedDetail(skip)}
-                            </GridCell>
-                            <GridCell className="text-xs text-fg-muted">
-                              {skip.message}
-                            </GridCell>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {job.errors.length > 0 ? (
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2"
-                  onClick={() => setShowErrors((v) => !v)}
-                >
-                  {showErrors ? (
-                    <EyeOff className="h-3.5 w-3.5" />
-                  ) : (
-                    <Eye className="h-3.5 w-3.5" />
-                  )}
-                  {showErrors ? 'Ocultar falhas' : 'Ver falhas'}
-                </Button>
-                {showErrors ? (
-                  <div className="max-h-44 overflow-auto rounded-md border">
-                    <table className="w-full border-collapse font-data text-sm">
-                      <thead>
-                        <tr>
-                          <GridTh>Linha</GridTh>
-                          <GridTh>Código</GridTh>
-                          <GridTh>Mensagem</GridTh>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {job.errors.map((err) => (
-                          <tr key={`${err.index}-${errorDetail(err)}`}>
-                            <GridCell>{err.index >= 0 ? err.index + 2 : '-'}</GridCell>
-                            <GridCell className="font-mono text-xs">
-                              {errorDetail(err)}
-                            </GridCell>
-                            <GridCell className="text-danger text-xs">
-                              {err.message}
-                            </GridCell>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {finished && job.mode === 'simulate' ? (
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                Simulação — nada gravado no banco.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
-          <Button type="button" variant="secondary" onClick={onBack} disabled={Boolean(active)}>
-            Voltar
-          </Button>
-          {importReady ? (
+      ) : (
+        <>
+          <div className="inline-flex rounded-md border border-line p-0.5">
             <Button
-              type="button"
-              variant="secondary"
-              disabled={isSubmitting || !selectedFile || Boolean(active)}
-              onClick={() => void handleImport('simulate')}
+              size="sm"
+              variant={inputMode === 'manual' ? 'secondary' : 'ghost'}
+              className="h-8"
+              disabled={Boolean(active)}
+              onClick={() => setInputMode('manual')}
             >
-              <Sparkles className="h-4 w-4" />
-              Simular
+              Manual
             </Button>
+            <Button
+              size="sm"
+              variant={inputMode === 'folder' ? 'secondary' : 'ghost'}
+              className="h-8"
+              disabled={Boolean(active)}
+              onClick={() => setInputMode('folder')}
+            >
+              Pasta
+            </Button>
+          </div>
+
+          {inputMode === 'manual' ? (
+            <ZonaSoltarArquivo
+              onFileSelect={acceptFile}
+              selectedFile={selectedFile}
+              isLoading={isSubmitting || Boolean(active)}
+              title="Selecione o arquivo"
+              description={`Envie o CSV de ${meta.shortLabel.toLowerCase()} (delimitador ;).`}
+              inputLabel={`Selecionar CSV de ${meta.shortLabel}`}
+            />
+          ) : (
+            <div className="space-y-2 rounded-lg border border-line bg-surface px-3 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FolderOpen className="h-4 w-4 text-fg-muted" />
+                Coletar pasta
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={folderPath}
+                  onChange={(e) => setFolderPath(e.target.value)}
+                  onBlur={() => {
+                    if (!folderPath.trim()) setFolderPath(DEFAULT_FOLDER_PATH)
+                  }}
+                  placeholder={DEFAULT_FOLDER_PATH}
+                  className="font-mono text-sm"
+                  disabled={collecting || Boolean(active)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={collecting || Boolean(active)}
+                  onClick={() => void handleCollect()}
+                >
+                  {collecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4" />
+                  )}
+                  Coletar
+                </Button>
+              </div>
+              {selectedFile ? (
+                <p className="text-xs text-fg-muted">
+                  Arquivo: <span className="font-mono">{selectedFile.name}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-fg-subtle">Esperado: {meta.exampleFileName}</p>
+              )}
+            </div>
+          )}
+
+          {job ? (
+            <div className="space-y-3 rounded-lg border border-line bg-surface p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-medium">Envio · {job.status}</span>
+                <span className="text-fg-muted">{job.percent}%</span>
+              </div>
+              <Progress value={job.percent} />
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="neutral" className="gap-1 font-normal">
+                  Ok {formatNumber(job.successCount)}
+                </Badge>
+                <Badge variant="neutral" className="gap-1 font-normal">
+                  Ignorados {formatNumber(job.skippedCount)}
+                </Badge>
+                <Badge
+                  variant={job.errorCount > 0 ? 'negative' : 'neutral'}
+                  className="gap-1 font-normal"
+                >
+                  Falhas {formatNumber(job.errorCount)}
+                </Badge>
+              </div>
+
+              {job.skippedCount > 0 ? (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => setShowSkipped((v) => !v)}
+                  >
+                    {showSkipped ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                    {showSkipped ? 'Ocultar ignorados' : 'Ver ignorados'}
+                  </Button>
+                  {showSkipped && (job.skipped?.length ?? 0) > 0 ? (
+                    <div className="max-h-44 overflow-auto rounded-md border">
+                      <table className="w-full border-collapse font-data text-sm">
+                        <thead>
+                          <tr>
+                            <GridTh>Linha</GridTh>
+                            <GridTh>Código</GridTh>
+                            <GridTh>Motivo</GridTh>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {job.skipped!.map((skip) => (
+                            <tr key={`skip-${skip.index}-${skippedDetail(skip)}`}>
+                              <GridCell>{skip.index >= 0 ? skip.index + 2 : '-'}</GridCell>
+                              <GridCell className="font-mono text-xs">
+                                {skippedDetail(skip)}
+                              </GridCell>
+                              <GridCell className="text-xs text-fg-muted">
+                                {skip.message}
+                              </GridCell>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {job.errors.length > 0 ? (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => setShowErrors((v) => !v)}
+                  >
+                    {showErrors ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                    {showErrors ? 'Ocultar falhas' : 'Ver falhas'}
+                  </Button>
+                  {showErrors ? (
+                    <div className="max-h-44 overflow-auto rounded-md border">
+                      <table className="w-full border-collapse font-data text-sm">
+                        <thead>
+                          <tr>
+                            <GridTh>Linha</GridTh>
+                            <GridTh>Código</GridTh>
+                            <GridTh>Mensagem</GridTh>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {job.errors.map((err) => (
+                            <tr key={`${err.index}-${errorDetail(err)}`}>
+                              <GridCell>{err.index >= 0 ? err.index + 2 : '-'}</GridCell>
+                              <GridCell className="font-mono text-xs">
+                                {errorDetail(err)}
+                              </GridCell>
+                              <GridCell className="text-danger text-xs">
+                                {err.message}
+                              </GridCell>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {finished ? (
+                <p className="text-xs text-fg-muted">
+                  Concluído · ok {formatNumber(job.successCount)} · falhas{' '}
+                  {formatNumber(job.errorCount)}
+                </p>
+              ) : null}
+            </div>
           ) : null}
+        </>
+      )}
+
+      <div className="flex justify-between pt-1">
+        <Button type="button" variant="secondary" onClick={onBack} disabled={Boolean(active)}>
+          Voltar
+        </Button>
+        {ready ? (
           <Button
             type="button"
-            className="ml-auto"
-            onClick={() => void handleImport('live')}
+            onClick={() => void handleImport()}
             disabled={isSubmitting || !selectedFile || Boolean(active)}
           >
             {isSubmitting || active ? (
@@ -452,7 +443,7 @@ export function PainelImportacaoOpcional({
             )}
             Importar
           </Button>
-        </div>
+        ) : null}
       </div>
     </div>
   )

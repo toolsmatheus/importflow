@@ -6,6 +6,13 @@ import type {
   CollectedAuxiliaryDto,
   FolderCollectResultDto,
 } from '../dto/coleta-pasta.dto.js'
+import type { OptionalFolderCollectResultDto } from '../dto/opcional.dto.js'
+import {
+  OPTIONAL_FILE_ALIASES,
+  OPTIONAL_IMPORT_KINDS,
+  OPTIONAL_IMPORT_READY_KINDS,
+  type OptionalImportKind,
+} from '../models/opcional.model.js'
 import type { CsvAnalysisResult } from '../schemas/csv.schema.js'
 import { loadAuxiliaryCatalog } from './auxiliar.service.js'
 import { salvarArquivoEnviado } from './csv-arquivo.service.js'
@@ -135,4 +142,63 @@ export function expectedFolderFiles(): { role: string; names: string[] }[] {
       names: AUXILIARY_FILE_ALIASES[entity],
     })),
   ]
+}
+
+export type OptionalFolderCollectResult = OptionalFolderCollectResultDto
+
+/** Coleta CSVs da Etapa 2 (fornecedor / validade / estoque / lotes) pela pasta. */
+export async function coletarOpcionaisDaPasta(
+  folderPath: string
+): Promise<OptionalFolderCollectResult> {
+  const resolved = path.resolve(folderPath)
+  const stat = await fs.stat(resolved).catch(() => null)
+
+  if (!stat || !stat.isDirectory()) {
+    throw new Error(`Pasta não encontrada ou inválida: ${resolved}`)
+  }
+
+  const entries = await fs.readdir(resolved, { withFileTypes: true })
+  const csvFiles = entries.filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.csv'))
+  const filesByNorm = new Map(csvFiles.map((e) => [normalizeName(e.name), e.name]))
+
+  const found: OptionalFolderCollectResult['found'] = []
+  const missing: string[] = []
+  const files: OptionalFolderCollectResult['files'] = []
+  const claimed = new Set<string>()
+
+  for (const kind of OPTIONAL_IMPORT_READY_KINDS) {
+    const aliases = OPTIONAL_FILE_ALIASES[kind]
+    const fileName = findByAliases(filesByNorm, aliases)
+
+    if (!fileName) {
+      missing.push(aliases[0])
+      continue
+    }
+
+    const norm = normalizeName(fileName)
+    if (claimed.has(norm)) continue
+    claimed.add(norm)
+
+    const fullPath = path.join(resolved, fileName)
+    const content = await fs.readFile(fullPath, 'utf8')
+    found.push({ kind, fileName })
+    files.push({ kind, fileName, content })
+  }
+
+  return {
+    folderPath: resolved,
+    found,
+    missing,
+    files,
+  }
+}
+
+export function expectedOptionalFolderFiles(): {
+  kind: OptionalImportKind
+  names: string[]
+}[] {
+  return OPTIONAL_IMPORT_KINDS.map((kind) => ({
+    kind,
+    names: OPTIONAL_FILE_ALIASES[kind],
+  }))
 }

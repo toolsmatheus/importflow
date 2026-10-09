@@ -228,7 +228,10 @@ export function usableMigracaoCodigo(codigo: string): string {
   return t
 }
 
-/** Resolve produto by migracao (if usable) then barcode. */
+/**
+ * Resolve produto: codigo_migracao (se usable) → se não achar, codigobarra.
+ * Só falha quando nenhum dos dois localiza o produto.
+ */
 export function resolveProdutoIdFromCsv(
   existence: ProductExistenceCatalogs,
   codigo: string,
@@ -241,12 +244,18 @@ export function resolveProdutoIdFromCsv(
       existence.byMigracao.get(migracao) ??
       existence.byMigracao.get(String(Number(migracao)))
   }
-  if (produtoId === undefined && codigobarras) {
-    produtoId =
-      existence.byBarcode.get(codigobarras) ??
-      existence.byBarcode.get(codigobarras.replace(/\D/g, ''))
-  }
-  return produtoId
+  if (produtoId !== undefined) return produtoId
+
+  const barcode = codigobarras.trim()
+  if (!barcode) return undefined
+  const digits = barcode.replace(/\D/g, '')
+  return (
+    existence.byBarcode.get(barcode) ??
+    (digits ? existence.byBarcode.get(digits) : undefined) ??
+    (Number.isInteger(Number(barcode))
+      ? existence.byBarcode.get(String(Number(barcode)))
+      : undefined)
+  )
 }
 
 /**
@@ -297,6 +306,8 @@ function addExistenceKey(map: Map<string, number>, key: unknown, id: number) {
   const raw = String(key).trim()
   if (!raw) return
   if (!map.has(raw)) map.set(raw, id)
+  const digits = raw.replace(/\D/g, '')
+  if (digits && !map.has(digits)) map.set(digits, id)
   const n = Number(raw)
   if (Number.isInteger(n) && !map.has(String(n))) map.set(String(n), id)
 }

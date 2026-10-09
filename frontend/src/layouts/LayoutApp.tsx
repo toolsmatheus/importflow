@@ -1,13 +1,41 @@
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
-import { Download } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { Toaster } from 'sonner'
 import { Button, cn } from '@/components'
 import { MenuModelos } from '@/components/shared/MenuModelos'
 
+const PRODUTOS_OPCOES = [
+  { path: '/import/produtos', label: 'Etapa 1' },
+  { path: '/import/opcionais', label: 'Etapa 2' },
+] as const
+
 export function LayoutApp() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [menuAberto, setMenuAberto] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
   const ativoProdutos = location.pathname.startsWith('/import/produtos')
+  const ativoOpcionais = location.pathname.startsWith('/import/opcionais')
+  const emAreaProdutos = ativoProdutos || ativoOpcionais
+  const rotuloAtual = ativoOpcionais ? 'Etapa 2' : 'Etapa 1'
+
+  useEffect(() => {
+    if (!menuAberto) return
+    const onPointer = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuAberto(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuAberto(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuAberto])
 
   return (
     <div className="min-h-screen bg-surface-muted">
@@ -32,36 +60,61 @@ export function LayoutApp() {
 
           <div className="mx-1 hidden w-px self-center bg-line sm:block" aria-hidden />
 
-          <nav className="flex min-w-0 flex-1 items-stretch gap-0" aria-label="Principal">
-            <button
-              type="button"
-              onClick={() => navigate('/import/produtos')}
-              className={cn(
-                'relative inline-flex items-center px-3 text-sm transition-colors sm:px-4',
-                ativoProdutos
-                  ? 'font-semibold text-fg-strong'
-                  : 'font-medium text-fg-muted hover:text-fg-strong'
-              )}
-              aria-current={ativoProdutos ? 'page' : undefined}
-            >
-              Produtos
-              {ativoProdutos ? (
-                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-action sm:inset-x-4" />
-              ) : null}
-            </button>
+          <nav className="flex min-w-0 flex-1 items-stretch" aria-label="Principal">
+            <div ref={menuRef} className="relative flex items-stretch">
+              <button
+                type="button"
+                onClick={() => setMenuAberto((v) => !v)}
+                className={cn(
+                  'relative inline-flex items-center gap-1.5 px-3 text-sm transition-colors sm:px-4',
+                  emAreaProdutos
+                    ? 'font-semibold text-fg-strong'
+                    : 'font-medium text-fg-muted hover:text-fg-strong'
+                )}
+                aria-expanded={menuAberto}
+                aria-haspopup="menu"
+              >
+                Produtos
+                <span className="hidden font-normal text-fg-muted sm:inline">· {rotuloAtual}</span>
+                <ChevronDown
+                  className={cn('h-3.5 w-3.5 text-fg-muted transition-transform', menuAberto && 'rotate-180')}
+                  aria-hidden
+                />
+                {emAreaProdutos ? (
+                  <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-action sm:inset-x-4" />
+                ) : null}
+              </button>
 
-            <button
-              type="button"
-              disabled
-              title="Em breve"
-              aria-disabled="true"
-              className="relative inline-flex cursor-not-allowed items-center gap-2 px-3 text-sm font-medium text-fg-faint sm:px-4"
-            >
-              Opcionais
-              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-label text-fg-subtle">
-                Em breve
-              </span>
-            </button>
+              {menuAberto ? (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full z-50 mt-1 min-w-[11rem] overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-lg"
+                >
+                  {PRODUTOS_OPCOES.map((opcao) => {
+                    const ativo = location.pathname.startsWith(opcao.path)
+                    return (
+                      <button
+                        key={opcao.path}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          navigate(opcao.path)
+                          setMenuAberto(false)
+                        }}
+                        className={cn(
+                          'flex w-full px-3 py-2 text-left text-sm transition-colors',
+                          ativo
+                            ? 'bg-action-subtle font-semibold text-action'
+                            : 'text-fg hover:bg-surface-muted'
+                        )}
+                      >
+                        {opcao.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
           </nav>
 
           <div className="flex shrink-0 items-center self-center">

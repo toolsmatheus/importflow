@@ -34,6 +34,10 @@ describe('resolveProdutoIdFromCsv', () => {
     expect(resolveProdutoIdFromCsv(existence, '0', '7891234567890')).toBe(50)
   })
 
+  it('falls back to barcode when migration is not found', () => {
+    expect(resolveProdutoIdFromCsv(existence, '9999', '7891234567890')).toBe(50)
+  })
+
   it('returns undefined when not found', () => {
     expect(resolveProdutoIdFromCsv(existence, '9999', '')).toBeUndefined()
   })

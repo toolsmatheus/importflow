@@ -1,5 +1,8 @@
 import type { OptionalImportKind } from '@/types'
-import { OPTIONAL_IMPORT_KINDS } from '@/lib/optionalImportMeta'
+import {
+  OPTIONAL_IMPORT_KINDS,
+  OPTIONAL_IMPORT_READY_KINDS,
+} from '@/lib/optionalImportMeta'
 
 export type OptionalThemeId = 'produtos'
 
@@ -19,7 +22,7 @@ export const OPTIONAL_THEMES: OptionalThemeMeta[] = [
     id: 'produtos',
     label: 'Produtos',
     description: 'Fornecedor, validade, estoque e lotes de controlados.',
-    importCount: OPTIONAL_IMPORT_KINDS.length,
+    importCount: OPTIONAL_IMPORT_READY_KINDS.length,
     available: true,
     kinds: [...OPTIONAL_IMPORT_KINDS],
   },

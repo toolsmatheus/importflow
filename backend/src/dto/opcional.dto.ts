@@ -1,4 +1,5 @@
 import type {
+  OptionalImportKind,
   OptionalJobStatus,
   OptionalModoEnvio,
   LotJobError,
@@ -10,6 +11,20 @@ import type {
   ValidityJobError,
   ValidityJobSkipped,
 } from '../models/opcional.model.js'
+
+export interface OptionalCollectedFileDto {
+  kind: OptionalImportKind
+  fileName: string
+  /** Conteúdo UTF-8 do CSV (para o cliente montar File e enviar). */
+  content: string
+}
+
+export interface OptionalFolderCollectResultDto {
+  folderPath: string
+  found: { kind: OptionalImportKind; fileName: string }[]
+  missing: string[]
+  files: OptionalCollectedFileDto[]
+}
 
 export interface OptionalJobSnapshotDto<TError, TSkipped> {
   id: string

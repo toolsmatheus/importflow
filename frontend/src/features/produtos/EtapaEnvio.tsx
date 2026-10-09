@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import {
+  ArrowRight,
   CheckCircle2,
   Download,
   Loader2,
@@ -61,6 +63,7 @@ export function EtapaEnvio({
   auxiliary,
   validationResult,
 }: EtapaEnvioProps) {
+  const navigate = useNavigate()
   const [idFilialPreview, setIdFilialPreview] = useState<number | null>(null)
   const [versaoPreview, setVersaoPreview] = useState<string | null>(null)
   const progressRef = useRef<HTMLDivElement>(null)
@@ -565,12 +568,30 @@ export function EtapaEnvio({
           <PainelChecagensInconsistencia
             checks={validationResult!.checkSummary!}
             issues={validationResult?.issues}
+            rows={validationResult?.rows}
             truncated={validationResult?.truncated}
             embedded
             defaultExpandWithIssues={false}
           />
         </SoftExpand>
       )}
+
+      {finished && job?.status !== 'cancelled' ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2.5">
+          <p className="text-sm text-fg-muted">Importar estoque, lotes, fornecedor…</p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              onFinish()
+              navigate('/import/opcionais')
+            }}
+          >
+            Ir para Etapa 2
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex justify-between pt-1">
         <Button variant="secondary" onClick={onBack} disabled={Boolean(active)}>

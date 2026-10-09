@@ -64,7 +64,7 @@ async function runStockJob(job: StockJobInternal): Promise<void> {
 
       const row = job.rows[index]
       const codigo = cell(row, 'codigo')
-      const codigobarras = cell(row, 'codigobarras', 'codigobarra')
+      const codigobarras = cell(row, 'codigobarra', 'codigo_barra', 'codigobarras')
       // Layout produto: estoque | layout código de barras (Delphi): quantidade / quantidadeestoque
       const estoqueRaw = cell(
         row,
@@ -117,12 +117,20 @@ async function runStockJob(job: StockJobInternal): Promise<void> {
 
       if (produtoId === undefined) {
         job.errorCount++
+        const triedMigracao = Boolean(migracao)
+        const triedBarcode = Boolean(codigobarras)
+        let message: string
+        if (triedMigracao && triedBarcode) {
+          message = `Produto não encontrado (codigo_migracao=${migracao}, codigobarra=${codigobarras})`
+        } else if (triedMigracao) {
+          message = `Produto codigo_migracao=${migracao} não encontrado no banco`
+        } else {
+          message = `Produto com código de barras ${codigobarras} não encontrado no banco`
+        }
         runtime.pushError(job, {
           index,
           codigo: ref,
-          message: migracao
-            ? `Produto codigo_migracao=${migracao} não encontrado no banco`
-            : `Produto com código de barras ${codigobarras} não encontrado no banco`,
+          message,
         })
         job.processed++
         continue

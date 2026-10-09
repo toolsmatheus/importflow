@@ -59,7 +59,7 @@ export function DialogContent({ className, children, ...props }: ComponentProps<
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-10 grid w-full max-w-lg gap-4 rounded-lg border border-line bg-surface p-6 shadow-sm',
+          'relative z-10 flex w-full max-w-lg flex-col gap-4 rounded-lg border border-line bg-surface p-6 shadow-sm',
           className,
         )}
         {...props}

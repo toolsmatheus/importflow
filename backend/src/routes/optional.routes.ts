@@ -1,14 +1,19 @@
 import type { FastifyInstance } from 'fastify'
 import {
+  barcodeExtraTemplateHandler,
+  cancelBarcodeExtraSendHandler,
   cancelLotSendHandler,
   cancelStockSendHandler,
   cancelSupplierSendHandler,
   cancelValiditySendHandler,
+  collectOptionalFolderHandler,
+  getBarcodeExtraSendHandler,
   getLotSendHandler,
   getStockSendHandler,
   getSupplierSendHandler,
   getValiditySendHandler,
   lotTemplateHandler,
+  startBarcodeExtraSendHandler,
   startLotSendHandler,
   startStockSendHandler,
   startSupplierSendHandler,
@@ -19,6 +24,17 @@ import {
 } from '../controller/opcional.controller.js'
 
 export async function optionalRoutes(app: FastifyInstance) {
+  app.post('/opcionais/collect-folder', collectOptionalFolderHandler)
+  app.post('/opcionais/coleta-pasta', collectOptionalFolderHandler)
+
+  app.get('/opcionais/barcode-extras/template', barcodeExtraTemplateHandler)
+  app.post('/opcionais/barcode-extras/send/start', startBarcodeExtraSendHandler)
+  app.get('/opcionais/barcode-extras/send/:jobId', getBarcodeExtraSendHandler)
+  app.post(
+    '/opcionais/barcode-extras/send/:jobId/cancel',
+    cancelBarcodeExtraSendHandler
+  )
+
   app.get('/opcionais/supplier-refs/template', supplierTemplateHandler)
   app.post('/opcionais/supplier-refs/send/start', startSupplierSendHandler)
   app.get('/opcionais/supplier-refs/send/:jobId', getSupplierSendHandler)

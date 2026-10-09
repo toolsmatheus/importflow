@@ -9,6 +9,9 @@ interface ZonaSoltarArquivoProps {
   isLoading?: boolean
   progress?: UploadAnalyzeProgress | null
   selectedFile?: File | null
+  title?: string
+  description?: string
+  inputLabel?: string
 }
 
 function isCsvFile(file: File) {
@@ -29,6 +32,9 @@ export function ZonaSoltarArquivo({
   isLoading,
   progress,
   selectedFile,
+  title = 'Selecione o arquivo',
+  description = 'Envie o CSV de produtos preenchido a partir do modelo (delimitador ;).',
+  inputLabel = 'Selecionar arquivo CSV de produtos',
 }: ZonaSoltarArquivoProps) {
   const [isDragging, setIsDragging] = useState(false)
 
@@ -59,10 +65,8 @@ export function ZonaSoltarArquivo({
   return (
     <Card variant="panel" className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold text-fg-strong">Selecione o arquivo</h2>
-        <p className="text-sm text-fg-muted">
-          Envie o CSV de produtos preenchido a partir do modelo (delimitador ;).
-        </p>
+        <h2 className="text-sm font-semibold text-fg-strong">{title}</h2>
+        <p className="text-sm text-fg-muted">{description}</p>
       </div>
       <div>
         <div
@@ -126,7 +130,7 @@ export function ZonaSoltarArquivo({
           <input
             type="file"
             accept=".csv,text/csv"
-            aria-label="Selecionar arquivo CSV de produtos"
+            aria-label={inputLabel}
             onChange={(e) => {
               acceptFile(e.target.files?.[0])
               e.target.value = ''

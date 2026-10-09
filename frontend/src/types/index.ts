@@ -44,16 +44,16 @@ export type { ControladoSuggestResultDto as ControladoSuggestResult } from '@dto
 
 export type {
   OptionalJobSnapshotDto as OptionalJobSnapshot,
+  OptionalFolderCollectResultDto as OptionalFolderCollectResult,
   StockJobSnapshotDto,
   LotJobSnapshotDto,
   ValidityJobSnapshotDto,
   SupplierJobSnapshotDto,
 } from '@dto/opcional.dto'
 
+export type { OptionalImportKind } from '@models/opcional.model'
+
 /** Passos do wizard de produtos (estado de UI). */
 export type WizardStep = 'file' | 'auxiliary' | 'errors' | 'send'
-
-/** Importações complementares (aba Opcionais). */
-export type OptionalImportKind = 'supplierRefs' | 'validity' | 'stock' | 'lots'
 
 export type FileInputMode = 'manual' | 'folder'

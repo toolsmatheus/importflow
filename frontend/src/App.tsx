@@ -4,6 +4,7 @@ import { LayoutApp } from '@/layouts/LayoutApp'
 import { ProvedorAssistenteImportacao } from '@/features/produtos/useAssistenteImportacao'
 import { PaginaImportacao } from '@/features/produtos/PaginaImportacao'
 import { PaginaImportacaoProduto } from '@/features/produtos/PaginaImportacaoProduto'
+import { OpcionaisImportPage } from '@/features/opcionais/OpcionaisImportPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +23,7 @@ function App() {
               <Route path="/import" element={<PaginaImportacao />}>
                 <Route index element={<Navigate to="produtos" replace />} />
                 <Route path="produtos" element={<PaginaImportacaoProduto />} />
-                <Route path="opcionais" element={<Navigate to="/import/produtos" replace />} />
+                <Route path="opcionais" element={<OpcionaisImportPage />} />
               </Route>
               <Route path="/settings" element={<Navigate to="/import/produtos" replace />} />
               <Route path="*" element={<Navigate to="/import/produtos" replace />} />
