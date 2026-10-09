@@ -1,4 +1,4 @@
-import { REQUIRED_HEADERS } from '../../schemas/product.schema.js'
+import { REQUIRED_HEADERS, SN_DEFAULT_S_FIELDS } from '../../schemas/product.schema.js'
 import {
   isBlank,
   isValidIntegerId,
@@ -47,6 +47,13 @@ export function validarLinha(
         message: 'Campo obrigatório não informado.',
         severity: 'error',
       })
+    }
+  }
+
+  // Flags de processo: vazio/ausente → S (só N no arquivo desliga).
+  for (const field of SN_DEFAULT_S_FIELDS) {
+    if (isBlank(cell(record, field))) {
+      record[field] = 'S'
     }
   }
 

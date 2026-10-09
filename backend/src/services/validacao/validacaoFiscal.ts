@@ -206,18 +206,4 @@ export function validarFiscalEPrecos(
   }
 
   // st/isento/semincidencia só cruzados quando aliquota=0. Com alíquota > 0, usa-se a alíquota.
-
-  if (hasColumn(columns, 'descontofixo') && hasColumn(columns, 'descontomax')) {
-    const fixo = parseBrazilianNumber(cell(record, 'descontofixo'))
-    const max = parseBrazilianNumber(cell(record, 'descontomax'))
-    if (fixo !== null && max !== null && fixo > max) {
-      empurrarIssue(issues, counters, {
-        row: rowNumber,
-        field: 'descontofixo',
-        value: cell(record, 'descontofixo'),
-        message: `Desconto fixo (${fixo}) é maior que o desconto máximo (${max}).`,
-        severity: 'warning',
-      })
-    }
-  }
 }

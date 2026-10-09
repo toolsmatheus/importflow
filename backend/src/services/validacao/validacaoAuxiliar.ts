@@ -41,7 +41,8 @@ export async function resolverCatalogosAuxiliares(
         field: entity,
         value: '',
         message,
-        severity: 'warning',
+        // id vazio / id duplicado no auxiliar bloqueiam o envio
+        severity: 'error',
       })
     }
   }

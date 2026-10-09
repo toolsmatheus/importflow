@@ -16,24 +16,17 @@ export function LayoutApp() {
           <button
             type="button"
             onClick={() => navigate('/import/produtos')}
-            className="flex shrink-0 items-center gap-3 self-center outline-none focus-visible:rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="flex shrink-0 flex-col items-start self-center leading-none outline-none focus-visible:rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             aria-label="ToolsDataWeb"
           >
-            <img
-              src="/brand/symbol-color.png"
-              alt=""
-              className="h-8 w-8 object-contain"
-            />
-            <span className="flex flex-col items-start leading-none">
-              <span
-                className="text-[1.35rem] font-normal tracking-[0.06em] text-fg-strong"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                TOOLSDATAWEB
-              </span>
-              <span className="mt-0.5 text-[10px] font-medium uppercase tracking-label text-fg-subtle">
-                ToolsPharma
-              </span>
+            <span
+              className="text-[1.35rem] font-normal tracking-[0.06em] text-fg-strong"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              TOOLSDATAWEB
+            </span>
+            <span className="mt-0.5 text-[10px] font-medium uppercase tracking-label text-fg-subtle">
+              ToolsPharma
             </span>
           </button>
 

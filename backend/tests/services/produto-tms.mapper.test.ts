@@ -53,6 +53,17 @@ function baseRow(overrides: Record<string, string> = {}): Record<string, string>
   }
 }
 
+describe('mapearLinhaCsvParaPayloadProduto — nome', () => {
+  it('preenche nomedetalhado igual ao nome (sem coluna no CSV)', () => {
+    const result = mapearLinhaCsvParaPayloadProduto(baseRow(), 1, baseCatalogs())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.payload.nome).toBe('PRODUTO TESTE')
+    expect(result.payload.nomedetalhado).toBe(result.payload.nome)
+  })
+})
+
 describe('mapearLinhaCsvParaPayloadProduto — CFOP automático', () => {
   it('aplica CFOP 5102 e CST quando alíquota > 0', () => {
     const result = mapearLinhaCsvParaPayloadProduto(baseRow(), 1, baseCatalogs())
@@ -199,6 +210,26 @@ describe('mapearLinhaCsvParaPayloadProduto — CFOP automático', () => {
     expect(result.payload.atualizarpreco).toBe(false)
     expect(result.payload.pagarcomissao).toBe(true)
     expect(result.payload.permitirdescontovenda).toBe(false)
+  })
+
+  it('flags S/N vazias ou ausentes defaultam para S (true)', () => {
+    const result = mapearLinhaCsvParaPayloadProduto(
+      baseRow({
+        atualizaestoque: '',
+        atualizarpreco: '',
+        pagarpremicao: '',
+        permitedesconto: '',
+      }),
+      1,
+      baseCatalogs()
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.payload.atualizarestoque).toBe(true)
+    expect(result.payload.atualizarpreco).toBe(true)
+    expect(result.payload.pagarcomissao).toBe(true)
+    expect(result.payload.permitirdescontovenda).toBe(true)
   })
 
   it('tipopreco vazio assume liberado; MONITORADO mapeia tpMonitorado', () => {

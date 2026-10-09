@@ -94,6 +94,24 @@ export const VALIDATION_CHECK_DEFS: Array<{
         i.message.toLowerCase().includes('não foi possível validar')),
   },
   {
+    id: 'aux_id_empty',
+    label: 'ID vazio no arquivo auxiliar',
+    severity: 'error',
+    match: (i) =>
+      i.severity === 'error' &&
+      i.message.toLowerCase().includes('id vazio') &&
+      i.message.toLowerCase().includes('auxiliar'),
+  },
+  {
+    id: 'aux_id_duplicate',
+    label: 'ID duplicado no arquivo auxiliar',
+    severity: 'error',
+    match: (i) =>
+      i.severity === 'error' &&
+      i.message.toLowerCase().includes('duplicado') &&
+      i.message.toLowerCase().includes('auxiliar'),
+  },
+  {
     id: 'aux_ref_invalid',
     label: 'Referências auxiliares inválidas',
     severity: 'error',
@@ -161,12 +179,6 @@ export const VALIDATION_CHECK_DEFS: Array<{
     label: 'Alíquota divergente da UF do cliente',
     severity: 'warning',
     match: (i) => i.field === 'aliquota' && i.message.includes('padrão da UF'),
-  },
-  {
-    id: 'desconto_inconsistente',
-    label: 'Desconto fixo maior que o máximo',
-    severity: 'warning',
-    match: (i) => i.field === 'descontofixo',
   },
   {
     id: 'custo_maior_venda',

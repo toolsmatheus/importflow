@@ -52,7 +52,9 @@ export function EtapaAuxiliar({
       onUploaded(result.entity, result)
       toast.success(`${result.entity}: ${formatNumber(result.recordCount)} id(s)`)
       if (result.parseWarnings.length > 0) {
-        toast.warning(`${result.parseWarnings.length} alerta(s) no auxiliar`)
+        toast.error(
+          `${result.parseWarnings.length} erro(s) no auxiliar (id vazio ou duplicado)`
+        )
       }
     },
     onError: (error: Error) => {

@@ -13,7 +13,7 @@ Importação de produtos via CSV para o banco de dados (ToolsPharma), com valida
 
 - **CFOP** — não é coluna obrigatória: alíquota ICMS > 0 → 5102; alíquota 0 + ST → 5405
 - **Alíquota 0** — se não houver `st`/`isento`/`semincidencia`, `st` é definido como `S` com aviso; se houver conflito entre as três flags, erro bloqueante
-- **Flags S/N obrigatórias** — `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto` (mapeiam para o produto no TMS)
+- **Flags S/N** — `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto`: vazio/ausente → `S`; só `N` no arquivo desliga
 - **Markup** — se vazio ou inconsistente com custo/venda, é recalculado com aviso
 - **EAN inválido** — alerta (não bloqueia); EAN duplicado (≥8 dígitos) — erro
 
@@ -23,7 +23,7 @@ Detalhes e lista completa: [agents/VALIDACOES.md](agents/VALIDACOES.md).
 
 **Não envie** a pasta do projeto com `node_modules` (~200+ MB). Há duas formas leves:
 
-### Opção A — Zip leve (~1–2 MB)
+### Opção A — Zip pronto para o cliente (recomendado)
 
 No PC de desenvolvimento:
 
@@ -31,21 +31,20 @@ No PC de desenvolvimento:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack-client.ps1
 ```
 
-Gera `dist-client\ToolsDataWeb-cliente.zip`. Envie esse zip pelo AnyDesk; o cliente descompacta e dá duplo clique em `start.bat`.
+Gera `dist-client\ToolsDataWeb-cliente.zip` **com Node portátil, `node_modules` e build**.  
+O cliente **não precisa ter Node instalado**: descompacta e dá duplo clique em `start.bat`.
 
 ### Opção B — Só o bootstrap (~2 KB)
 
-Envie apenas `bootstrap-cliente.bat` pelo chat do AnyDesk. No PC do cliente (com internet), o arquivo baixa o projeto do GitHub e chama o `start.bat`.
-
-Nas duas opções, na primeira execução o `start.bat` baixa Node (se precisar), `npm install` e o build.
+Envie apenas `bootstrap-cliente.bat` pelo chat do AnyDesk. No PC do cliente (com internet), o arquivo baixa o projeto do GitHub e chama o `start.bat` (aí precisa baixar Node + `npm install` + build).
 
 ### O que o `start.bat` faz no PC do cliente
 
 | Situação | Ação |
 |----------|------|
 | Node **20+** no PATH | Usa o Node do sistema |
-| Node ausente ou **\< 20** | Baixa Node 20 LTS portátil em `.runtime\node` |
-| Dependências / build | `npm install` e build se faltar (ou source mais novo) |
+| Node ausente ou **\< 20** | Usa `.runtime\node` do zip (ou baixa Node 20 LTS se faltar) |
+| Dependências / build | No zip pronto: já vêm inclusos — só sobe o servidor |
 
 Abre `http://localhost:3001` quando `/api/health` responder. Forçar rebuild: `start.bat /rebuild`.
 

@@ -16,11 +16,11 @@ Documento resumido das checagens feitas ao processar **auxiliares** e **produtos
 Arquivos: `grupo`, `subgrupo`, `categoria`, `laboratorio`, `grupodepreco`, `similar`, `dcb`  
 Modelo: `id;nome` (também aceita `codigo` no lugar de `id`)
 
-- [ ] **id vazio** — linha ignorada no catálogo · **warning**  
-  *Ex.:* `grupo.csv` com linha `;Medicamentos` (sem id) → aviso e linha fora do catálogo.
+- [ ] **id vazio** — linha ignorada no catálogo · **error**  
+  *Ex.:* `grupo.csv` com linha `;Medicamentos` (sem id) → erro e linha fora do catálogo.
 
-- [ ] **id duplicado** no mesmo arquivo — mantém a primeira · **warning**  
-  *Ex.:* duas linhas `1;Medicamentos` e `1;Perfumaria` → aviso; fica só “Medicamentos”.
+- [ ] **id duplicado** no mesmo arquivo — mantém a primeira · **error**  
+  *Ex.:* duas linhas `1;Medicamentos` e `1;Perfumaria` → erro; fica só “Medicamentos”.
 
 - [ ] **arquivo sumiu do storage** (reenvio necessário) · **error**  
   *Ex.:* validar produtos citando um `fileId` de auxiliar que já expirou/foi apagado.
@@ -51,7 +51,9 @@ Mapeamento produto → auxiliar:
 ## Produtos — arquivo
 
 Cabeçalhos obrigatórios:  
-`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`, `atualizaestoque`, `atualizarpreco`, `pagarpremicao`, `permitedesconto`  
+`codigo`, `nome`, `codigogrupo`, `custo`, `venda`, `listapiscofins`, `aliquota`, `ncm`, `cstpiscofins`
+
+*(Flags S/N abaixo são opcionais: vazio/ausente → `S`.)*  
 `fator` é opcional (vazio → `1`). `cfop` definido com base em regra.
 
 - [ ] **cabeçalhos obrigatórios** presentes · **error**  
@@ -84,19 +86,19 @@ Cabeçalhos obrigatórios:
 - [ ] **`codigogrupo` inteiro** se preenchido · **error**  
   *Ex.:* `codigogrupo=1A` ou `codigogrupo=grupo1`.
 
-### Flags S/N obrigatórias
+### Flags S/N (padrão `S`)
 
-| Coluna CSV | Envio TMS | Exemplo |
-|------------|-----------|---------|
-| `atualizaestoque` | `atualizarestoque` | `S` / `N` |
-| `atualizarpreco` | `atualizarpreco` | `S` / `N` |
-| `pagarpremicao` | `pagarcomissao` | `S` / `N` |
-| `permitedesconto` | `permitirdescontovenda` | `S` / `N` |
+| Coluna CSV | Envio TMS | Comportamento |
+|------------|-----------|---------------|
+| `atualizaestoque` | `atualizarestoque` | vazio/ausente → `S`; só `N` desliga |
+| `atualizarpreco` | `atualizarpreco` | vazio/ausente → `S`; só `N` desliga |
+| `pagarpremicao` | `pagarcomissao` | vazio/ausente → `S`; só `N` desliga |
+| `permitedesconto` | `permitirdescontovenda` | vazio/ausente → `S`; só `N` desliga |
 
-- [ ] **flags obrigatórias preenchidas** · **error**  
-  *Ex.:* `atualizarpreco` em branco.
+- [ ] **flags vazias ou ausentes** → grava `S` automaticamente · *(sem erro)*  
+  *Ex.:* `atualizarpreco` em branco → tratado como `S`.
 
-- [ ] **flags = `S` ou `N`** · **error**  
+- [ ] **flags = `S` ou `N`** (se preenchidas) · **error** se inválido  
   *Ex.:* `pagarpremicao=SIM` ou `permitedesconto=1`.
 
 ### Números e markup
@@ -105,7 +107,7 @@ Cabeçalhos obrigatórios:
   *Ex.:* `custo=dez reais` ou `venda=10.abc` → “Valor numérico inválido”.  
   *Ok:* `10,50` / `1.234,56`.
 
-- [ ] **`custo` > `venda`** · **warning** *(mesmo tratamento do desconto fixo > máximo)*  
+- [ ] **`custo` > `venda`** · **warning**  
   *Ex.:* `custo=20,00` e `venda=15,00` → aviso; não bloqueia o envio.
 
 - [ ] **markup vazio / inválido / inconsistente** → **recalcula** · **warning**  
@@ -177,11 +179,7 @@ Decimais opcionais checados: `valorpmc`, `estoque`, `estoqueminimo`, `descontofi
   *Vazio ou coluna ausente → LIBERADO no envio.*  
   *Ex. erro:* `tipopreco=FIXO`.
 
-### Descontos e Farmácia Popular
-
-- [ ] **`descontofixo` > `descontomax`** · **warning**  
-  *Ex.:* `descontofixo=15` e `descontomax=10` → aviso.  
-  *Ok:* `15` e `15` (igual não avisa); ou fixo menor que o máximo.
+### Farmácia Popular
 
 - [ ] **`medfciapop = S`** → `qtdfciapop` e `valorfciapop` obrigatórios · **error**  
   *Ex.:* `medfciapop=S` com `qtdfciapop` e/ou `valorfciapop` vazios.

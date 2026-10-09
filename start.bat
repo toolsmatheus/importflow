@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 title ToolsDataWeb
 
@@ -7,15 +7,37 @@ set "NODE_MAJOR_MIN=20"
 set "PORT=3001"
 set "URL=http://localhost:%PORT%"
 set "FORCE_REBUILD=0"
+set "LOG=%~dp0start-log.txt"
+
 if /I "%~1"=="/rebuild" set "FORCE_REBUILD=1"
 if /I "%~1"=="--rebuild" set "FORCE_REBUILD=1"
 
 echo.
 echo  ToolsDataWeb
 echo  ----------
+echo.
+
+call :log "=== ToolsDataWeb start %DATE% %TIME% ==="
+call :log "Pasta: %CD%"
 
 call :ensure_node
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+  echo.
+  echo ERRO: nao foi possivel preparar o Node.js.
+  echo Veja o arquivo start-log.txt nesta pasta.
+  call :log "FALHA ensure_node"
+  goto :fail
+)
+
+where node >nul 2>&1
+if errorlevel 1 (
+  echo ERRO: node nao esta no PATH da sessao.
+  call :log "node ausente no PATH apos ensure_node"
+  goto :fail
+)
+
+call :log "Node: "
+node -v >>"%LOG%" 2>&1
 
 set "NEED_INSTALL=0"
 if not exist "node_modules\" set "NEED_INSTALL=1"
@@ -23,14 +45,16 @@ if not exist "package-lock.json" set "NEED_INSTALL=1"
 
 if "%NEED_INSTALL%"=="1" (
   echo [1/3] Instalando dependencias (npm workspaces^)...
+  call :log "npm install..."
   call npm install
   if errorlevel 1 (
     echo ERRO: npm install falhou. Verifique a internet e tente de novo.
-    pause
-    exit /b 1
+    call :log "npm install FALHOU"
+    goto :fail
   )
 ) else (
   echo [1/3] Dependencias OK
+  call :log "Dependencias OK"
 )
 
 set "NEED_BUILD=0"
@@ -45,69 +69,88 @@ if "%NEED_BUILD%"=="0" (
 
 if "%NEED_BUILD%"=="1" (
   echo [2/3] Gerando build...
+  call :log "npm run build..."
   call npm run build
   if errorlevel 1 (
     echo ERRO: build falhou.
-    pause
-    exit /b 1
+    call :log "build FALHOU"
+    goto :fail
   )
 ) else (
   echo [2/3] Build OK
+  call :log "Build OK"
 )
 
 echo [3/3] Iniciando em %URL%
 echo      (feche esta janela para encerrar)
 echo.
+call :log "npm start em %URL%"
 
 start "" /b cmd /c "timeout /t 2 /nobreak >nul & powershell -NoProfile -Command \"try { for($i=0;$i -lt 45;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing '%URL%/api/health' -TimeoutSec 2; if($r.StatusCode -eq 200){ Start-Process '%URL%'; break } } catch {} Start-Sleep -Seconds 1 } } catch {}\""
 
 call npm start
+set "EXITCODE=%ERRORLEVEL%"
 echo.
-echo Servidor encerrado.
+echo Servidor encerrado (codigo %EXITCODE%).
+call :log "Servidor encerrado codigo %EXITCODE%"
 pause
+exit /b %EXITCODE%
+
+:fail
+echo.
+pause
+exit /b 1
+
+:log
+>>"%LOG%" echo %~1
 exit /b 0
 
 :ensure_node
+REM Preferir Node portatil do pacote (cliente sem Node instalado)
+set "RUNTIME_DIR=%~dp0.runtime\node"
+set "NODE_EXE=%RUNTIME_DIR%\node.exe"
+
+if exist "%NODE_EXE%" (
+  call :read_major "%NODE_EXE%" PORTABLE_MAJOR
+  if defined PORTABLE_MAJOR if !PORTABLE_MAJOR! GEQ %NODE_MAJOR_MIN% (
+    set "PATH=%RUNTIME_DIR%;%PATH%"
+    echo Usando Node portatil em .runtime\node
+    call :log "Usando Node portatil !PORTABLE_MAJOR!"
+    exit /b 0
+  )
+)
+
 where node >nul 2>&1
-if errorlevel 1 (
-  echo Node.js nao encontrado. Baixando runtime portatil...
-  call :install_portable_node
-  exit /b %errorlevel%
+if not errorlevel 1 (
+  call :read_major "node" SYS_MAJOR
+  if defined SYS_MAJOR if !SYS_MAJOR! GEQ %NODE_MAJOR_MIN% (
+    echo Usando Node do sistema
+    call :log "Usando Node do sistema !SYS_MAJOR!"
+    exit /b 0
+  )
+  echo Node do sistema insuficiente. Tentando runtime portatil...
+  call :log "Node sistema insuficiente"
 )
 
-for /f "tokens=1 delims=v." %%A in ('node -v 2^>nul') do set "NODE_MAJOR=%%A"
-if not defined NODE_MAJOR (
-  echo Nao foi possivel ler a versao do Node. Baixando runtime portatil...
-  call :install_portable_node
-  exit /b %errorlevel%
-)
+echo Node.js adequado nao encontrado. Baixando runtime portatil...
+call :install_portable_node
+exit /b %errorlevel%
 
-if %NODE_MAJOR% LSS %NODE_MAJOR_MIN% (
-  echo Node v%NODE_MAJOR% detectado; ToolsDataWeb precisa de Node %NODE_MAJOR_MIN%+.
-  echo Baixando runtime portatil...
-  call :install_portable_node
-  exit /b %errorlevel%
-)
-
+:read_major
+set "MAJOR_OUT="
+for /f "tokens=1 delims=v." %%A in ('%~1 -v 2^>nul') do set "MAJOR_OUT=%%A"
+set "%~2=%MAJOR_OUT%"
 exit /b 0
 
 :install_portable_node
 set "RUNTIME_DIR=%~dp0.runtime\node"
 set "NODE_EXE=%RUNTIME_DIR%\node.exe"
-if exist "%NODE_EXE%" (
-  for /f "tokens=1 delims=v." %%A in ('"%NODE_EXE%" -v 2^>nul') do set "PORTABLE_MAJOR=%%A"
-  if defined PORTABLE_MAJOR if %PORTABLE_MAJOR% GEQ %NODE_MAJOR_MIN% (
-    set "PATH=%RUNTIME_DIR%;%PATH%"
-    echo Usando Node portatil em .runtime\node
-    exit /b 0
-  )
-)
-
 set "TMP_ZIP=%TEMP%\toolsdataweb-node.zip"
 set "TMP_EXTRACT=%TEMP%\toolsdataweb-node-extract"
 set "NODE_DIST_URL=https://nodejs.org/dist/v20.18.1/node-v20.18.1-win-x64.zip"
 
-echo Baixando Node 20 LTS (pode levar 1–2 min^)...
+echo Baixando Node 20 LTS (pode levar 1-2 min^)...
+call :log "Download Node %NODE_DIST_URL%"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^
   "Invoke-WebRequest -Uri '%NODE_DIST_URL%' -OutFile '%TMP_ZIP%';" ^
@@ -117,16 +160,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Get-ChildItem '%TMP_EXTRACT%' -Directory | Select-Object -First 1 | ForEach-Object {" ^
   "  Copy-Item -Path (Join-Path $_.FullName '*') -Destination '%RUNTIME_DIR%' -Recurse -Force" ^
   "}"
+if errorlevel 1 (
+  echo ERRO: falha no download/extracao do Node portatil.
+  call :log "Download/extracao Node FALHOU"
+  exit /b 1
+)
 
 if not exist "%NODE_EXE%" (
   echo ERRO: falha ao instalar Node portatil.
   echo Instale Node.js 20+ em https://nodejs.org e execute start.bat de novo.
-  pause
+  call :log "node.exe ausente apos download"
   exit /b 1
 )
 
 set "PATH=%RUNTIME_DIR%;%PATH%"
 echo Node portatil pronto.
+call :log "Node portatil instalado"
 exit /b 0
 
 :source_newer_than_build

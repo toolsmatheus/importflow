@@ -14,6 +14,10 @@ export const REQUIRED_HEADERS = [
   'aliquota',
   'ncm',
   'cstpiscofins',
+] as const
+
+/** Flags S/N: vazio ou ausente → S; só N no arquivo desliga. */
+export const SN_DEFAULT_S_FIELDS = [
   'atualizaestoque',
   'atualizarpreco',
   'pagarpremicao',
@@ -49,6 +53,7 @@ export const OPTIONAL_HEADERS = [
   'cest',
   'csosn',
   'csticms',
+  ...SN_DEFAULT_S_FIELDS,
 ] as const
 
 export const FARMACIA_POPULAR_HEADERS = [
@@ -87,10 +92,10 @@ export type ProductCsvRow = Record<ProductCsvHeader, string | undefined> & {
   aliquota: string
   ncm: string
   cstpiscofins: string
-  atualizaestoque: string
-  atualizarpreco: string
-  pagarpremicao: string
-  permitedesconto: string
+  atualizaestoque?: string
+  atualizarpreco?: string
+  pagarpremicao?: string
+  permitedesconto?: string
 }
 
 export const AUXILIARY_ENTITIES = [

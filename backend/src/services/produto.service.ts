@@ -183,9 +183,10 @@ export async function validarCsvProduto(
     totalRecords++
     const rowNumber = totalRecords + 1
 
+    // Vazio/ausente conta como S (mesmo padrão do envio).
     const flagAtualiza = String(record.atualizaestoque ?? '').trim().toUpperCase()
-    if (flagAtualiza === 'S') atualizaEstoqueS++
-    else if (flagAtualiza === 'N') atualizaEstoqueN++
+    if (flagAtualiza === 'N') atualizaEstoqueN++
+    else atualizaEstoqueS++
 
     if (missingRequiredHeaders.length === 0) {
       const barcodeKeys = validarLinha(

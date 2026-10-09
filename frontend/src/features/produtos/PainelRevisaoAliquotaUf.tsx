@@ -112,8 +112,8 @@ export function PainelRevisaoAliquotaUf({
           if (!next) setConfirmApply(false)
         }}
       >
-        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="space-y-1 border-b px-6 py-4 text-left">
+        <DialogContent className="flex h-[min(92vh,880px)] w-[min(96vw,80rem)] max-w-none flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 space-y-1 border-b px-4 py-3 text-left sm:px-6 sm:py-4">
             <DialogTitle>Alíquotas diferenciadas — UF {clientUf}</DialogTitle>
             <DialogDescription>
               Esperado: <span className="font-mono">{expectedLabel}%</span>
@@ -121,8 +121,8 @@ export function PainelRevisaoAliquotaUf({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
-            <div>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
+            <div className="shrink-0">
               <p className="mb-2 text-sm font-medium text-fg-strong">Resumo por alíquota atual</p>
               <div className="flex flex-wrap gap-2">
                 {summary.map((s) => (
@@ -136,33 +136,41 @@ export function PainelRevisaoAliquotaUf({
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full border-collapse font-data text-sm">
-                <thead>
+            <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+              <table className="w-full min-w-[44rem] border-collapse font-data text-sm">
+                <thead className="sticky top-0 z-10 bg-surface">
                   <tr>
-                    <GridTh className="w-16">Linha</GridTh>
-                    <GridTh className="w-24">Código</GridTh>
-                    <GridTh className="min-w-[140px]">Cód. barras</GridTh>
-                    <GridTh className="w-20">Grupo</GridTh>
-                    <GridTh>Nome</GridTh>
-                    <GridTh className="w-28 text-right">Atual</GridTh>
-                    <GridTh className="w-28 text-right">Esperada</GridTh>
+                    <GridTh className="w-14 whitespace-nowrap">Linha</GridTh>
+                    <GridTh className="w-20 whitespace-nowrap">Código</GridTh>
+                    <GridTh className="hidden whitespace-nowrap md:table-cell md:w-36">
+                      Cód. barras
+                    </GridTh>
+                    <GridTh className="hidden w-16 whitespace-nowrap sm:table-cell">Grupo</GridTh>
+                    <GridTh className="min-w-[10rem]">Nome</GridTh>
+                    <GridTh className="w-20 whitespace-nowrap text-right">Atual</GridTh>
+                    <GridTh className="w-24 whitespace-nowrap text-right">Esperada</GridTh>
                   </tr>
                 </thead>
                 <tbody>
                   {preview.map((m) => (
                     <tr key={`${m.row}-${m.codigo}`}>
-                      <GridCell className="font-mono text-xs">{m.row}</GridCell>
-                      <GridCell className="font-mono text-xs">{m.codigo || '—'}</GridCell>
-                      <GridCell className="font-mono text-xs">{m.codigobarras || '—'}</GridCell>
-                      <GridCell className="font-mono text-xs">{m.codigogrupo || '—'}</GridCell>
-                      <GridCell className="max-w-[240px] truncate text-sm" title={m.nome}>
+                      <GridCell className="whitespace-nowrap font-mono text-xs">{m.row}</GridCell>
+                      <GridCell className="whitespace-nowrap font-mono text-xs">
+                        {m.codigo || '—'}
+                      </GridCell>
+                      <GridCell className="hidden whitespace-nowrap font-mono text-xs md:table-cell">
+                        {m.codigobarras || '—'}
+                      </GridCell>
+                      <GridCell className="hidden whitespace-nowrap font-mono text-xs sm:table-cell">
+                        {m.codigogrupo || '—'}
+                      </GridCell>
+                      <GridCell className="max-w-[14rem] truncate text-sm sm:max-w-[22rem] lg:max-w-none lg:whitespace-normal" title={m.nome}>
                         {m.nome || '—'}
                       </GridCell>
-                      <GridCell className="text-right font-mono text-sm text-amber-700 dark:text-amber-300">
+                      <GridCell className="whitespace-nowrap text-right font-mono text-sm text-amber-700 dark:text-amber-300">
                         {m.currentRaw || formatAliquotaCsv(m.current)}%
                       </GridCell>
-                      <GridCell className="text-right font-mono text-sm">
+                      <GridCell className="whitespace-nowrap text-right font-mono text-sm">
                         {expectedLabel}%
                       </GridCell>
                     </tr>
@@ -172,14 +180,14 @@ export function PainelRevisaoAliquotaUf({
             </div>
 
             {mismatches.length > PREVIEW_LIMIT && (
-              <p className="text-xs text-fg-muted">
+              <p className="shrink-0 text-xs text-fg-muted">
                 Mostrando {formatNumber(PREVIEW_LIMIT)} de {formatNumber(mismatches.length)}. Use
                 &quot;Exportar CSV&quot; para a lista completa.
               </p>
             )}
 
             {confirmApply && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+              <div className="shrink-0 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
                 <p className="font-medium">Confirmar alteração?</p>
                 <p className="mt-1">
                   Aplicar <span className="font-mono">{expectedLabel}%</span> em{' '}
@@ -191,32 +199,47 @@ export function PainelRevisaoAliquotaUf({
             )}
           </div>
 
-          <DialogFooter className="flex-col gap-2 border-t px-6 py-4 sm:flex-row sm:justify-between">
+          <DialogFooter className="shrink-0 flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
             <Button
               type="button"
               variant="ghost"
               size="sm"
+              className="w-full sm:w-auto"
               onClick={() => downloadMismatchesCsv(mismatches, clientUf, expected)}
             >
               <Download className="h-4 w-4" />
               Exportar CSV
             </Button>
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
               {!confirmApply ? (
                 <>
-                  <Button type="button" variant="secondary" onClick={handleKeep}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                    onClick={handleKeep}
+                  >
                     Manter como estão
                   </Button>
-                  <Button type="button" onClick={handleAskApply}>
+                  <Button type="button" className="w-full sm:w-auto" onClick={handleAskApply}>
                     Aplicar padrão da UF ({expectedLabel}%)
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button type="button" variant="secondary" onClick={() => setConfirmApply(false)}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                    onClick={() => setConfirmApply(false)}
+                  >
                     Voltar
                   </Button>
-                  <Button type="button" onClick={handleConfirmApply}>
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    onClick={handleConfirmApply}
+                  >
                     Confirmar aplicação
                   </Button>
                 </>

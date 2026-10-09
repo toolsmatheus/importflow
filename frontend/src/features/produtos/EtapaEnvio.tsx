@@ -20,6 +20,10 @@ import {
   phaseLabel,
   skipReasonLabel,
 } from '@/features/produtos/EtapaEnvioHelpers'
+import {
+  baixarRelatorioAlertasPdf,
+  podeGerarRelatorioAlertasPdf,
+} from '@/features/produtos/relatorioAlertasPdf'
 import { produtoServico } from '@/api/produto'
 import { formatNumber } from '@/lib/utils'
 import type {
@@ -276,6 +280,29 @@ export function EtapaEnvio({
             >
               <Download className="h-4 w-4" />
               Baixar ignorados CSV
+            </Button>
+          ) : null}
+          {finished && podeGerarRelatorioAlertasPdf({ job, validationResult }) ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                try {
+                  baixarRelatorioAlertasPdf({
+                    job,
+                    validationResult,
+                    rows,
+                  })
+                  toast.success('Relatório PDF baixado')
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : 'Falha ao gerar o PDF'
+                  )
+                }
+              }}
+            >
+              <Download className="h-4 w-4" />
+              Baixar PDF (validações)
             </Button>
           ) : null}
           {finished ? (

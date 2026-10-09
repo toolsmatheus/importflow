@@ -7,6 +7,7 @@ import {
   LISTA_PIS_COFINS,
   OPTIONAL_HEADERS,
   REQUIRED_HEADERS,
+  SN_DEFAULT_S_FIELDS,
   TEMPLATE_DELIMITER,
   type AuxiliaryEntity,
   type OptionalHeader,
@@ -23,6 +24,7 @@ export {
   LISTA_PIS_COFINS,
   OPTIONAL_HEADERS,
   REQUIRED_HEADERS,
+  SN_DEFAULT_S_FIELDS,
   TEMPLATE_DELIMITER,
 }
 export type {
@@ -168,7 +170,7 @@ function buildExampleProductRow(values: {
     cstpiscofins: values.cstpiscofins ?? '01',
     atualizaestoque: values.atualizaestoque ?? 'S',
     atualizarpreco: values.atualizarpreco ?? 'S',
-    pagarpremicao: values.pagarpremicao ?? 'N',
+    pagarpremicao: values.pagarpremicao ?? 'S',
     permitedesconto: values.permitedesconto ?? 'S',
     valorpmc: values.valorpmc ?? '',
     tipopreco: values.tipopreco ?? 'LIBERADO',
